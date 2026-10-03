@@ -1544,6 +1544,10 @@ class AppState extends ChangeNotifier {
       ? 'Скачиваю обновление…'
       : 'Скачиваю обновление… ${(updateProgress! * 100).round()} %';
 
+  /// То же коротко — для строки версии в боковом меню: длинная подпись не помещается в её рамку.
+  String get updateProgressShort =>
+      updateProgress == null ? 'Скачиваю…' : 'Скачиваю… ${(updateProgress! * 100).round()} %';
+
   /// Скачивает установщик новой версии SkipIt из релиза на GitHub и сверяет его контрольную сумму.
   Future<String?> downloadAppUpdate() async {
     final release = appUpdate;

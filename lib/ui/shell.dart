@@ -768,7 +768,7 @@ class _VersionRow extends StatelessWidget {
     final title = 'Версия $appVersion${AppPaths.isDev ? ' dev' : ''}';
     final downloading = state.downloadingAppUpdate;
     final action = downloading
-        ? state.updateProgressLabel
+        ? state.updateProgressShort
         : state.checkingUpdates
         ? 'Проверяю обновления…'
         : hasUpdate
