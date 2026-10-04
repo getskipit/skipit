@@ -570,9 +570,11 @@ class LogBuffer extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Удаляет все прошлые отрезки; текущий остаётся.
-  void clearHistory() {
-    for (final s in sessions.where((s) => !s.live).toList()) {
+  /// Удаляет прошлые отрезки — все или только начавшиеся в день [day]; текущий остаётся.
+  void clearHistory({DateTime? day}) {
+    bool matches(LogSession s) =>
+        day == null || (s.start.year == day.year && s.start.month == day.month && s.start.day == day.day);
+    for (final s in sessions.where((s) => !s.live && matches(s)).toList()) {
       _deleteFiles(s);
       sessions.remove(s);
     }

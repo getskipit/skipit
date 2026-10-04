@@ -9,6 +9,7 @@ import '../core/log_explain.dart';
 import '../core/paths.dart';
 import '../core/util.dart';
 import '../state/app_scope.dart';
+import 'app_menu.dart';
 import 'flag_text.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
@@ -125,18 +126,38 @@ class _LogsPageState extends State<LogsPage> {
                 icon: Icons.folder_open_rounded,
                 onPressed: () => Process.run('explorer', [AppPaths.logDir.path]),
               ),
-              GhostButton(
-                label: 'Очистить историю',
-                icon: Icons.delete_sweep_rounded,
-                onPressed: sessions.any((s) => !s.live)
-                    ? () async {
-                        if (await confirm(context, 'Очистить историю?',
-                            'Журналы прошлых подключений будут удалены. Текущий журнал останется.')) {
+              // Builder: меню выбора появляется под самой кнопкой.
+              Builder(
+                builder: (context) => GhostButton(
+                  label: 'Очистить историю',
+                  icon: Icons.delete_sweep_rounded,
+                  onPressed: sessions.any((s) => !s.live)
+                      ? () async {
+                          // Дни, за которые есть прошлые журналы, свежие сверху.
+                          final days = <DateTime>[];
+                          for (final s in sessions.reversed.where((s) => !s.live)) {
+                            final day = DateTime(s.start.year, s.start.month, s.start.day);
+                            if (!days.contains(day)) days.add(day);
+                          }
+                          // 0 — за всё время, дальше — номер дня в списке плюс один.
+                          final picked = await showAppMenu<int>(context, items: [
+                            const AppMenuItem(0, 'За всё время', icon: Icons.delete_sweep_rounded, danger: true),
+                            const AppMenuItem.divider(),
+                            for (final (i, day) in days.indexed) AppMenuItem(i + 1, _dayLabel(day)),
+                          ]);
+                          if (picked == null || !context.mounted) return;
+                          final day = picked == 0 ? null : days[picked - 1];
+                          final ok = day == null
+                              ? await confirm(context, 'Очистить историю?',
+                                  'Журналы прошлых подключений будут удалены. Текущий журнал останется.')
+                              : await confirm(context, 'Удалить журналы за ${_dayLabel(day).toLowerCase()}?',
+                                  'Журналы прошлых подключений за этот день будут удалены. Текущий журнал останется.');
+                          if (!ok) return;
                           setState(() => _selectedId = null);
-                          log.clearHistory();
+                          log.clearHistory(day: day);
                         }
-                      }
-                    : null,
+                      : null,
+                ),
               ),
             ],
           ),

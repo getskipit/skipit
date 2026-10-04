@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -364,6 +365,38 @@ void main() {
     second.remove(past);
     expect(second.sessions, isEmpty);
     expect(dir.listSync(), isEmpty);
+  });
+
+  test('очистка истории за один день не трогает другие дни и текущий журнал', () async {
+    final first = LogBuffer();
+    await first.open(dir);
+    first.startSession('Finland', detail: 'TUN');
+    first.add('app', 'Подключено');
+    first.endSession();
+    first.close();
+
+    // Тот же журнал, но вчерашний: имя файла и время начала в заголовке сдвинуты на день.
+    final today = dir.listSync().whereType<File>().firstWhere((f) => f.readAsStringSync().contains('Finland'));
+    final rows = today.readAsLinesSync();
+    final head = jsonDecode(rows.first.substring(1)) as Map<String, dynamic>;
+    final start = DateTime.parse(head['start'] as String).subtract(const Duration(days: 1));
+    head['start'] = start.toIso8601String();
+    String two(int n) => n.toString().padLeft(2, '0');
+    File('${dir.path}\\${start.year}-${two(start.month)}-${two(start.day)}_10-00-00_000.log')
+        .writeAsStringSync(['#${jsonEncode(head)}', ...rows.skip(1)].join('\n'));
+
+    final second = LogBuffer();
+    await second.open(dir);
+    final before = second.sessions.where((s) => !s.live).length;
+    expect(second.sessions.where((s) => s.start.day == start.day), hasLength(1));
+
+    second.clearHistory(day: start);
+    expect(second.sessions.where((s) => s.start.day == start.day), isEmpty);
+    expect(second.sessions.where((s) => !s.live), hasLength(before - 1));
+
+    second.clearHistory();
+    expect(second.sessions.where((s) => !s.live), isEmpty);
+    second.close();
   });
 
   test('журнал старше 5 дней удаляется, более свежий остаётся', () async {
