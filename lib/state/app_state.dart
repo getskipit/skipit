@@ -874,6 +874,17 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Перетаскивание подписки в списке: [moved] встаёт на место [target], та сдвигается.
+  void moveSubscription(Subscription moved, Subscription target) {
+    final from = subscriptions.indexOf(moved);
+    final to = subscriptions.indexOf(target);
+    if (from < 0 || to < 0 || from == to) return;
+    subscriptions
+      ..removeAt(from)
+      ..insert(to, moved);
+    changed();
+  }
+
   void deleteSubscription(Subscription sub) {
     subscriptions.remove(sub);
     servers.removeWhere((s) => s.subscriptionId == sub.id);

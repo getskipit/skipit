@@ -77,6 +77,9 @@ class _ServersPanelState extends State<ServersPanel> {
       if (state.serversOf(null).isNotEmpty) (null, _filter(null, state.serversOf(null))),
       // При поиске группы без совпадений не показываем.
     ].where((g) => _query.isEmpty || g.$2.isNotEmpty).toList();
+    // Порядок меняется только среди закреплённых и только в полном списке (без поиска).
+    final pinnedCount = state.subscriptions.where((s) => s.pinned).length;
+    bool canDrag(Subscription sub) => sub.pinned && pinnedCount > 1 && _query.isEmpty;
 
     final header = Row(children: [
       Expanded(
@@ -146,7 +149,25 @@ class _ServersPanelState extends State<ServersPanel> {
         for (final (sub, list) in groups)
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: _GroupCard(key: ValueKey(sub?.id ?? 'manual'), subscription: sub, servers: list),
+            // Закреплённые подписки можно менять местами: заголовок одной перетаскивают на другую.
+            child: DragTarget<Subscription>(
+              onWillAcceptWithDetails: (d) => sub != null && canDrag(sub) && d.data != sub,
+              onAcceptWithDetails: (d) => state.moveSubscription(d.data, sub!),
+              builder: (context, incoming, _) => Container(
+                foregroundDecoration: incoming.isEmpty
+                    ? null
+                    : BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: C.orange, width: 2),
+                      ),
+                child: _GroupCard(
+                  key: ValueKey(sub?.id ?? 'manual'),
+                  subscription: sub,
+                  servers: list,
+                  draggable: sub != null && canDrag(sub),
+                ),
+              ),
+            ),
           ),
     ];
 
@@ -249,9 +270,12 @@ class _MenuAction extends StatelessWidget {
 
 
 class _GroupCard extends StatefulWidget {
-  const _GroupCard({super.key, required this.subscription, required this.servers});
+  const _GroupCard({super.key, required this.subscription, required this.servers, this.draggable = false});
   final Subscription? subscription;
   final List<ServerProfile> servers;
+
+  /// Заголовок можно перетащить на другую закреплённую подписку, чтобы поменять их местами.
+  final bool draggable;
 
   @override
   State<_GroupCard> createState() => _GroupCardState();
@@ -317,6 +341,33 @@ class _GroupCardState extends State<_GroupCard> {
             sub.updateIntervalHours > 0 ? 'Автообновление — ${sub.updateIntervalHours} ч.' : 'Без автообновления',
           ].join('  |  ');
 
+    // Перетаскивание заголовка: за указателем едет маленькая плашка с названием, а не вся карточка —
+    // развёрнутая подписка бывает выше окна. Обычный клик по заголовку работает как раньше.
+    Widget dragHandle(Widget header) => sub == null || !widget.draggable
+        ? header
+        : Draggable<Subscription>(
+            data: sub,
+            axis: Axis.vertical,
+            dragAnchorStrategy: pointerDragAnchorStrategy,
+            feedback: Material(
+              color: Colors.transparent,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 280),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: C.surface2,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: C.orange),
+                ),
+                child: FlagText(sub.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+              ),
+            ),
+            child: header,
+          );
+
     return Container(
       decoration: BoxDecoration(
         color: C.surface,
@@ -326,7 +377,7 @@ class _GroupCardState extends State<_GroupCard> {
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // Заголовок группы.
-        Hover(
+        dragHandle(Hover(
           builder: (context, hovered) => GestureDetector(
             onTap: toggle,
             child: Container(
@@ -352,9 +403,12 @@ class _GroupCardState extends State<_GroupCard> {
                       // Значок закреплённой подписки.
                       if (sub?.pinned ?? false) ...[
                         const SizedBox(width: 6),
-                        const Tooltip(
-                          message: 'Закреплена вверху списка',
-                          child: Icon(Icons.push_pin_rounded, size: 14, color: C.orange),
+                        Tooltip(
+                          message: widget.draggable
+                              ? 'Закреплена вверху списка. Перетащите заголовок на другую закреплённую подписку, '
+                                  'чтобы поменять их местами'
+                              : 'Закреплена вверху списка',
+                          child: const Icon(Icons.push_pin_rounded, size: 14, color: C.orange),
                         ),
                       ],
                     ]),
@@ -412,7 +466,7 @@ class _GroupCardState extends State<_GroupCard> {
               ]),
             ),
           ),
-        ),
+        )),
         if (sub != null) _SubscriptionBar(sub),
         if (sub?.error != null)
           Padding(
