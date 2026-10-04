@@ -76,6 +76,11 @@ void main() {
     expect(LogLine('sing-box', CoreProcess.clean('\x1B[31mERROR\x1B[0m connection: i/o timeout')).level, 2);
     expect(LogLine('sing-box', 'WARN inbound/tun: open interface take too much time').level, 1);
     expect(CoreProcess.clean('обычная строка [0m] без команд'), 'обычная строка [0m] без команд');
+    // Своё время Xray в начале строки убирается: журнал помечает строки временем сам.
+    expect(CoreProcess.clean('2026/10/05 02:23:55.652302 [Info] transport/internet/tcp: listening tcp on 127.0.0.1:10809'),
+        '[Info] transport/internet/tcp: listening tcp on 127.0.0.1:10809');
+    // Дата в середине строки остаётся.
+    expect(CoreProcess.clean('[Info] expires 2026/10/05 02:23:55 soon'), '[Info] expires 2026/10/05 02:23:55 soon');
   });
 
   test('одинаковые соединения склеиваются в группу; свежие обращения — в конце', () {

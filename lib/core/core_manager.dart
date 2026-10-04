@@ -31,8 +31,12 @@ class CoreProcess {
   /// Команды раскраски текста для консоли (sing-box красит уровень строки и номер соединения).
   static final _colorCodes = RegExp(r'\x1B\[[0-9;]*[A-Za-z]');
 
-  /// Строка ядра в том виде, в каком она идёт в журнал: без команд раскраски.
-  static String clean(String line) => line.replaceAll(_colorCodes, '');
+  /// Дата и время, которые Xray ставит в начале своих строк («2026/10/05 02:23:55.652302 »).
+  /// Журнал сам помечает каждую строку временем, а день виден по отрезку.
+  static final _ownTime = RegExp(r'^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}(\.\d+)? ');
+
+  /// Строка ядра в том виде, в каком она идёт в журнал: без команд раскраски и без своего времени.
+  static String clean(String line) => line.replaceAll(_colorCodes, '').replaceFirst(_ownTime, '');
 
   void _feed(String line) {
     line = clean(line);
