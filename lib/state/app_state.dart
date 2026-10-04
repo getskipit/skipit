@@ -1328,7 +1328,7 @@ class AppState extends ChangeNotifier {
       status = ConnStatus.connected;
       connectedAt = DateTime.now();
       log.add('app', 'Подключено');
-      WinSys.flushDnsCache();
+      _flushDns();
       stats.reset();
       _statsTimer?.cancel();
       _checkPort = checkPort;
@@ -1417,7 +1417,7 @@ class AppState extends ChangeNotifier {
     await _teardown();
     if (!hold) await KillSwitch.release();
     await KillSwitch.verifyReleased();
-    WinSys.flushDnsCache();
+    _flushDns();
     log.add('app', 'Отключено');
     if (summary != null) log.add('app', summary);
     if (KillSwitch.active) log.add('app', 'Kill Switch держит интернет закрытым');
@@ -1487,6 +1487,11 @@ class AppState extends ChangeNotifier {
       }
     }());
   }
+
+  /// Очистка кэша DNS Windows (при подключении и отключении) с записью результата в журнал:
+  /// иначе адреса сайтов, запомненные до смены пути, остались бы прежними.
+  void _flushDns() => log.add(
+      'app', WinSys.flushDnsCache() ? 'Кэш DNS Windows очищен' : 'Не удалось очистить кэш DNS Windows');
 
   /// Что с интернетом, когда VPN отключился сам, — для уведомления.
   String get _withoutVpn =>
