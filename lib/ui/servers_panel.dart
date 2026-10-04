@@ -153,20 +153,33 @@ class _ServersPanelState extends State<ServersPanel> {
             child: DragTarget<Subscription>(
               onWillAcceptWithDetails: (d) => sub != null && canDrag(sub) && d.data != sub,
               onAcceptWithDetails: (d) => state.moveSubscription(d.data, sub!),
-              builder: (context, incoming, _) => Container(
-                foregroundDecoration: incoming.isEmpty
-                    ? null
-                    : BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: C.orange, width: 2),
+              builder: (context, incoming, _) {
+                final moved = incoming.firstOrNull;
+                // Перетаскивают снизу вверх — подписка встанет над этой, сверху вниз — под ней.
+                final above = moved != null &&
+                    sub != null &&
+                    state.subscriptions.indexOf(moved) > state.subscriptions.indexOf(sub);
+                return Stack(clipBehavior: Clip.none, children: [
+                  _GroupCard(
+                    key: ValueKey(sub?.id ?? 'manual'),
+                    subscription: sub,
+                    servers: list,
+                    draggable: sub != null && canDrag(sub),
+                  ),
+                  // Оранжевая черта в промежутке между карточками — место, куда встанет подписка.
+                  if (moved != null)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: above ? -9 : null,
+                      bottom: above ? null : -9,
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(2)),
                       ),
-                child: _GroupCard(
-                  key: ValueKey(sub?.id ?? 'manual'),
-                  subscription: sub,
-                  servers: list,
-                  draggable: sub != null && canDrag(sub),
-                ),
-              ),
+                    ),
+                ]);
+              },
             ),
           ),
     ];
@@ -284,6 +297,9 @@ class _GroupCard extends StatefulWidget {
 class _GroupCardState extends State<_GroupCard> {
   bool _manualExpanded = true;
 
+  /// Заголовок этой подписки сейчас перетаскивают — карточка бледнеет, чтобы было видно, какую несут.
+  bool _dragging = false;
+
   Future<void> _edit(AppState state, Subscription sub) async {
     final name = TextEditingController(text: sub.name);
     final url = TextEditingController(text: sub.url);
@@ -349,6 +365,8 @@ class _GroupCardState extends State<_GroupCard> {
             data: sub,
             axis: Axis.vertical,
             dragAnchorStrategy: pointerDragAnchorStrategy,
+            onDragStarted: () => setState(() => _dragging = true),
+            onDragEnd: (_) => setState(() => _dragging = false),
             feedback: Material(
               color: Colors.transparent,
               child: Container(
@@ -368,7 +386,10 @@ class _GroupCardState extends State<_GroupCard> {
             child: header,
           );
 
-    return Container(
+    return AnimatedOpacity(
+      opacity: _dragging ? 0.45 : 1,
+      duration: const Duration(milliseconds: 140),
+      child: Container(
       decoration: BoxDecoration(
         color: C.surface,
         borderRadius: BorderRadius.circular(18),
@@ -478,6 +499,7 @@ class _GroupCardState extends State<_GroupCard> {
           child: Column(children: [for (final s in widget.servers) _ServerRow(server: s)]),
         ),
       ]),
+      ),
     );
   }
 }
