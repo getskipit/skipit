@@ -195,7 +195,11 @@ void main() {
     expect(find.textContaining('same.example:443 → через VPN'), findsOneWidget);
     expect(find.text('×5'), findsOneWidget);
     expect(find.textContaining('(proxy-2) · вход: HTTP-прокси'), findsNothing);
+    // Клик по самой строке ничего не раскрывает — только по счётчику.
     await tester.tap(find.textContaining('same.example:443'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('(proxy-2) · вход: HTTP-прокси'), findsNothing);
+    await tester.tap(find.text('×5'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.textContaining('(proxy-2) · вход: HTTP-прокси'), findsNWidgets(2));
     if (const String.fromEnvironment('SKIPIT_SHOTS').isNotEmpty) {

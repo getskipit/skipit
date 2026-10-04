@@ -1019,7 +1019,7 @@ String _connLine(ConnEntry c) => '${c.time.toIso8601String()} ${c.network} ${_ta
     '${c.unknownProcess ? ' · программа не определена' : ''}';
 
 /// Строка списка соединений: куда шли → каким путём отправлено. Несколько одинаковых соединений —
-/// одна строка со счётчиком и временем последнего; клик разворачивает их все.
+/// одна строка со счётчиком и временем последнего; клик по счётчику разворачивает их все.
 class _ConnGroupText extends StatelessWidget {
   const _ConnGroupText(this.group, {super.key, required this.open, required this.onToggle});
   final ConnGroup group;
@@ -1052,62 +1052,50 @@ class _ConnGroupText extends StatelessWidget {
       ]),
       style: _style,
     );
-    // Слева у каждой строки место под стрелку — одинаковое, чтобы время стояло в один столбец.
-    if (!many) return Padding(padding: const EdgeInsets.only(left: _arrow), child: head);
+    if (!many) return head;
 
     final count = group.items.length;
+    final orange = C.isDark ? C.orangeLight : C.orange;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      // Раскрывается кликом по всей строке: стрелка слева и подсветка под курсором показывают, что это можно.
-      Tooltip(
-        message: open ? 'Свернуть' : 'Показать все соединения: $count',
-        waitDuration: const Duration(milliseconds: 600),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: Hover(
-            builder: (context, hovered) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onToggle,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                decoration: BoxDecoration(
-                  color: hovered || open ? C.hover : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
+      Row(children: [
+        Flexible(child: head),
+        // Раскрывается только кнопкой-счётчиком, как повторы в журнале: по самой строке можно
+        // спокойно кликать и выделять текст.
+        Tooltip(
+          message: open ? 'Свернуть' : 'Показать все соединения: $count',
+          waitDuration: const Duration(milliseconds: 600),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Hover(
+              builder: (context, hovered) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onToggle,
+                child: Container(
+                  margin: const EdgeInsets.only(left: 8, right: 4),
+                  padding: const EdgeInsets.fromLTRB(6, 0, 2, 0),
+                  decoration: BoxDecoration(
+                    color: hovered || open ? orange.withValues(alpha: 0.16) : C.surface2,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: hovered || open ? orange.withValues(alpha: 0.6) : C.border),
+                  ),
+                  child: DefaultSelectionStyle.merge(
+                    mouseCursor: SystemMouseCursors.click,
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text('×$count',
+                          style: TextStyle(color: orange, fontSize: 11, fontWeight: FontWeight.w700, height: 1.4)),
+                      Icon(open ? Icons.expand_more_rounded : Icons.chevron_right_rounded, size: 14, color: orange),
+                    ]),
+                  ),
                 ),
-                child: Row(children: [
-                  SizedBox(
-                    width: _arrow,
-                    child: AnimatedRotation(
-                      turns: open ? 0.25 : 0,
-                      duration: const Duration(milliseconds: 140),
-                      child: Icon(Icons.chevron_right_rounded, size: 16, color: hovered || open ? C.orange : C.muted),
-                    ),
-                  ),
-                  // Внутри области выделения над текстом по умолчанию курсор «для текста» — здесь строка нажимается.
-                  Flexible(child: DefaultSelectionStyle.merge(mouseCursor: SystemMouseCursors.click, child: head)),
-                  Container(
-                    margin: const EdgeInsets.only(left: 8, right: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: C.surface2,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: hovered || open ? C.orange.withValues(alpha: 0.6) : C.border),
-                    ),
-                    child: DefaultSelectionStyle.merge(
-                      mouseCursor: SystemMouseCursors.click,
-                      child: Text('×$count',
-                          style: TextStyle(color: C.text, fontSize: 11, fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ]),
               ),
             ),
           ),
         ),
-      ),
+      ]),
       if (open)
         for (final e in group.items)
           Padding(
-            padding: const EdgeInsets.only(left: _arrow + 12),
+            padding: const EdgeInsets.only(left: 12),
             child: Text.rich(
               TextSpan(children: [
                 TextSpan(text: _time(e.time), style: TextStyle(color: C.muted)),
@@ -1118,7 +1106,4 @@ class _ConnGroupText extends StatelessWidget {
           ),
     ]);
   }
-
-  /// Ширина места под стрелку раскрытия.
-  static const _arrow = 18.0;
 }
