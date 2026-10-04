@@ -363,6 +363,9 @@ class _GroupCardState extends State<_GroupCard> {
   /// Заголовок этой подписки сейчас перетаскивают — карточка бледнеет, чтобы было видно, какую несут.
   bool _dragging = false;
 
+  /// Где по вертикали нажали на заголовок — чтобы отличить дрогнувший клик от переноса.
+  double _pressedAt = 0;
+
   Future<void> _edit(AppState state, Subscription sub) async {
     final name = TextEditingController(text: sub.name);
     final url = TextEditingController(text: sub.url);
@@ -430,6 +433,11 @@ class _GroupCardState extends State<_GroupCard> {
             dragAnchorStrategy: pointerDragAnchorStrategy,
             onDragStarted: () => setState(() => _dragging = true),
             onDragEnd: (_) => setState(() => _dragging = false),
+            // Рука дрогнула при клике — заголовок сдвинули на пару точек и отпустили на месте.
+            // Это клик, а не перенос: сворачиваем или разворачиваем, как обычно.
+            onDraggableCanceled: (_, offset) {
+              if ((offset.dy - _pressedAt).abs() < 12) toggle();
+            },
             feedback: Material(
               color: Colors.transparent,
               child: Container(
@@ -446,7 +454,7 @@ class _GroupCardState extends State<_GroupCard> {
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
               ),
             ),
-            child: header,
+            child: Listener(onPointerDown: (e) => _pressedAt = e.position.dy, child: header),
           );
 
     return AnimatedOpacity(

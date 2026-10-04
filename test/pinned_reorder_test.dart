@@ -66,6 +66,20 @@ void main() {
     await tester.pump(const Duration(seconds: 9));
   });
 
+  testWidgets('рука дрогнула при клике — подписка сворачивается, а не переносится', (tester) async {
+    final state = await open(tester);
+    final start = tester.getCenter(find.text('Alpha'));
+    final gesture = await tester.startGesture(start, kind: PointerDeviceKind.mouse);
+    await tester.pump(const Duration(milliseconds: 50));
+    await gesture.moveTo(start + const Offset(1, 6));
+    await tester.pump(const Duration(milliseconds: 30));
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(state.subscriptions.first.expanded, isFalse);
+    expect(names(state), ['Alpha', 'Bravo', 'Charlie', 'Delta']);
+    await tester.pump(const Duration(seconds: 9));
+  });
+
   testWidgets('клик по заголовку закреплённой подписки по-прежнему сворачивает её', (tester) async {
     final state = await open(tester);
     expect(state.subscriptions.first.expanded, isTrue);
