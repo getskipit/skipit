@@ -31,12 +31,20 @@ class Pinger {
   /// адаптером: обычное соединение ушло бы в адаптер, а он отвечает на рукопожатие сам и мгновенно —
   /// получилось бы «0 мс» у любого сервера. Соединение, привязанное к адресу сетевой карты, Windows
   /// отправляет через неё. Карт может быть несколько — берётся первая, через которую сервер ответил.
-  static Future<int> tcp(ServerProfile s, {List<InternetAddress> sources = const []}) async {
+  ///
+  /// [cancel] обрывает и уже начатое соединение: сервер, который не отвечает, иначе держал бы
+  /// остановленную проверку до конца своего времени ожидания.
+  static Future<int> tcp(ServerProfile s, {List<InternetAddress> sources = const [], PingCancel? cancel}) async {
     Future<int> attempt(InternetAddress? source) async {
       final sw = Stopwatch()..start();
       try {
-        final socket =
-            await Socket.connect(s.address, s.port, sourceAddress: source, timeout: const Duration(seconds: 4));
+        final task = await Socket.startConnect(s.address, s.port, sourceAddress: source);
+        cancel?._onCancel.add(() async => task.cancel());
+        if (cancel?.cancelled ?? false) task.cancel();
+        final socket = await task.socket.timeout(const Duration(seconds: 4), onTimeout: () {
+          task.cancel();
+          throw TimeoutException('connect');
+        });
         socket.destroy();
         return sw.elapsedMilliseconds;
       } catch (_) {
@@ -89,7 +97,7 @@ class Pinger {
   static Future<void> tcpAll(List<ServerProfile> servers, void Function(ServerProfile, int) onResult,
           [PingCancel? cancel, List<InternetAddress> sources = const []]) =>
       _pool(servers, 24, (s) async {
-        final ms = s.isUdpOnly ? -1 : await tcp(s, sources: sources);
+        final ms = s.isUdpOnly ? -1 : await tcp(s, sources: sources, cancel: cancel);
         if (!(cancel?.cancelled ?? false)) onResult(s, ms);
       }, cancel);
 

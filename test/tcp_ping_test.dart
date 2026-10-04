@@ -34,6 +34,22 @@ void main() {
     expect(await Pinger.tcp(server, sources: [missing]), -1);
   });
 
+  test('остановка обрывает соединение с сервером, который не отвечает', () async {
+    // Адрес из диапазона для документации: пакеты туда уходят в никуда, ответа не будет.
+    final silent = ServerProfile(
+        name: 'silent', protocol: 'vless', address: '192.0.2.55', port: 443, link: '', outbound: const {});
+    // Если на этом компьютере сейчас подключён VPN с адаптером, на рукопожатие отвечает сам адаптер —
+    // молчащего сервера не получится, проверять нечего.
+    if (await Pinger.tcp(silent) >= 0) return;
+    final cancel = PingCancel();
+    final sw = Stopwatch()..start();
+    final result = Pinger.tcp(silent, cancel: cancel);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await cancel.cancel();
+    expect(await result, -1);
+    expect(sw.elapsedMilliseconds, lessThan(2000), reason: 'без обрыва ждали бы все 4 секунды');
+  });
+
   test('адаптер VPN в список сетевых карт не попадает', () async {
     final all = await NetworkInterface.list(type: InternetAddressType.any);
     if (all.isEmpty) return;
