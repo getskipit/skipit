@@ -776,7 +776,9 @@ class AppState extends ChangeNotifier {
     // Сервер подписки уже не ответил через VPN, а напрямую ответил — не ждём таймаута ещё раз.
     if (viaProxy != null && !_subsDirectOnly.contains(sub.id)) {
       try {
-        return await Net.fetchSubscription(sub.url, settings, proxyPort: viaProxy).timeout(limit);
+        // Первая попытка короче: если через VPN сервер молчит, быстрее перейти к запросу напрямую.
+        return await Net.fetchSubscription(sub.url, settings, proxyPort: viaProxy)
+            .timeout(const Duration(seconds: 15));
       } catch (e) {
         // Сервер ответил отказом — запрос дошёл, идти другим путём незачем.
         if (e is ServerRefused && e.isFinal) rethrow;
