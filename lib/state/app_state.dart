@@ -924,8 +924,16 @@ class AppState extends ChangeNotifier {
     }
 
     try {
-      if (settings.pingType == PingType.tcp) {
-        await Pinger.tcpAll(list, onResult, cancel);
+      // Пока подключён VPN с адаптером, рукопожатие идёт мимо адаптера — через настоящую сетевую карту:
+      // иначе на него отвечает сам адаптер и у всех серверов выходит «0 мс».
+      final viaTun = isConnected && usesTun;
+      if (settings.pingType == PingType.tcp && viaTun && KillSwitch.active) {
+        // Kill Switch не выпускает программу мимо адаптера — меряем запросом через сервер.
+        log.add('app', 'С включённым Kill Switch проверка по TCP недоступна — измерена реальная задержка');
+        await Pinger.realDelayAll(list, settings.testUrl, log, onResult, cancel);
+      } else if (settings.pingType == PingType.tcp) {
+        final sources = viaTun ? await Pinger.physicalSources(WinSys.tunNames) : const <InternetAddress>[];
+        await Pinger.tcpAll(list, onResult, cancel, sources);
       } else {
         await Pinger.realDelayAll(list, settings.testUrl, log, onResult, cancel);
       }

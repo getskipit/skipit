@@ -26,14 +26,51 @@ class Pinger {
   static const _timeout = Duration(seconds: 6);
 
   /// TCP-рукопожатие с сервером. -1 — недоступен.
-  static Future<int> tcp(ServerProfile s) async {
-    final sw = Stopwatch()..start();
+  ///
+  /// [sources] — адреса настоящих сетевых карт (см. [physicalSources]). Нужны, пока подключён VPN с
+  /// адаптером: обычное соединение ушло бы в адаптер, а он отвечает на рукопожатие сам и мгновенно —
+  /// получилось бы «0 мс» у любого сервера. Соединение, привязанное к адресу сетевой карты, Windows
+  /// отправляет через неё. Карт может быть несколько — берётся первая, через которую сервер ответил.
+  static Future<int> tcp(ServerProfile s, {List<InternetAddress> sources = const []}) async {
+    Future<int> attempt(InternetAddress? source) async {
+      final sw = Stopwatch()..start();
+      try {
+        final socket =
+            await Socket.connect(s.address, s.port, sourceAddress: source, timeout: const Duration(seconds: 4));
+        socket.destroy();
+        return sw.elapsedMilliseconds;
+      } catch (_) {
+        return -1;
+      }
+    }
+
+    if (sources.isEmpty) return attempt(null);
+    final done = Completer<int>();
+    var left = sources.length;
+    for (final source in sources) {
+      unawaited(attempt(source).then((ms) {
+        left--;
+        if (done.isCompleted) return;
+        if (ms >= 0) {
+          done.complete(ms);
+        } else if (left == 0) {
+          done.complete(-1);
+        }
+      }));
+    }
+    return done.future;
+  }
+
+  /// Адреса всех сетевых карт, кроме адаптеров с именами [skip] (наш адаптер VPN).
+  static Future<List<InternetAddress>> physicalSources(List<String> skip) async {
     try {
-      final socket = await Socket.connect(s.address, s.port, timeout: const Duration(seconds: 4));
-      socket.destroy();
-      return sw.elapsedMilliseconds;
+      final all = await NetworkInterface.list(type: InternetAddressType.any);
+      return [
+        for (final i in all)
+          if (!skip.contains(i.name)) ...i.addresses.where((a) => !a.isLoopback && !a.isLinkLocal),
+      ];
     } catch (_) {
-      return -1;
+      return const [];
     }
   }
 
@@ -50,9 +87,9 @@ class Pinger {
   }
 
   static Future<void> tcpAll(List<ServerProfile> servers, void Function(ServerProfile, int) onResult,
-          [PingCancel? cancel]) =>
+          [PingCancel? cancel, List<InternetAddress> sources = const []]) =>
       _pool(servers, 24, (s) async {
-        final ms = s.isUdpOnly ? -1 : await tcp(s);
+        final ms = s.isUdpOnly ? -1 : await tcp(s, sources: sources);
         if (!(cancel?.cancelled ?? false)) onResult(s, ms);
       }, cancel);
 
