@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -366,6 +367,41 @@ class _GroupCardState extends State<_GroupCard> {
   /// Где по вертикали нажали на заголовок — чтобы отличить дрогнувший клик от переноса.
   double _pressedAt = 0;
 
+  /// Где сейчас указатель во время переноса и таймер прокрутки списка у его краёв.
+  double _pointerY = 0;
+  Timer? _edgeScroll;
+
+  /// Пока подписку держат у верхнего или нижнего края списка, список сам едет в эту сторону —
+  /// тем быстрее, чем ближе к краю. Иначе до подписки за пределами экрана было бы не дотянуться.
+  void _startEdgeScroll() {
+    _edgeScroll?.cancel();
+    final scrollable = Scrollable.maybeOf(context);
+    if (scrollable == null) return;
+    const zone = 70.0;
+    _edgeScroll = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      final box = scrollable.context.findRenderObject();
+      if (box is! RenderBox || !box.attached) return;
+      final top = box.localToGlobal(Offset.zero).dy;
+      final bottom = top + box.size.height;
+      final depth = _pointerY < top + zone
+          ? _pointerY - (top + zone)
+          : _pointerY > bottom - zone
+              ? _pointerY - (bottom - zone)
+              : 0.0;
+      if (depth == 0) return;
+      final position = scrollable.position;
+      final to = (position.pixels + depth.clamp(-zone, zone) * 0.25)
+          .clamp(position.minScrollExtent, position.maxScrollExtent);
+      if (to != position.pixels) position.jumpTo(to);
+    });
+  }
+
+  @override
+  void dispose() {
+    _edgeScroll?.cancel();
+    super.dispose();
+  }
+
   Future<void> _edit(AppState state, Subscription sub) async {
     final name = TextEditingController(text: sub.name);
     final url = TextEditingController(text: sub.url);
@@ -431,8 +467,16 @@ class _GroupCardState extends State<_GroupCard> {
             data: sub,
             axis: Axis.vertical,
             dragAnchorStrategy: pointerDragAnchorStrategy,
-            onDragStarted: () => setState(() => _dragging = true),
-            onDragEnd: (_) => setState(() => _dragging = false),
+            onDragStarted: () {
+              setState(() => _dragging = true);
+              _pointerY = _pressedAt;
+              _startEdgeScroll();
+            },
+            onDragUpdate: (d) => _pointerY = d.globalPosition.dy,
+            onDragEnd: (_) {
+              _edgeScroll?.cancel();
+              setState(() => _dragging = false);
+            },
             // Рука дрогнула при клике — заголовок сдвинули на пару точек и отпустили на месте.
             // Это клик, а не перенос: сворачиваем или разворачиваем, как обычно.
             onDraggableCanceled: (_, offset) {
