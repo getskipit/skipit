@@ -863,6 +863,18 @@ class _LineTextState extends State<_LineText> {
 
   static String _clock(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}:${_two(t.second)}';
 
+  /// Уровень, которым ядро начинает строку (`[Info]` у Xray, `INFO` у sing-box), и номер соединения за ним.
+  static final _levelTag =
+      RegExp(r'^(\[(?:Debug|Info|Warning|Error)\]|(?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL|PANIC)\b) ?(\[\d+\] )?');
+
+  static Color _levelColor(String tag) {
+    final t = tag.toLowerCase();
+    if (t.contains('err') || t.contains('fatal') || t.contains('panic')) return C.red;
+    if (t.contains('warn')) return C.isDark ? C.orangeLight : C.orange;
+    if (t.contains('info')) return C.green;
+    return C.muted;
+  }
+
   @override
   Widget build(BuildContext context) {
     final line = widget.line;
@@ -874,11 +886,18 @@ class _LineTextState extends State<_LineText> {
       1 => C.isDark ? C.orangeLight : C.orange,
       _ => C.text,
     };
+    // Пометка уровня в начале строки ядра — своим цветом и жирным, номер соединения за ней — серым:
+    // так глаз сразу находит, где кончается служебное начало и начинается само сообщение.
+    final tag = _levelTag.firstMatch(line.text);
+    final level = tag?.group(1), conn = tag?.group(2);
     final text = Text.rich(
       TextSpan(children: [
         TextSpan(text: '${_clock(t)} ', style: TextStyle(color: C.muted)),
         TextSpan(text: '[${line.source}] ', style: TextStyle(color: C.cyan)),
-        TextSpan(text: line.text, style: TextStyle(color: color)),
+        if (level != null)
+          TextSpan(text: '$level ', style: TextStyle(color: _levelColor(level), fontWeight: FontWeight.w700)),
+        if (conn != null) TextSpan(text: conn, style: TextStyle(color: C.muted)),
+        TextSpan(text: tag == null ? line.text : line.text.substring(tag.end), style: TextStyle(color: color)),
         // Одинаковые строки ядра не повторяются в журнале — у первой растёт счётчик.
         if (line.repeats > 1) ...[
           const TextSpan(text: '  '),
