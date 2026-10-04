@@ -181,7 +181,7 @@ Future<void> main(List<String> rawArgs) async {
       AppTheme.system => WidgetsBinding.instance.platformDispatcher.platformBrightness != Brightness.light,
     };
     // Серверы для меню — в том же порядке, что на главной (не больше 60: меню прокручивается колесом).
-    final servers = state.servers.take(60).toList();
+    final servers = state.serversInListOrder.take(60).toList();
     // Провайдер каждого сервера — для заголовков в списке. Если провайдер один, заголовки не нужны.
     String groupOf(ServerProfile s) {
       final sub = state.subscriptionById(s.subscriptionId);

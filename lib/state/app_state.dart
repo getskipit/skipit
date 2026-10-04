@@ -647,6 +647,14 @@ class AppState extends ChangeNotifier {
   List<ServerProfile> serversOf(String? subscriptionId) =>
       servers.where((s) => s.subscriptionId == subscriptionId).toList();
 
+  /// Серверы в том порядке, в каком они стоят на главной: закреплённые подписки, остальные подписки,
+  /// затем свои серверы. Так же идёт список в меню значка в трее.
+  List<ServerProfile> get serversInListOrder => [
+        for (final sub in [...subscriptions.where((s) => s.pinned), ...subscriptions.where((s) => !s.pinned)])
+          ...serversOf(sub.id),
+        ...serversOf(null),
+      ];
+
   Subscription? subscriptionById(String? id) {
     for (final s in subscriptions) {
       if (s.id == id) return s;
