@@ -34,8 +34,10 @@ UninstallDisplayName={#AppName}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-; Лицензия показывается на отдельном шаге мастера установки.
-LicenseFile=..\LICENSE
+; Лицензия показывается на отдельном шаге мастера установки: тот же текст, что в LICENSE, но без
+; приложения-образца в конце («Copyright [yyyy] [name of copyright owner]»). В папку программы
+; ставится полный LICENSE.
+LicenseFile=license.txt
 ; Если программа всё же запущена — закрыть её перед заменой файлов.
 CloseApplications=force
 RestartApplications=no
