@@ -22,7 +22,22 @@ class AppPaths {
     geoDir = Directory('${dataDir.path}\\geo');
     await geoDir.create(recursive: true);
     coreDir = _findCoreDir();
-    if (isDev) await _seedDevData(appData);
+    if (isDev) {
+      await _seedDevData(appData);
+    } else {
+      _removeOldConfigs();
+    }
+  }
+
+  /// Конфиги ядер на диск больше не пишутся (их пишет только тестовая сборка), но от прежних версий
+  /// могли остаться файлы с адресами серверов. Убираем их при запуске, не дожидаясь подключения.
+  static void _removeOldConfigs() {
+    for (final path in [configFile, tunConfigFile, testConfigFile]) {
+      try {
+        final file = File(path);
+        if (file.existsSync()) file.deleteSync();
+      } catch (_) {}
+    }
   }
 
   /// Первый запуск тестовой сборки: один раз копируем подписки и настройки из установленного SkipIt,
