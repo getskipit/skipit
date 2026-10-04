@@ -49,6 +49,7 @@ class Tray {
     required String tooltip,
     required bool connected,
     required bool closeToTray,
+    required bool notifications,
     required String status,
     required String server,
     required int state,
@@ -81,6 +82,10 @@ class Tray {
         'toggle': connected ? 'Отключить' : 'Подключить',
         'exit': 'Выход',
         'closeToTray': closeToTray,
+        // Уведомление при закрытии окна крестиком (раз за запуск); пустая строка его выключает.
+        'closeHint': notifications
+            ? '${AppPaths.appName} продолжает работать в трее. Выход — через меню значка'
+            : '',
       });
 
   static Future<void> show() => _call('show');

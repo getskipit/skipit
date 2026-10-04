@@ -35,6 +35,8 @@ class FlutterWindow : public Win32Window {
 
   void AddTrayIcon();
   void RemoveTrayIcon();
+  // Уведомление Windows у значка в трее.
+  void ShowNotification(const std::wstring& title, const std::wstring& text, bool warning);
   void ShowFromTray();
   void ShowTrayMenu();
   void HandleTrayCall(
@@ -57,6 +59,10 @@ class FlutterWindow : public Win32Window {
   bool tray_added_ = false;
   // Крестик прячет окно в трей вместо выхода (настройка приходит из Dart).
   bool close_to_tray_ = true;
+  // Текст уведомления «программа осталась в трее» (из Dart; пустой — уведомления выключены)
+  // и отметка, что в этом запуске его уже показывали.
+  std::wstring close_hint_;
+  bool close_hint_shown_ = false;
   // В прошлый раз окно было развёрнуто на весь экран.
   bool start_maximized_ = false;
   // Идёт перетаскивание/изменение размера — сохраняем только в конце.

@@ -156,7 +156,8 @@ class SettingsPage extends StatelessWidget {
               (v) => state.setAutostart(v)),
           toggle('Сворачивать в трей при закрытии', 'Крестик прячет окно в трей, VPN продолжает работать. Выход — через меню значка в трее',
               s.closeToTray, (v) => s.closeToTray = v),
-          toggle('Уведомления Windows', 'Пока окно спрятано, сообщать: VPN оборвался, переподключился, связи через сервер нет',
+          toggle('Уведомления Windows', 'Пока окно спрятано, сообщать: VPN оборвался, переподключился, связи через сервер нет. '
+                  'И напоминать, что программа осталась в трее',
               s.notifications, (v) => s.notifications = v),
           toggle('Подключаться при запуске', 'Автоматически включать VPN при автозапуске', s.connectOnStart,
               (v) => s.connectOnStart = v),

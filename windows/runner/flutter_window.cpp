@@ -176,6 +176,16 @@ void FlutterWindow::RemoveTrayIcon() {
   tray_added_ = false;
 }
 
+void FlutterWindow::ShowNotification(const std::wstring& title, const std::wstring& text, bool warning) {
+  if (!tray_added_) return;
+  NOTIFYICONDATAW data = tray_icon_;
+  data.uFlags = NIF_INFO;
+  wcsncpy_s(data.szInfoTitle, title.c_str(), _TRUNCATE);
+  wcsncpy_s(data.szInfo, text.c_str(), _TRUNCATE);
+  data.dwInfoFlags = warning ? NIIF_WARNING : NIIF_INFO;
+  Shell_NotifyIconW(NIM_MODIFY, &data);
+}
+
 void FlutterWindow::ShowFromTray() {
   HWND hwnd = GetHandle();
   ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);
@@ -265,6 +275,7 @@ void FlutterWindow::HandleTrayCall(
       if (auto v = text("exit")) tray_menu_.label_exit = *v;
       if (auto v = text("title")) tray_menu_.title = *v;
       if (auto v = text("status")) tray_menu_.status = *v;
+      if (auto v = text("closeHint")) close_hint_ = *v;
       if (auto v = text("server")) tray_menu_.server = *v;
       auto state = args->find(flutter::EncodableValue("state"));
       if (state != args->end()) {
@@ -332,12 +343,7 @@ void FlutterWindow::HandleTrayCall(
       };
       auto warning = args->find(flutter::EncodableValue("warning"));
       const auto* is_warning = warning == args->end() ? nullptr : std::get_if<bool>(&warning->second);
-      NOTIFYICONDATAW data = tray_icon_;
-      data.uFlags = NIF_INFO;
-      wcsncpy_s(data.szInfoTitle, text("title").c_str(), _TRUNCATE);
-      wcsncpy_s(data.szInfo, text("text").c_str(), _TRUNCATE);
-      data.dwInfoFlags = is_warning && *is_warning ? NIIF_WARNING : NIIF_INFO;
-      Shell_NotifyIconW(NIM_MODIFY, &data);
+      ShowNotification(text("title"), text("text"), is_warning && *is_warning);
     }
     result->Success();
   } else if (method == "show") {
@@ -394,6 +400,11 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       // Крестик прячет окно в трей; VPN продолжает работать.
       if (close_to_tray_ && tray_added_) {
         ShowWindow(hwnd, SW_HIDE);
+        // Один раз за запуск напоминаем, что программа не закрылась, а спряталась.
+        if (!close_hint_.empty() && !close_hint_shown_) {
+          close_hint_shown_ = true;
+          ShowNotification(tray_menu_.title, close_hint_, false);
+        }
         return 0;
       }
       break;

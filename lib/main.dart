@@ -189,7 +189,7 @@ Future<void> main(List<String> rawArgs) async {
 
     final groups = [for (final s in servers) groupOf(s)];
     final grouped = groups.toSet().length > 1;
-    final key = '$tooltip|${state.status.name}|${state.settings.closeToTray}|$dark|${state.settings.mode.name}|'
+    final key = '$tooltip|${state.status.name}|${state.settings.closeToTray}|${state.settings.notifications}|$dark|${state.settings.mode.name}|'
         '${state.usesTun ? state.settings.tunCore.name : ''}|${grouped ? groups.join(',') : ''}|'
         '${state.settings.selectedServerId}|${servers.map((s) => '${s.id}:${s.name}').join(',')}';
     if (key == lastTray) return;
@@ -199,6 +199,7 @@ Future<void> main(List<String> rawArgs) async {
       tooltip: tooltip,
       connected: state.isConnected,
       closeToTray: state.settings.closeToTray,
+      notifications: state.settings.notifications,
       status: status,
       server: server ?? 'Сервер не выбран',
       state: state.isConnected ? 2 : (state.isBusy ? 1 : 0),
