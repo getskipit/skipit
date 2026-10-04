@@ -236,7 +236,8 @@ class SettingsPage extends StatelessWidget {
             title: 'User-Agent',
             subtitle: 'Некоторые панели отдают разный формат по User-Agent',
             trailing: SizedBox(
-              width: 340,
+              // Значение обычно короткое («SkipIt/1.0.7»); более длинное прокручивается внутри поля.
+              width: 220,
               child: _UserAgentField(
                 value: s.userAgent,
                 onChanged: (v) {
