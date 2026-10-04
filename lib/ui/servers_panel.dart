@@ -41,6 +41,27 @@ class _ServersPanelState extends State<ServersPanel> {
     super.dispose();
   }
 
+  /// Карточки групп по id подписки — чтобы после перестановки плавно довезти их на новые места.
+  final _slides = <String, GlobalKey<_MoveSlideState>>{};
+
+  /// Перестановка закреплённых подписок: карточки не перескакивают, а съезжаются на новые места.
+  void _move(AppState state, Subscription moved, Subscription target) {
+    final before = {
+      for (final e in _slides.entries)
+        if (e.value.currentState != null) e.key: e.value.currentState!.top,
+    };
+    state.moveSubscription(moved, target);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final e in _slides.entries) {
+        final slide = e.value.currentState;
+        final old = before[e.key];
+        if (slide == null || old == null) continue;
+        final delta = old - slide.top;
+        if (delta.abs() > 0.5) slide.slideFrom(delta);
+      }
+    });
+  }
+
   void _clearSearch() {
     _search.clear();
     setState(() => _query = '');
@@ -147,12 +168,14 @@ class _ServersPanelState extends State<ServersPanel> {
         )
       else
         for (final (sub, list) in groups)
-          Padding(
+          _MoveSlide(
+            key: _slides.putIfAbsent(sub?.id ?? 'manual', GlobalKey<_MoveSlideState>.new),
+            child: Padding(
             padding: const EdgeInsets.only(bottom: 14),
             // Закреплённые подписки можно менять местами: заголовок одной перетаскивают на другую.
             child: DragTarget<Subscription>(
               onWillAcceptWithDetails: (d) => sub != null && canDrag(sub) && d.data != sub,
-              onAcceptWithDetails: (d) => state.moveSubscription(d.data, sub!),
+              onAcceptWithDetails: (d) => _move(state, d.data, sub!),
               builder: (context, incoming, _) {
                 final moved = incoming.firstOrNull;
                 // Перетаскивают снизу вверх — подписка встанет над этой, сверху вниз — под ней.
@@ -181,6 +204,7 @@ class _ServersPanelState extends State<ServersPanel> {
                 ]);
               },
             ),
+            ),
           ),
     ];
 
@@ -189,6 +213,45 @@ class _ServersPanelState extends State<ServersPanel> {
         ? ListView(primary: true, padding: const EdgeInsets.only(right: scrollGutter, bottom: 24), children: children)
         : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
   }
+}
+
+/// Обёртка карточки в списке: после перестановки доезжает со старого места на новое.
+class _MoveSlide extends StatefulWidget {
+  const _MoveSlide({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<_MoveSlide> createState() => _MoveSlideState();
+}
+
+class _MoveSlideState extends State<_MoveSlide> with SingleTickerProviderStateMixin {
+  late final _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 260), value: 1);
+  double _from = 0;
+
+  /// Верх карточки на экране.
+  double get top => (context.findRenderObject() as RenderBox).localToGlobal(Offset.zero).dy;
+
+  /// Карточка уже стоит на новом месте; показываем её сдвинутой на [delta] и возвращаем в ноль.
+  void slideFrom(double delta) {
+    _from = delta;
+    _anim.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _anim,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, _from * (1 - Curves.easeOutCubic.transform(_anim.value))),
+          child: child,
+        ),
+        child: widget.child,
+      );
 }
 
 class _EmptyState extends StatelessWidget {

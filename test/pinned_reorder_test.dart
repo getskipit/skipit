@@ -41,7 +41,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 30));
     }
     await gesture.up();
-    await tester.pump(const Duration(milliseconds: 300));
+    // Карточки доезжают на новые места — ждём конца движения.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
   }
 
   List<String> names(AppState state) => [for (final s in state.subscriptions) s.name];
