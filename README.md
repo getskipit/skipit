@@ -14,7 +14,6 @@
 
 [![version](https://img.shields.io/github/v/release/getskipit/skipit?include_prereleases&sort=date&style=for-the-badge&label=version&labelColor=010409&color=FF6A1A&logo=github&logoColor=white)](https://github.com/getskipit/skipit/releases/latest)
 [![status](https://img.shields.io/badge/stable-3FB950?style=for-the-badge&label=status&labelColor=010409&logo=rocket&logoColor=white)](#-о-проекте)
-[![downloads](https://img.shields.io/github/downloads/getskipit/skipit/total?style=for-the-badge&label=downloads&labelColor=010409&color=3FB950&logo=windows&logoColor=white)](https://github.com/getskipit/skipit/releases)
 [![license](https://img.shields.io/github/license/getskipit/skipit?style=for-the-badge&label=license&labelColor=010409&color=3FB950&logo=opensourceinitiative&logoColor=white)](LICENSE)
 
 [![os](https://img.shields.io/badge/Windows%2010%20%C2%B7%2011%20x64-161B22?style=for-the-badge&label=os&labelColor=010409&logo=windows11&logoColor=0078D4)](#-системные-требования)
