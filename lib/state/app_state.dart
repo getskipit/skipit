@@ -219,7 +219,7 @@ class AppState extends ChangeNotifier {
       _linkFails++;
       if (!wasDown && linkDown) {
         log.add('app', 'Ошибка: VPN подключён, но связи через сервер нет');
-        _notify('VPN подключён, но связи через сервер нет', warning: true);
+        _notify('VPN подключён, но связи через сервер нет');
       }
     }
     notifyListeners();
@@ -1463,19 +1463,19 @@ class AppState extends ChangeNotifier {
       // Включённый Kill Switch остаётся стоять: пока VPN не вернулся, трафик напрямую не идёт.
       await disconnect(keepError: true, hold: true);
       if (retry) {
-        _notify('VPN оборвался, переподключаюсь', warning: true);
+        _notify('VPN оборвался, переподключаюсь');
         await Future.delayed(const Duration(seconds: 3));
         await connect();
         if (isConnected) {
           _notify('VPN снова подключён');
         } else {
-          _notify('Не удалось переподключиться. $_withoutVpn', warning: true);
+          _notify('Не удалось переподключиться. $_withoutVpn');
         }
       } else {
         lastError = 'Ядро VPN неожиданно закрылось, подключение остановлено. Если запущен другой VPN-клиент '
             '(например, Happ) — закройте его: он может закрывать ядро SkipIt.';
         notifyListeners();
-        _notify('VPN отключился: ядро неожиданно закрылось. $_withoutVpn', warning: true);
+        _notify('VPN отключился: ядро неожиданно закрылось. $_withoutVpn');
       }
     }());
   }
@@ -1486,8 +1486,8 @@ class AppState extends ChangeNotifier {
 
   /// Уведомление Windows о сбое или восстановлении VPN. Показывается, только когда окно спрятано
   /// или свёрнуто (это решает оболочка окна) и уведомления не выключены в настройках.
-  void _notify(String text, {bool warning = false}) {
-    if (settings.notifications) unawaited(Tray.notify(text, warning: warning));
+  void _notify(String text) {
+    if (settings.notifications) unawaited(Tray.notify(text));
   }
 
   Future<void> _ensureGeoFiles(RoutingProfile routing, {bool force = false}) async {

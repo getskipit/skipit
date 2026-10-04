@@ -83,17 +83,13 @@ class Tray {
         'exit': 'Выход',
         'closeToTray': closeToTray,
         // Уведомление при закрытии окна крестиком (раз за запуск); пустая строка его выключает.
-        'closeHint': notifications
-            ? '${AppPaths.appName} продолжает работать в трее. Выход — через меню значка'
-            : '',
+        'closeHint': notifications ? 'Продолжает работать в трее' : '',
       });
 
   static Future<void> show() => _call('show');
 
   /// Уведомление Windows у значка. Оболочка показывает его, только когда окно спрятано или свёрнуто.
-  /// [warning] — со значком предупреждения (сбой), иначе обычное.
-  static Future<void> notify(String text, {bool warning = false}) =>
-      _call('notify', {'title': AppPaths.appName, 'text': text, 'warning': warning});
+  static Future<void> notify(String text) => _call('notify', {'title': AppPaths.appName, 'text': text});
 
   /// Убирает значок и закрывает окно. Перед вызовом всё уже должно быть остановлено.
   static Future<void> quit() => _call('quit');

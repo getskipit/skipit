@@ -36,7 +36,7 @@ class FlutterWindow : public Win32Window {
   void AddTrayIcon();
   void RemoveTrayIcon();
   // Уведомление Windows у значка в трее.
-  void ShowNotification(const std::wstring& title, const std::wstring& text, bool warning);
+  void ShowNotification(const std::wstring& title, const std::wstring& text);
   void ShowFromTray();
   void ShowTrayMenu();
   void HandleTrayCall(

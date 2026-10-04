@@ -176,13 +176,17 @@ void FlutterWindow::RemoveTrayIcon() {
   tray_added_ = false;
 }
 
-void FlutterWindow::ShowNotification(const std::wstring& title, const std::wstring& text, bool warning) {
+void FlutterWindow::ShowNotification(const std::wstring& title, const std::wstring& text) {
   if (!tray_added_) return;
   NOTIFYICONDATAW data = tray_icon_;
   data.uFlags = NIF_INFO;
   wcsncpy_s(data.szInfoTitle, title.c_str(), _TRUNCATE);
   wcsncpy_s(data.szInfo, text.c_str(), _TRUNCATE);
-  data.dwInfoFlags = warning ? NIIF_WARNING : NIIF_INFO;
+  // Картинка уведомления — значок программы, а не стандартные «i» и треугольник Windows.
+  data.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON;
+  data.hBalloonIcon = static_cast<HICON>(LoadImageW(
+      GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
+      GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR | LR_SHARED));
   Shell_NotifyIconW(NIM_MODIFY, &data);
 }
 
@@ -341,9 +345,7 @@ void FlutterWindow::HandleTrayCall(
         const auto* s = it == args->end() ? nullptr : std::get_if<std::string>(&it->second);
         return s ? Utf8ToWide(*s) : std::wstring();
       };
-      auto warning = args->find(flutter::EncodableValue("warning"));
-      const auto* is_warning = warning == args->end() ? nullptr : std::get_if<bool>(&warning->second);
-      ShowNotification(text("title"), text("text"), is_warning && *is_warning);
+      ShowNotification(text("title"), text("text"));
     }
     result->Success();
   } else if (method == "show") {
@@ -403,7 +405,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         // Один раз за запуск напоминаем, что программа не закрылась, а спряталась.
         if (!close_hint_.empty() && !close_hint_shown_) {
           close_hint_shown_ = true;
-          ShowNotification(tray_menu_.title, close_hint_, false);
+          ShowNotification(tray_menu_.title, close_hint_);
         }
         return 0;
       }

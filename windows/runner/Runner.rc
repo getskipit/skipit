@@ -90,7 +90,7 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "SkipIt" "\0"
-            VALUE "FileDescription", "SkipIt VPN" "\0"
+            VALUE "FileDescription", "SkipIt" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "SkipIt" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 SkipIt" "\0"
