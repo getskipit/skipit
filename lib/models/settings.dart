@@ -45,7 +45,7 @@ enum UpdateChannel { stable, beta }
 
 class AppSettings {
   ConnectionMode mode = ConnectionMode.mixed;
-  TunCore tunCore = TunCore.singbox;
+  TunCore tunCore = TunCore.xray;
   int socksPort = 10808;
   int httpPort = 10809;
   int apiPort = 10813;
