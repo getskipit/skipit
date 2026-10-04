@@ -43,7 +43,7 @@ constexpr wchar_t kGlyphPower = L'\xE7E8';
 constexpr wchar_t kGlyphGlobe = L'\xE774';
 constexpr wchar_t kGlyphCheck = L'\xE73E';
 
-enum class Kind { kAction, kMode, kCore, kServer };
+enum class Kind { kAction, kMode, kCore, kSwitch, kServer };
 
 struct Item {
   Kind kind = Kind::kAction;
@@ -196,6 +196,14 @@ int Layout(Menu& m) {
   segmented(Kind::kMode, m.model.label_mode, m.mode_track);
   // Ядро TUN — только в режимах с адаптером (в остальных список ядер пуст).
   segmented(Kind::kCore, m.model.label_core, m.core_track);
+
+  // Kill Switch — строка с выключателем (тоже только в режимах с адаптером).
+  for (Item& item : m.items) {
+    if (item.kind != Kind::kSwitch) continue;
+    separator();
+    item.rect = RECT{left, y, right, y + px(kItemHeight)};
+    y += px(kItemHeight);
+  }
 
   // Серверы: видимая часть списка, остальное — прокруткой.
   const int visible = VisibleServers(m);
@@ -393,12 +401,33 @@ void Paint(HWND hwnd, HDC target) {
         continue;
       }
 
+      if (item.kind == Kind::kSwitch) {
+        // Название слева, выключатель справа — как в настройках программы.
+        g.DrawString(item.text.c_str(), -1, &item_font,
+                     Gdiplus::RectF(r.X + 12 * s, r.Y, r.Width - 12 * s - 52 * s, r.Height), &format, &text_brush);
+        const float tw = 34 * s, th = 18 * s;
+        const Gdiplus::RectF track(r.GetRight() - tw - 10 * s, r.Y + (r.Height - th) / 2, tw, th);
+        FillRounded(g, track, th / 2, item.selected ? Rgb(kOrange) : Rgb(p.muted, 90));
+        const float knob = th - 6 * s;
+        Gdiplus::SolidBrush knob_brush(item.selected ? Gdiplus::Color(255, 255, 255, 255) : Rgb(p.muted));
+        g.FillEllipse(&knob_brush, item.selected ? track.GetRight() - knob - 3 * s : track.X + 3 * s, track.Y + 3 * s,
+                      knob, knob);
+        continue;
+      }
+
       // Главное действие всегда оранжевое; остальные значки загораются при наведении.
       Gdiplus::SolidBrush glyph_brush(Rgb(hovered || item.accent ? accent : p.muted));
       Gdiplus::SolidBrush label_brush(Rgb(item.danger && hovered ? kRed : p.text));
-      const wchar_t glyph[2] = {item.glyph, 0};
-      g.DrawString(glyph, 1, &icon_font, Gdiplus::RectF(r.X + 6 * s, r.Y + 1 * s, 28 * s, r.Height), &center,
-                   &glyph_brush);
+      if (item.glyph == kGlyphStop) {
+        // «Отключить» — закрашенный квадрат «стоп». Контурный значок из шрифта выглядел как пустая галочка.
+        const float size = 11 * s;
+        FillRounded(g, Gdiplus::RectF(r.X + 6 * s + (28 * s - size) / 2, r.Y + (r.Height - size) / 2, size, size),
+                    2.5f * s, Rgb(hovered ? accent : p.muted));
+      } else {
+        const wchar_t glyph[2] = {item.glyph, 0};
+        g.DrawString(glyph, 1, &icon_font, Gdiplus::RectF(r.X + 6 * s, r.Y + 1 * s, 28 * s, r.Height), &center,
+                     &glyph_brush);
+      }
       g.DrawString(item.text.c_str(), -1, &item_font,
                    Gdiplus::RectF(r.X + 40 * s, r.Y, r.Width - 48 * s, r.Height), &format, &label_brush);
     }
@@ -583,6 +612,14 @@ void ShowTrayMenu(HWND owner, UINT message, POINT pt, const TrayMenuModel& model
     core.text = model.cores[i];
     core.selected = static_cast<int>(i) == model.core;
     menu->items.push_back(core);
+  }
+  if (model.kill_switch >= 0) {
+    Item kill_switch;
+    kill_switch.kind = Kind::kSwitch;
+    kill_switch.command = commands.kill_switch;
+    kill_switch.text = model.label_kill_switch;
+    kill_switch.selected = model.kill_switch == 1;
+    menu->items.push_back(kill_switch);
   }
   int selected_row = -1;
   for (size_t i = 0; i < model.servers.size(); i++) {

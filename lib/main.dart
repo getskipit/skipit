@@ -149,6 +149,7 @@ Future<void> main(List<String> rawArgs) async {
         state.toast('$e — нажмите кнопку подключения в окне');
       }
     },
+    onKillSwitch: () => state.setKillSwitch(!state.settings.killSwitch),
     onServer: (index) async {
       if (index < 0 || index >= trayServers.length) return;
       try {
@@ -191,7 +192,7 @@ Future<void> main(List<String> rawArgs) async {
     final groups = [for (final s in servers) groupOf(s)];
     final grouped = groups.toSet().length > 1;
     final key = '$tooltip|${state.status.name}|${state.settings.closeToTray}|${state.settings.notifications}|$dark|${state.settings.mode.name}|'
-        '${state.usesTun ? state.settings.tunCore.name : ''}|${grouped ? groups.join(',') : ''}|'
+        '${state.usesTun ? '${state.settings.tunCore.name}|${state.settings.killSwitch}' : ''}|${grouped ? groups.join(',') : ''}|'
         '${state.settings.selectedServerId}|${servers.map((s) => '${s.id}:${s.name}').join(',')}';
     if (key == lastTray) return;
     lastTray = key;
@@ -210,6 +211,7 @@ Future<void> main(List<String> rawArgs) async {
       // Ядро TUN выбирается только в режимах с адаптером — в остальных переключателя в меню нет.
       cores: state.usesTun ? const ['sing-box', 'Xray'] : const [],
       core: TunCore.values.indexOf(state.settings.tunCore),
+      killSwitch: state.usesTun ? state.settings.killSwitch : null,
       servers: [
         for (final (i, s) in servers.indexed)
           () {

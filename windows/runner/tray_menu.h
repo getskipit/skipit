@@ -38,6 +38,9 @@ struct TrayMenuModel {
   // Ядра TUN (подписи) и номер выбранного; пусто — режим без TUN, переключатель не показывается.
   std::vector<std::wstring> cores;
   int core = -1;
+  // Kill Switch: −1 — пункта нет (режим без TUN), 0 — выключен, 1 — включён.
+  std::wstring label_kill_switch = L"Kill Switch";
+  int kill_switch = -1;
   // Серверы и номер выбранного.
   std::vector<TrayMenuServer> servers;
   int selected_server = -1;
@@ -48,6 +51,7 @@ struct TrayMenuCommands {
   UINT toggle;
   UINT open;
   UINT exit;
+  UINT kill_switch;
   UINT mode_base;
   UINT core_base;
   UINT server_base;

@@ -19,6 +19,7 @@ constexpr UINT kTrayMenuCommand = WM_APP + 3;
 constexpr UINT kCmdOpen = 1;
 constexpr UINT kCmdToggle = 2;
 constexpr UINT kCmdExit = 3;
+constexpr UINT kCmdKillSwitch = 4;
 // Выбор режима и сервера в меню значка: база плюс номер пункта.
 constexpr UINT kCmdModeBase = 100;
 constexpr UINT kCmdCoreBase = 200;
@@ -202,7 +203,8 @@ void FlutterWindow::ShowTrayMenu() {
   GetCursorPos(&pt);
   if (tray_menu_.status.empty()) tray_menu_.title = IsDevBuild() ? L"SkipIt Dev" : L"SkipIt";
   ::ShowTrayMenu(GetHandle(), kTrayMenuCommand, pt, tray_menu_,
-                 TrayMenuCommands{kCmdToggle, kCmdOpen, kCmdExit, kCmdModeBase, kCmdCoreBase, kCmdServerBase});
+                 TrayMenuCommands{kCmdToggle, kCmdOpen, kCmdExit, kCmdKillSwitch, kCmdModeBase, kCmdCoreBase,
+                                  kCmdServerBase});
 }
 
 void FlutterWindow::HandleKillSwitchCall(
@@ -301,6 +303,7 @@ void FlutterWindow::HandleTrayCall(
       tray_menu_.mode = number("mode", tray_menu_.mode);
       tray_menu_.selected_server = number("selectedServer", tray_menu_.selected_server);
       tray_menu_.core = number("core", tray_menu_.core);
+      tray_menu_.kill_switch = number("killSwitch", tray_menu_.kill_switch);
       auto strings = [args](const char* key, std::vector<std::wstring>& out) {
         auto it = args->find(flutter::EncodableValue(key));
         if (it == args->end()) return;
@@ -434,6 +437,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
           break;
         case kCmdExit:
           if (tray_channel_) tray_channel_->InvokeMethod("exit", nullptr);
+          break;
+        case kCmdKillSwitch:
+          if (tray_channel_) tray_channel_->InvokeMethod("killSwitch", nullptr);
           break;
         default:
           // Выбран режим, ядро TUN или сервер — номер пункта уходит в Dart.

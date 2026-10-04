@@ -16,6 +16,7 @@ class Tray {
     required Future<void> Function(int index) onMode,
     required Future<void> Function(int index) onCore,
     required Future<void> Function(int index) onServer,
+    required Future<void> Function() onKillSwitch,
   }) {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
@@ -29,6 +30,8 @@ class Tray {
           await onCore(call.arguments as int);
         case 'server':
           await onServer(call.arguments as int);
+        case 'killSwitch':
+          await onKillSwitch();
       }
       return null;
     });
@@ -45,6 +48,7 @@ class Tray {
   /// [status] и [server] — шапка меню значка, [state]: 0 — не подключено, 1 — идёт подключение
   /// или отключение, 2 — подключено; [dark] — тема программы (меню рисуется в её цветах).
   /// [cores] — ядра TUN; пустой список прячет их переключатель (режим без адаптера).
+  /// [killSwitch] — выключатель Kill Switch; null прячет его (он действует только в режимах с адаптером).
   static Future<void> update({
     required String tooltip,
     required bool connected,
@@ -58,6 +62,7 @@ class Tray {
     required int mode,
     required List<String> cores,
     required int core,
+    required bool? killSwitch,
     required List<Map<String, String>> servers,
     required int selectedServer,
   }) =>
@@ -69,6 +74,8 @@ class Tray {
         'mode': mode,
         'cores': cores,
         'core': core,
+        // Выключатель Kill Switch: −1 — пункта в меню нет.
+        'killSwitch': killSwitch == null ? -1 : (killSwitch ? 1 : 0),
         'servers': servers,
         'selectedServer': selectedServer,
         'title': AppPaths.appName,
