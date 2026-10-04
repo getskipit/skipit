@@ -72,7 +72,7 @@ DWORD AddFilter(const Context& c, const GUID& layer, UINT8 weight, bool permit,
 // Входящие закрываются так же, как исходящие: иначе программа, которая сама принимает подключения
 // (торрент-клиент, игровой сервер), продолжала бы обмениваться данными через обычную сеть.
 std::wstring AddLayer(const Context& c, bool v6, bool inbound, const std::vector<FWP_BYTE_BLOB*>& apps,
-                      const std::wstring& tun) {
+                      FWP_BYTE_BLOB* self, const std::wstring& tun) {
   const GUID& layer = inbound ? (v6 ? FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6 : FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4)
                               : (v6 ? FWPM_LAYER_ALE_AUTH_CONNECT_V6 : FWPM_LAYER_ALE_AUTH_CONNECT_V4);
   DWORD rc;
@@ -150,6 +150,22 @@ std::wstring AddLayer(const Context& c, bool v6, bool inbound, const std::vector
     cond.conditionValue.type = FWP_UINT16;
     cond.conditionValue.uint16 = 53;
     if ((rc = AddFilter(c, layer, kWeightDns, false, &cond, 1)) != ERROR_SUCCESS) return Error(L"dns", rc);
+  }
+
+  // Сама программа: только исходящие соединения TCP — так она меряет задержку до VPN-серверов мимо
+  // адаптера (через адаптер рукопожатие занимает 0 мс у любого сервера). Весь остальной её трафик
+  // идёт через адаптер, как у обычных программ. Вес ниже запрета DNS: к порту 53 не выпускается.
+  if (!inbound && self) {
+    FWPM_FILTER_CONDITION0 conds[2]{};
+    conds[0].fieldKey = FWPM_CONDITION_ALE_APP_ID;
+    conds[0].matchType = FWP_MATCH_EQUAL;
+    conds[0].conditionValue.type = FWP_BYTE_BLOB_TYPE;
+    conds[0].conditionValue.byteBlob = self;
+    conds[1].fieldKey = FWPM_CONDITION_IP_PROTOCOL;
+    conds[1].matchType = FWP_MATCH_EQUAL;
+    conds[1].conditionValue.type = FWP_UINT8;
+    conds[1].conditionValue.uint8 = IPPROTO_TCP;
+    if ((rc = AddFilter(c, layer, kWeightLan, true, conds, 2)) != ERROR_SUCCESS) return Error(L"self", rc);
   }
 
   // Локальная сеть остаётся доступной: роутер, принтер, общие папки.
@@ -232,10 +248,18 @@ std::wstring KillSwitchEngage(const std::vector<std::wstring>& apps, const std::
         ids.push_back(id);
       }
     }
-    for (const bool inbound : {false, true}) {
-      if (error.empty()) error = AddLayer(c, false, inbound, ids, tun_v4);
-      if (error.empty()) error = AddLayer(c, true, inbound, ids, tun_v6);
+    // Сама программа (для проверки задержки). Не удалось узнать — обходимся без этого разрешения.
+    FWP_BYTE_BLOB* self = nullptr;
+    wchar_t own_path[MAX_PATH];
+    const DWORD own_length = GetModuleFileNameW(nullptr, own_path, MAX_PATH);
+    if (own_length > 0 && own_length < MAX_PATH && FwpmGetAppIdFromFileName0(own_path, &self) != ERROR_SUCCESS) {
+      self = nullptr;
     }
+    for (const bool inbound : {false, true}) {
+      if (error.empty()) error = AddLayer(c, false, inbound, ids, self, tun_v4);
+      if (error.empty()) error = AddLayer(c, true, inbound, ids, self, tun_v6);
+    }
+    if (self) FwpmFreeMemory0(reinterpret_cast<void**>(&self));
     if (error.empty()) {
       rc = FwpmTransactionCommit0(engine);
       if (rc != ERROR_SUCCESS) error = Error(L"commit", rc);
