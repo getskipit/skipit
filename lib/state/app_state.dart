@@ -924,12 +924,15 @@ class AppState extends ChangeNotifier {
     }
 
     try {
-      // Пока подключён VPN с адаптером, рукопожатие идёт мимо адаптера — через настоящую сетевую карту:
-      // иначе на него отвечает сам адаптер и у всех серверов выходит «0 мс».
-      final viaTun = isConnected && usesTun;
+      // Пока весь трафик идёт через адаптер VPN, рукопожатие пускаем мимо него — через настоящую сетевую
+      // карту: иначе на него отвечает сам адаптер и у всех серверов выходит «0 мс». Смотрим на маршрут
+      // Windows, а не на своё состояние: адаптер уже стоит во время подключения, и он может быть чужим.
       // (Kill Switch такие соединения самой программы выпускает — см. kill_switch.cpp.)
       if (settings.pingType == PingType.tcp) {
-        final sources = viaTun ? await Pinger.physicalSources(WinSys.tunNames) : const <InternetAddress>[];
+        final tunnel = WinSys.tunnelOnDefaultRoute();
+        final sources = tunnel == null
+            ? const <InternetAddress>[]
+            : await Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
         await Pinger.tcpAll(list, onResult, cancel, sources);
       } else {
         await Pinger.realDelayAll(list, settings.testUrl, log, onResult, cancel);

@@ -476,6 +476,16 @@ class WinSys {
       r"Where-Object { $_.InstanceId -like 'SWD\WINTUN\*' -and $_.Status -ne 'OK' -and $own -notcontains $_.InstanceId.ToUpper() } | "
       r"ForEach-Object { pnputil /remove-device $_.InstanceId 2>$null | Out-Null }");
 
+  /// Виртуальный адаптер, который сейчас забирает весь трафик (наш, второй копии программы или чужого
+  /// VPN): имя такого адаптера или null. На соединение через него отвечает он сам, а не сервер.
+  /// PPP сюда не входит: так подключаются и к обычному провайдеру.
+  static String? tunnelOnDefaultRoute() {
+    final a = defaultRouteAdapter();
+    if (a == null) return null;
+    final ours = tunNames.contains(a.alias);
+    return ours || (!a.hardware && const {53, 131}.contains(a.type)) ? a.alias : null;
+  }
+
   /// Другой VPN, который сейчас забирает весь трафик: маршрут в интернет идёт через виртуальный
   /// туннельный адаптер (Wintun, WireGuard, TAP, PPP). Свой адаптер не считается. При любой ошибке —
   /// пустой список: проверка не должна мешать подключению.
