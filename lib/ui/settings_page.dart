@@ -232,8 +232,21 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
           text('Адрес для проверки', 'Должен отвечать быстро (204)', s.testUrl, (v) => s.testUrl = v),
-          text('User-Agent', 'Некоторые панели отдают разный формат по User-Agent', s.userAgent,
-              (v) => s.userAgent = v),
+          _Row(
+            title: 'User-Agent',
+            subtitle: 'Некоторые панели отдают разный формат по User-Agent',
+            trailing: SizedBox(
+              width: 340,
+              child: _UserAgentField(
+                value: s.userAgent,
+                onChanged: (v) {
+                  // Пустое поле — это стандартное значение, а не пустой заголовок в запросе.
+                  s.userAgent = v.isEmpty ? AppSettings.defaultUserAgent : v;
+                  state.changed();
+                },
+              ),
+            ),
+          ),
           toggle('Отправлять HWID', 'Заголовки x-hwid / x-device-os для лимита устройств у провайдера', s.sendHwid,
               (v) => s.sendHwid = v),
           _Row(
@@ -387,6 +400,52 @@ class _Section extends StatelessWidget {
             ]),
           ),
         ]),
+      );
+}
+
+/// Поле User-Agent с кнопкой «Сбросить»: она появляется, когда значение отличается от стандартного.
+class _UserAgentField extends StatefulWidget {
+  const _UserAgentField({required this.value, required this.onChanged});
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_UserAgentField> createState() => _UserAgentFieldState();
+}
+
+class _UserAgentFieldState extends State<_UserAgentField> {
+  late final _text = TextEditingController(text: widget.value);
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: _text,
+        decoration: InputDecoration(
+          suffixIcon: _text.text.trim() == AppSettings.defaultUserAgent
+              ? null
+              : Tooltip(
+                  message: 'Сбросить: ${AppSettings.defaultUserAgent}',
+                  child: Hover(
+                    builder: (context, hovered) => GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        setState(() => _text.text = AppSettings.defaultUserAgent);
+                        widget.onChanged(AppSettings.defaultUserAgent);
+                      },
+                      child: Icon(Icons.restart_alt_rounded, size: 18, color: hovered ? C.orange : C.muted),
+                    ),
+                  ),
+                ),
+        ),
+        onChanged: (v) {
+          setState(() {});
+          widget.onChanged(v.trim());
+        },
       );
 }
 
