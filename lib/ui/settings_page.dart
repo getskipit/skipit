@@ -128,6 +128,8 @@ class SettingsPage extends StatelessWidget {
               },
             ),
           ),
+          toggle('Меньше анимаций', 'Списки, меню и переходы срабатывают сразу, без плавного движения. Для слабых компьютеров',
+              s.reduceMotion, (v) => s.reduceMotion = v),
         ]),
         _Section('Система', [
           _Row(

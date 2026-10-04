@@ -17,6 +17,7 @@ import 'state/app_state.dart';
 import 'ui/flag_text.dart';
 import 'ui/shell.dart';
 import 'ui/theme.dart';
+import 'ui/widgets.dart';
 
 /// Режимы в меню значка — в том же порядке, что на главной.
 const trayModes = [ConnectionMode.mixed, ConnectionMode.tun, ConnectionMode.systemProxy, ConnectionMode.proxyOnly];
@@ -256,6 +257,7 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver {
   /// виджетов, поэтому перестраиваем все виджеты окна — но не пересоздаём их: состояние (открытый
   /// раздел, прокрутка, анимация переключателей) сохраняется, и смена темы выглядит плавно.
   void _syncTheme() {
+    Motion.apply(widget.state.settings.reduceMotion);
     final p = _resolvePalette();
     if (identical(p, _palette)) return;
     void apply() {
@@ -285,6 +287,7 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver {
     final lifecycle = WidgetsBinding.instance.lifecycleState;
     if (lifecycle != null) didChangeAppLifecycleState(lifecycle);
     widget.state.addListener(_syncTheme);
+    Motion.apply(widget.state.settings.reduceMotion);
     // При закрытии окна обязательно гасим ядро и возвращаем системный прокси.
     _lifecycle = AppLifecycleListener(onExitRequested: () async {
       await widget.state.shutdown();

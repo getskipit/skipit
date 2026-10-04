@@ -77,6 +77,9 @@ class AppSettings {
 
   /// Уведомления Windows о сбоях VPN, пока окно спрятано.
   bool notifications = true;
+
+  /// «Меньше анимаций»: всё в окне переключается мгновенно (для слабых компьютеров).
+  bool reduceMotion = false;
   bool preferJson = true;
   UpdateChannel updateChannel = UpdateChannel.stable;
   AppTheme theme = AppTheme.dark;
@@ -118,6 +121,7 @@ class AppSettings {
         'sidebarCollapsed': sidebarCollapsed,
         'closeToTray': closeToTray,
         'notifications': notifications,
+        'reduceMotion': reduceMotion,
         'preferJson': preferJson,
         'updateChannel': updateChannel.name,
         'theme': theme.name,
@@ -161,6 +165,7 @@ class AppSettings {
     s.sidebarCollapsed = parseBool(j['sidebarCollapsed'], s.sidebarCollapsed);
     s.closeToTray = parseBool(j['closeToTray'], s.closeToTray);
     s.notifications = parseBool(j['notifications'], s.notifications);
+    s.reduceMotion = parseBool(j['reduceMotion'], s.reduceMotion);
     s.preferJson = parseBool(j['preferJson'], s.preferJson);
     s.updateChannel = UpdateChannel.values.asNameMap()[j['updateChannel']] ?? s.updateChannel;
     s.theme = AppTheme.values.asNameMap()[j['theme']] ?? s.theme;

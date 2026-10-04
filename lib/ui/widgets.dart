@@ -1,7 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'app_menu.dart';
 import 'theme.dart';
+
+/// Настройка «Меньше анимаций» (для слабых компьютеров): время всех анимаций окна ускоряется в
+/// двадцать раз — раскрытия, переходы и подсветки срабатывают за один кадр. Значки «идёт работа»
+/// при этом должны крутиться как обычно, поэтому их длительность берётся через [steady].
+class Motion {
+  static const _fast = 0.05;
+
+  static void apply(bool reduced) {
+    final value = reduced ? _fast : 1.0;
+    if (timeDilation != value) timeDilation = value;
+  }
+
+  /// Длительность бесконечной анимации, которая не должна ускоряться.
+  static Duration steady(Duration d) => d * (1 / timeDilation);
+}
 
 /// Отслеживает наведение мыши и перестраивает содержимое.
 class Hover extends StatefulWidget {
@@ -206,7 +222,8 @@ class Spinner extends StatefulWidget {
 }
 
 class _SpinnerState extends State<Spinner> with SingleTickerProviderStateMixin {
-  late final _anim = AnimationController(vsync: this, duration: Duration(milliseconds: widget.pulse ? 650 : 900))
+  late final _anim = AnimationController(
+      vsync: this, duration: Motion.steady(Duration(milliseconds: widget.pulse ? 650 : 900)))
     ..repeat(reverse: widget.pulse);
 
   @override
@@ -575,6 +592,7 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
   /// Когда подключение закончилось, текущий круг доигрывается до конца: стрелки долетают на место,
   /// а не отскакивают назад рывком.
   void _syncAnim() {
+    _anim.duration = Motion.steady(const Duration(milliseconds: 750));
     if (widget.busy && !_looping) {
       _looping = true;
       _anim.repeat();
