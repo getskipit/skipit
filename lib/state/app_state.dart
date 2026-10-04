@@ -12,6 +12,7 @@ import '../core/net.dart';
 import '../core/paths.dart';
 import '../core/ping.dart';
 import '../core/singbox_config.dart';
+import '../core/tray.dart';
 import '../core/updates.dart';
 import '../core/util.dart';
 import '../core/windows.dart';
@@ -210,10 +211,16 @@ class AppState extends ChangeNotifier {
     if (ok) {
       _linkFails = 0;
       if (country != null) exitCountry = country;
-      if (wasDown) log.add('app', 'Связь через VPN восстановилась');
+      if (wasDown) {
+        log.add('app', 'Связь через VPN восстановилась');
+        _notify('Связь через VPN восстановилась');
+      }
     } else {
       _linkFails++;
-      if (!wasDown && linkDown) log.add('app', 'Ошибка: VPN подключён, но связи через сервер нет');
+      if (!wasDown && linkDown) {
+        log.add('app', 'Ошибка: VPN подключён, но связи через сервер нет');
+        _notify('VPN подключён, но связи через сервер нет', warning: true);
+      }
     }
     notifyListeners();
     // После неудачи перепроверяем быстрее: и чтобы не тревожить зря, и чтобы скорее снять тревогу.
@@ -1445,14 +1452,31 @@ class AppState extends ChangeNotifier {
       // Включённый Kill Switch остаётся стоять: пока VPN не вернулся, трафик напрямую не идёт.
       await disconnect(keepError: true, hold: true);
       if (retry) {
+        _notify('VPN оборвался, переподключаюсь', warning: true);
         await Future.delayed(const Duration(seconds: 3));
         await connect();
+        if (isConnected) {
+          _notify('VPN снова подключён');
+        } else {
+          _notify('Не удалось переподключиться. $_withoutVpn', warning: true);
+        }
       } else {
         lastError = 'Ядро VPN неожиданно закрылось, подключение остановлено. Если запущен другой VPN-клиент '
             '(например, Happ) — закройте его: он может закрывать ядро SkipIt.';
         notifyListeners();
+        _notify('VPN отключился: ядро неожиданно закрылось. $_withoutVpn', warning: true);
       }
     }());
+  }
+
+  /// Что с интернетом, когда VPN отключился сам, — для уведомления.
+  String get _withoutVpn =>
+      killSwitchHolding ? 'Интернет закрыт: Kill Switch' : 'Интернет идёт без VPN';
+
+  /// Уведомление Windows о сбое или восстановлении VPN. Показывается, только когда окно спрятано
+  /// или свёрнуто (это решает оболочка окна) и уведомления не выключены в настройках.
+  void _notify(String text, {bool warning = false}) {
+    if (settings.notifications) unawaited(Tray.notify(text, warning: warning));
   }
 
   Future<void> _ensureGeoFiles(RoutingProfile routing, {bool force = false}) async {

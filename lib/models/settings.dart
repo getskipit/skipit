@@ -74,6 +74,9 @@ class AppSettings {
   bool updateViaProxy = true;
   bool sidebarCollapsed = false;
   bool closeToTray = true;
+
+  /// Уведомления Windows о сбоях VPN, пока окно спрятано.
+  bool notifications = true;
   bool preferJson = true;
   UpdateChannel updateChannel = UpdateChannel.stable;
   AppTheme theme = AppTheme.dark;
@@ -114,6 +117,7 @@ class AppSettings {
         'updateViaProxy': updateViaProxy,
         'sidebarCollapsed': sidebarCollapsed,
         'closeToTray': closeToTray,
+        'notifications': notifications,
         'preferJson': preferJson,
         'updateChannel': updateChannel.name,
         'theme': theme.name,
@@ -156,6 +160,7 @@ class AppSettings {
     s.updateViaProxy = parseBool(j['updateViaProxy'], s.updateViaProxy);
     s.sidebarCollapsed = parseBool(j['sidebarCollapsed'], s.sidebarCollapsed);
     s.closeToTray = parseBool(j['closeToTray'], s.closeToTray);
+    s.notifications = parseBool(j['notifications'], s.notifications);
     s.preferJson = parseBool(j['preferJson'], s.preferJson);
     s.updateChannel = UpdateChannel.values.asNameMap()[j['updateChannel']] ?? s.updateChannel;
     s.theme = AppTheme.values.asNameMap()[j['theme']] ?? s.theme;

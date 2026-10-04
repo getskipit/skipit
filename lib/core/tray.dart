@@ -85,6 +85,11 @@ class Tray {
 
   static Future<void> show() => _call('show');
 
+  /// Уведомление Windows у значка. Оболочка показывает его, только когда окно спрятано или свёрнуто.
+  /// [warning] — со значком предупреждения (сбой), иначе обычное.
+  static Future<void> notify(String text, {bool warning = false}) =>
+      _call('notify', {'title': AppPaths.appName, 'text': text, 'warning': warning});
+
   /// Убирает значок и закрывает окно. Перед вызовом всё уже должно быть остановлено.
   static Future<void> quit() => _call('quit');
 }

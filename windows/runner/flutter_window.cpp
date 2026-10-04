@@ -320,6 +320,26 @@ void FlutterWindow::HandleTrayCall(
       }
     }
     result->Success();
+  } else if (method == "notify") {
+    // Уведомление Windows у значка. Только когда окно спрятано или свёрнуто: иначе всё видно в нём самом.
+    HWND hwnd = GetHandle();
+    const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+    if (args && tray_added_ && (!IsWindowVisible(hwnd) || IsIconic(hwnd))) {
+      auto text = [args](const char* key) {
+        auto it = args->find(flutter::EncodableValue(key));
+        const auto* s = it == args->end() ? nullptr : std::get_if<std::string>(&it->second);
+        return s ? Utf8ToWide(*s) : std::wstring();
+      };
+      auto warning = args->find(flutter::EncodableValue("warning"));
+      const auto* is_warning = warning == args->end() ? nullptr : std::get_if<bool>(&warning->second);
+      NOTIFYICONDATAW data = tray_icon_;
+      data.uFlags = NIF_INFO;
+      wcsncpy_s(data.szInfoTitle, text("title").c_str(), _TRUNCATE);
+      wcsncpy_s(data.szInfo, text("text").c_str(), _TRUNCATE);
+      data.dwInfoFlags = is_warning && *is_warning ? NIIF_WARNING : NIIF_INFO;
+      Shell_NotifyIconW(NIM_MODIFY, &data);
+    }
+    result->Success();
   } else if (method == "show") {
     ShowFromTray();
     result->Success();
@@ -381,6 +401,8 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       switch (LOWORD(lparam)) {
         case WM_LBUTTONUP:
         case WM_LBUTTONDBLCLK:
+        // Клик по уведомлению открывает окно.
+        case NIN_BALLOONUSERCLICK:
           ShowFromTray();
           break;
         case WM_RBUTTONUP:
