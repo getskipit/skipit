@@ -1,7 +1,7 @@
 name: skipit
 description: SkipIt — VPN-клиент для Windows на ядрах Xray-core и sing-box.
 publish_to: 'none'
-version: 1.0.7+1
+version: 1.0.8+1
 
 environment:
   sdk: '>=3.6.0 <4.0.0'

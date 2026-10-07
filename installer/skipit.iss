@@ -1,9 +1,9 @@
 ; Установщик SkipIt (Inno Setup 6/7).
 ; Собирается скриптом tools\build.ps1: версия передаётся через /DAppVersion=... (из тега релиза).
-;   ISCC.exe /DAppVersion=1.0.7 installer\skipit.iss
+;   ISCC.exe /DAppVersion=1.0.8 installer\skipit.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.0.7"
+  #define AppVersion "1.0.8"
 #endif
 #define AppName "SkipIt"
 #define AppExe "SkipIt.exe"
