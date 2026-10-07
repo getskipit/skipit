@@ -340,7 +340,9 @@ class _DayGroupState extends State<_DayGroup> {
                 margin: EdgeInsets.fromLTRB(8, first ? 8 : 4, 8, 4),
                 padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
                 decoration: BoxDecoration(
-                  color: hovered ? C.hover : C.surface2,
+                  // Наведение — поверх того же фона, непрозрачным цветом: при переходе от непрозрачного
+                  // к почти прозрачному белому середина перехода вспыхивала светло-серым.
+                  color: hovered ? Color.alphaBlend(C.hover, C.surface2) : C.surface2,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: marked ? C.orange.withValues(alpha: 0.55) : C.border),
                 ),
