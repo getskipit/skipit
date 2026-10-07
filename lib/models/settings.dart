@@ -82,6 +82,9 @@ class AppSettings {
   bool reduceMotion = false;
   bool preferJson = true;
   UpdateChannel updateChannel = UpdateChannel.stable;
+
+  /// Версия, о которой фоновая проверка обновлений уже сообщила: второй раз о ней не напоминает.
+  String? updateNotified;
   AppTheme theme = AppTheme.dark;
 
   String? selectedServerId;
@@ -124,6 +127,7 @@ class AppSettings {
         'reduceMotion': reduceMotion,
         'preferJson': preferJson,
         'updateChannel': updateChannel.name,
+        'updateNotified': updateNotified,
         'theme': theme.name,
         'selectedServerId': selectedServerId,
         'selectedRoutingId': selectedRoutingId,
@@ -168,6 +172,7 @@ class AppSettings {
     s.reduceMotion = parseBool(j['reduceMotion'], s.reduceMotion);
     s.preferJson = parseBool(j['preferJson'], s.preferJson);
     s.updateChannel = UpdateChannel.values.asNameMap()[j['updateChannel']] ?? s.updateChannel;
+    s.updateNotified = j['updateNotified'] as String?;
     s.theme = AppTheme.values.asNameMap()[j['theme']] ?? s.theme;
     s.selectedServerId = j['selectedServerId'] as String?;
     s.selectedRoutingId = j['selectedRoutingId'] as String?;

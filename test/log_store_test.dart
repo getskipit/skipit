@@ -112,6 +112,11 @@ void main() {
         contains('обратный запрос'));
     expect(x('[Debug] app/dns: domain p2p-sto2.discovery.steamserver.net will use DNS in order: [DOHL//dns.example]'),
         contains('p2p-sto2.discovery.steamserver.net'));
+    // Не ответил один DNS-сервер: это ещё не «сайт не найден» — за ним может стоять запасной.
+    expect(
+        x('[Error] app/dns: failed to retrieve response for site.example. > Post "https://dns.example/dns-query": '
+            'context deadline exceeded'),
+        contains('запасной'));
     expect(x('[Info] app/dns: DOHL//dns.example querying: p2p-sto2.discovery.steamserver.net.'),
         'Ядро спрашивает у DNS-сервера адрес p2p-sto2.discovery.steamserver.net.');
     expect(
@@ -221,7 +226,7 @@ void main() {
 
   test('вид всплывающего сообщения узнаётся по тексту: успех, ошибка или сведение', () {
     for (final text in [
-      'Подписка «SkipIt VPN» обновлена — серверов: 4',
+      'Подписка «SkipIt VPN» обновлена',
       'Журнал скопирован',
       'Ссылка на профиль скопирована',
       'Сохранено: SkipIt — настройки 2026-10-04.json',

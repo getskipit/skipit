@@ -58,6 +58,29 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
                     'Этот VPN SkipIt закрыть сам не может — отключите его вручную и подключитесь снова.',
             style: TextStyle(color: C.muted, height: 1.4),
           ),
+          // Второй путь — не закрывать другой VPN — отдельной плашкой со своей кнопкой: внизу окна
+          // остаются только «Отмена» и главное действие, а не три кнопки в ряд.
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: C.border),
+            ),
+            child: Row(children: [
+              Expanded(
+                child: Text(
+                  'Другой VPN только для рабочей сети или удалённого рабочего стола? Тогда его можно оставить.',
+                  style: TextStyle(color: C.muted, fontSize: 13, height: 1.35),
+                ),
+              ),
+              const SizedBox(width: 6),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, _ConflictChoice.proceed),
+                child: const Text('Подключиться рядом'),
+              ),
+            ]),
+          ),
         ]),
       ),
       actions: [
@@ -67,12 +90,6 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
             label: 'Закрыть и подключиться',
             icon: Icons.power_settings_new_rounded,
             onPressed: () => Navigator.pop(ctx, _ConflictChoice.close),
-          )
-        else
-          GhostButton(
-            label: 'Подключиться всё равно',
-            icon: Icons.bolt_rounded,
-            onPressed: () => Navigator.pop(ctx, _ConflictChoice.proceed),
           ),
       ],
     ),
@@ -167,6 +184,7 @@ class _ShellState extends State<Shell> {
           builder: (_) => _Toast(
               key: key,
               text: msg.text,
+              detail: msg.detail,
               kind: msg.kind,
               onGone: () {
                 if (identical(_toastEntry, entry)) _toastEntry = null;
@@ -279,8 +297,11 @@ class _ShellState extends State<Shell> {
 /// Всплывающее уведомление внизу окна: плавно поднимается и проявляется, через 4 секунды так же
 /// плавно уходит вниз. Закрывается кликом по нему или по крестику; пока на нём курсор — не исчезает.
 class _Toast extends StatefulWidget {
-  const _Toast({super.key, required this.text, required this.kind, required this.onGone});
+  const _Toast({super.key, required this.text, this.detail, required this.kind, required this.onGone});
   final String text;
+
+  /// Вторая строка мельче; с ней первая становится заголовком.
+  final String? detail;
 
   /// Успех, ошибка или просто сведение: значок слева и время показа.
   final ToastKind kind;
@@ -304,9 +325,18 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
 
   void _arm() {
     _timer?.cancel();
-    // Ошибку нужно успеть прочитать — она держится вдвое дольше.
-    _timer = Timer(Duration(seconds: widget.kind == ToastKind.error ? 8 : 4), dismiss);
+    // Ошибку и новость о новой версии нужно успеть прочитать — они держатся вдвое дольше.
+    final long = widget.kind == ToastKind.error || widget.kind == ToastKind.update;
+    _timer = Timer(Duration(seconds: long ? 8 : 4), dismiss);
   }
+
+  /// Значок и цвет вида уведомления; у простого сведения значка нет.
+  (IconData, Color)? get _badge => switch (widget.kind) {
+        ToastKind.success => (Icons.check_rounded, C.green),
+        ToastKind.error => (Icons.priority_high_rounded, C.red),
+        ToastKind.update => (Icons.arrow_downward_rounded, C.isDark ? C.orangeLight : C.orange),
+        ToastKind.info => null,
+      };
 
   void dismiss() {
     if (_leaving || !mounted) return;
@@ -358,27 +388,44 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
                   type: MaterialType.transparency,
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 520),
-                    padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+                    padding: EdgeInsets.fromLTRB(_badge == null ? 16 : 10, 10, 10, 10),
                     decoration: BoxDecoration(
                       color: C.surface2,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
+                      // Рамка ошибки и новой версии — цветом их значка, у остальных обычная.
                       border: Border.all(
-                          color: widget.kind == ToastKind.error ? C.red.withValues(alpha: 0.55) : C.border),
+                          color: widget.kind == ToastKind.error || widget.kind == ToastKind.update
+                              ? _badge!.$2.withValues(alpha: 0.55)
+                              : C.border),
                       boxShadow: [BoxShadow(color: C.palette.shadow, blurRadius: 24, offset: const Offset(0, 8))],
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      ...switch (widget.kind) {
-                        ToastKind.success => [
-                            Icon(Icons.check_circle_rounded, size: 18, color: C.green),
-                            const SizedBox(width: 10),
-                          ],
-                        ToastKind.error => [
-                            Icon(Icons.error_rounded, size: 18, color: C.red),
-                            const SizedBox(width: 10),
-                          ],
-                        ToastKind.info => const <Widget>[],
-                      },
-                      Flexible(child: Text(widget.text, style: TextStyle(color: C.text, fontSize: 14))),
+                      // Значок на подложке своего цвета — как метки в остальном окне.
+                      if (_badge case (final icon, final color)) ...[
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Icon(icon, size: 18, color: color),
+                        ),
+                        const SizedBox(width: 11),
+                      ],
+                      Flexible(
+                        child: widget.detail == null
+                            ? Text(widget.text, style: TextStyle(color: C.text, fontSize: 14))
+                            : Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(widget.text,
+                                      style: TextStyle(color: C.text, fontSize: 14, fontWeight: FontWeight.w600)),
+                                  Text(widget.detail!, style: TextStyle(color: C.muted, fontSize: 12.5)),
+                                ],
+                              ),
+                      ),
                       const SizedBox(width: 12),
                       Hover(
                         builder: (context, hovered) =>

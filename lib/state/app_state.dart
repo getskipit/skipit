@@ -27,12 +27,15 @@ import '../version.dart';
 enum ConnStatus { disconnected, connecting, connected, disconnecting }
 
 /// Вид всплывающего сообщения: от него зависят значок и время показа.
-enum ToastKind { success, error, info }
+enum ToastKind { success, error, info, update }
 
 class ToastMessage {
-  ToastMessage(this.text, this.kind);
+  ToastMessage(this.text, this.kind, [this.detail]);
   final String text;
   final ToastKind kind;
+
+  /// Вторая строка мельче: подробность к заголовку.
+  final String? detail;
 
   static final _error = RegExp(r'не удалось|ошибк|не найден|не действует|заблокирован|отказ|сначала |не файл|повреждён',
       caseSensitive: false);
@@ -625,7 +628,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// Всплывающее сообщение внизу окна. [kind] не задан — определяется по тексту (см. [ToastMessage.kindOf]).
-  void toast(String msg, {ToastKind? kind}) => _messages.add(ToastMessage(msg, kind ?? ToastMessage.kindOf(msg)));
+  void toast(String msg, {ToastKind? kind, String? detail}) =>
+      _messages.add(ToastMessage(msg, kind ?? ToastMessage.kindOf(msg), detail));
 
   // ---------------------------------------------------------------------------
   // Выборки
@@ -867,7 +871,7 @@ class AppState extends ChangeNotifier {
         final rd = RoutingProfile.parseDeeplink(routingLink);
         if (rd != null) _applyRoutingDeeplink(rd, subscriptionId: sub.id);
       }
-      if (!silent) toast('Подписка «${sub.displayName}» обновлена — серверов: ${fresh.length}');
+      if (!silent) toast('Подписка «${sub.displayName}» обновлена', detail: 'Серверов: ${fresh.length}');
     } catch (e) {
       sub.error = describeNetError(e);
       final refused = e is ServerRefused && e.isFinal;
@@ -1577,7 +1581,16 @@ class AppState extends ChangeNotifier {
       }
       lastUpdateCheck = DateTime.now();
       if (appUpdate != null) {
-        toast('Доступна новая версия SkipIt: ${appUpdate!.version}');
+        // Фоновая проверка сообщает о каждой версии один раз: дальше о ней напоминает плашка
+        // «Установить» в боковом меню.
+        final version = appUpdate!.version;
+        if (!silent || settings.updateNotified != version) {
+          toast('Доступна новая версия', kind: ToastKind.update, detail: 'SkipIt $version');
+        }
+        if (settings.updateNotified != version) {
+          settings.updateNotified = version;
+          save();
+        }
       } else if (!silent) {
         toast('У вас последняя версия');
       }
