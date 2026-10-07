@@ -89,6 +89,9 @@ void main() {
             (r) => (r['inboundTag'] as List).contains(XrayConfig.tunTag)), isTrue);
         // DNS из адаптера перехватывается первым правилом, IPv6 при выключенной настройке блокируется.
         expect(rules.first['outboundTag'], 'skipit-dns');
+        // На запросы не про адреса (SRV, TXT…) — пустой ответ, а не отказ: после отказа Windows ждала 12 секунд.
+        final dnsOut = (config['outbounds'] as List).firstWhere((o) => o['tag'] == 'skipit-dns');
+        expect(jsonEncode(dnsOut['settings']['rules']), contains('{"action":"return","rCode":0}'));
         expect(rules.any((r) => jsonEncode(r['ip']) == '["::/0"]' && r['outboundTag'] == 'skipit-block'), isTrue);
         // Адрес сервера резолвится напрямую — иначе ядро не смогло бы к нему подключиться.
         expect(jsonEncode((config['dns'] as Map)['servers']), contains('full:example.com'));
