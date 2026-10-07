@@ -110,6 +110,72 @@ void main() {
     state.log.endSession();
   });
 
+  testWidgets('новая запись в журнале не рвёт выделение на строках со счётчиком повторов', (tester) async {
+    C.use(Palette.dark);
+    tester.view.physicalSize = const Size(1200, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') copied = (call.arguments as Map)['text'] as String?;
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+
+    final state = AppState();
+    state.routingProfiles.addAll([RoutingProfile.global(), ...RoutingProfile.templates()]);
+    state.log.startSession('Сервер');
+    // Каждая строка повторилась: у всех есть счётчик «×2».
+    for (var i = 0; i < 8; i++) {
+      for (var n = 0; n < 2; n++) {
+        state.log.add('xray', '2026/10/04 02:55:0$i.00000$n [Warning] proxy/http: failed to read response from '
+            'site-$i.example > unexpected EOF');
+      }
+    }
+    expect(state.log.lines.every((l) => l.repeats == 2), isTrue);
+
+    await tester.pumpWidget(AppScope(
+      state: state,
+      child: MaterialApp(theme: buildTheme(), home: const Shell()),
+    ));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byIcon(Icons.receipt_long_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+
+    Rect row(int i) => tester.getRect(find.byKey(ValueKey<LogLine>(state.log.lines[i])));
+    final from = row(7).bottomRight - const Offset(40, 3);
+    final to = row(4).topLeft + const Offset(2, 3);
+    final mouse = await tester.startGesture(from, kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    for (var k = 1; k <= 10; k++) {
+      await mouse.moveTo(Offset.lerp(from, to, k / 10)!);
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await mouse.up();
+    await tester.pump();
+
+    Future<String?> copy() async {
+      copied = null;
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      return copied;
+    }
+
+    final before = await copy();
+    for (var i = 4; i <= 7; i++) {
+      expect(before, contains('site-$i.example'));
+    }
+    // Пришла новая запись: страница перестроилась, выделенное осталось тем же.
+    state.log.add('app', 'новая запись');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(await copy(), before);
+    state.log.endSession();
+  });
+
   testWidgets('выделение в журнале держится за текст, а не за место в списке', (tester) async {
     C.use(Palette.dark);
     tester.view.physicalSize = const Size(1200, 800);

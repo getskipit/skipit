@@ -877,8 +877,24 @@ class _LineTextState extends State<_LineText> {
     return C.muted;
   }
 
+  /// Построенная строка и то, для чего она построена: строка, число повторов, раскрыта ли, тема.
+  Widget? _built;
+  Object? _builtFor;
+
+  /// Страница перестраивается с каждой новой записью журнала, а строка — только когда изменилась
+  /// сама. Иначе строка со счётчиком повторов каждый раз заново вставала бы в выделение текста и
+  /// выпадала из него: выделенное шло полосами с пропусками.
   @override
   Widget build(BuildContext context) {
+    final key = (widget.line, widget.line.repeats, _open, C.palette);
+    if (key != _builtFor) {
+      _built = _content();
+      _builtFor = key;
+    }
+    return _built!;
+  }
+
+  Widget _content() {
     final line = widget.line;
     final orange = C.isDark ? C.orangeLight : C.orange;
     final t = line.time;
