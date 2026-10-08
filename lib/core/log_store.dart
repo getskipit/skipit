@@ -35,9 +35,15 @@ class LogLine {
   /// Пометка уровня, которую ставит само ядро: `[Warning]` у Xray, `WARN` в начале строки у sing-box.
   static final _coreLevel = RegExp(r'\[(debug|info|warning|error)\]|^\s*(trace|debug|info|warn|error|fatal|panic)\b');
 
+  /// У подключения несколько общих DNS-серверов: отказ одного — не сбой, ядро спросит следующий.
+  /// Ставится при подключении.
+  static bool dnsHasSpare = false;
+
   static int _levelOf(String text) {
     // NOERROR в ответе DNS значит «ошибки нет» — слово «error» внутри него не в счёт.
     final t = text.toLowerCase().replaceAll('noerror', '');
+    // Не ответил один DNS-сервер, а за ним есть запасной: сайт всё равно откроется — это предупреждение.
+    if (dnsHasSpare && t.contains('app/dns: failed to retrieve response')) return 1;
     // Программа спросила имя сайта, которого не существует. Ядро пишет это как ошибку, но VPN тут
     // ни при чём — оставляем предупреждением.
     if (t.contains('failed to resolve ip') && t.contains('rcode: 3')) return 1;

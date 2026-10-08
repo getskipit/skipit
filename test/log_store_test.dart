@@ -75,6 +75,13 @@ void main() {
     // Настоящие ошибки и предупреждения остаются.
     expect(LogLine('sing-box', CoreProcess.clean('\x1B[31mERROR\x1B[0m connection: i/o timeout')).level, 2);
     expect(LogLine('sing-box', 'WARN inbound/tun: open interface take too much time').level, 1);
+    // Не ответил один DNS-сервер: ошибка, но при запасном DNS — только предупреждение (сайт откроется).
+    const dnsFail = '[Error] app/dns: failed to retrieve response for example.com. > Post "https://doh.example/dns-query": '
+        'context deadline exceeded';
+    expect(LogLine('xray', dnsFail).level, 2);
+    LogLine.dnsHasSpare = true;
+    addTearDown(() => LogLine.dnsHasSpare = false);
+    expect(LogLine('xray', dnsFail).level, 1);
     expect(CoreProcess.clean('обычная строка [0m] без команд'), 'обычная строка [0m] без команд');
     // Своё время Xray в начале строки убирается: журнал помечает строки временем сам.
     expect(CoreProcess.clean('2026/10/05 02:23:55.652302 [Info] transport/internet/tcp: listening tcp on 127.0.0.1:10809'),

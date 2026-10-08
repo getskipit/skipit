@@ -1349,6 +1349,7 @@ class AppState extends ChangeNotifier {
       XrayConfig.addDnsCheckInbound(config, port: dnsCheckPort, password: _dnsCheckPassword);
       _dnsCheckPort = dnsCheckPort;
       _dnsConfig = {'dns': config['dns']};
+      LogLine.dnsHasSpare = DnsCheck.servers(config).where((s) => s.domains == 0).length > 1;
       dnsProbes = [];
       _routes
         ..clear()
