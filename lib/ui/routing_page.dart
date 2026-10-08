@@ -235,14 +235,19 @@ class _DnsCardState extends State<_DnsCard> {
     // Адрес применяется, когда его закончили вводить: по Enter или уходу из поля, а не на каждую букву —
     // подключённый VPN при смене DNS переподключается.
     Widget field(TextEditingController controller, String label, String hint) => Expanded(
-          child: Focus(
-            onFocusChange: (focused) {
-              if (!focused) apply();
-            },
-            child: TextField(
-              controller: controller,
-              onSubmitted: (_) => apply(),
-              decoration: InputDecoration(labelText: label, hintText: hint),
+          child: Tooltip(
+            message: 'Виды адресов: 1.1.1.1 или udp://… — обычный DNS, tcp://… — по TCP, '
+                'https://… — DoH, tls://… — DoT',
+            waitDuration: const Duration(milliseconds: 500),
+            child: Focus(
+              onFocusChange: (focused) {
+                if (!focused) apply();
+              },
+              child: TextField(
+                controller: controller,
+                onSubmitted: (_) => apply(),
+                decoration: InputDecoration(labelText: label, hintText: hint),
+              ),
             ),
           ),
         );
@@ -276,9 +281,9 @@ class _DnsCardState extends State<_DnsCard> {
           ]),
           const SizedBox(height: 8),
           Text(
-            'Можно несколько адресов через запятую: первый — основной, остальные — запасные. Виды адресов: '
-            '1.1.1.1 или udp://… — обычный DNS, tcp://… — по TCP, https://… — DoH, tls://… — DoT. Удалённые отвечают '
-            'за сайты, которые идут через VPN, локальные — за те, что идут напрямую. Применяется по Enter или когда '
+            'Можно указать несколько адресов через запятую: если первый не ответил, спросим следующий. '
+            'Например: https://dns.google/dns-query, 8.8.8.8\n'
+            'Удалённые — для сайтов через VPN, локальные — для сайтов напрямую. Сохраняется по Enter или когда '
             'вы уходите из поля.',
             style: TextStyle(color: C.muted, fontSize: 12),
           ),
