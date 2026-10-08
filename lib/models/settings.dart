@@ -67,7 +67,7 @@ class AppSettings {
   bool get httpAuth => portAuth && mode == ConnectionMode.proxyOnly;
   bool ipv6 = false;
   bool sniffing = true;
-  int mtu = 9000;
+  int mtu = 1500;
   bool autoSelect = false;
   bool autoReconnect = true;
 
@@ -136,6 +136,8 @@ class AppSettings {
         'ipv6': ipv6,
         'sniffing': sniffing,
         'mtu': mtu,
+        // Метка: MTU уже переведён с прежних 9000 на 1500 (см. fromJson).
+        'mtu1500': true,
         'autoSelect': autoSelect,
         'autoReconnect': autoReconnect,
         'killSwitch': killSwitch,
@@ -187,6 +189,8 @@ class AppSettings {
     s.ipv6 = parseBool(j['ipv6'], s.ipv6);
     s.sniffing = parseBool(j['sniffing'], s.sniffing);
     s.mtu = asInt(j['mtu']) ?? s.mtu;
+    // Раньше по умолчанию было 9000 — один раз переводим такие настройки на 1500.
+    if (j['mtu1500'] != true && s.mtu == 9000) s.mtu = 1500;
     s.autoSelect = parseBool(j['autoSelect'], s.autoSelect);
     s.autoReconnect = parseBool(j['autoReconnect'], s.autoReconnect);
     s.killSwitch = parseBool(j['killSwitch'], s.killSwitch);

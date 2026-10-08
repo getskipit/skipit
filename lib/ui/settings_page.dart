@@ -251,7 +251,7 @@ class _SettingsPageState extends State<SettingsPage> {
           toggle('IPv6', 'Включить IPv6 в туннеле и DNS', s.ipv6, (v) => s.ipv6 = v),
           toggle('Сниффинг', 'Определять домен по TLS/HTTP/QUIC — нужен для маршрутизации по сайтам', s.sniffing,
               (v) => s.sniffing = v),
-          number('MTU TUN-адаптера', 'Обычно 9000 или 1500', s.mtu, (v) => s.mtu = v),
+          number('MTU TUN-адаптера', 'Обычно 1500 или 9000', s.mtu, (v) => s.mtu = v),
           _Row(
             title: 'Уровень логов',
             subtitle: 'debug — максимум подробностей',

@@ -44,4 +44,13 @@ void main() {
     await state.releaseKillSwitch();
     expect(KillSwitch.active, isFalse);
   });
+
+  test('MTU по умолчанию 1500; сохранённые прежние 9000 один раз заменяются на 1500', () {
+    expect(AppSettings().mtu, 1500);
+    expect(AppSettings.fromJson(const {'mtu': 9000}).mtu, 1500);
+    expect(AppSettings.fromJson(const {'mtu': 1400}).mtu, 1400);
+    // После замены 9000, выбранные вручную, остаются.
+    final own = AppSettings()..mtu = 9000;
+    expect(AppSettings.fromJson(own.toJson()).mtu, 9000);
+  });
 }
