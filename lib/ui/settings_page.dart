@@ -191,23 +191,6 @@ class SettingsPage extends StatelessWidget {
               (v) => s.autoSelect = v),
           toggle('Разрешить подключения из локальной сети', 'Раздавать прокси другим устройствам (0.0.0.0)', s.allowLan,
               (v) => s.allowLan = v),
-          toggle(
-              'Пароль на локальные порты',
-              'Другие программы смогут ходить через порты SOCKS и HTTP только с логином и паролем. HTTP-порт '
-                  'остаётся без пароля в режимах «Смешанный» и «Прокси»: им пользуется Windows, а она пароль '
-                  'передать не умеет',
-              s.portAuth,
-              (v) => state.setPortAuth(v)),
-          if (s.portAuth)
-            _Row(
-              title: 'Логин и пароль портов',
-              subtitle: 'Логин ${AppSettings.portUser}, пароль ${s.portPassword}',
-              trailing: IconButton(
-                tooltip: 'Скопировать пароль',
-                icon: const Icon(Icons.copy_rounded),
-                onPressed: () => Clipboard.setData(ClipboardData(text: s.portPassword)),
-              ),
-            ),
         ]),
         _Section('Проверка задержки', [
           _Row(
@@ -231,6 +214,23 @@ class SettingsPage extends StatelessWidget {
         _CollapsibleSection('Дополнительно', 'Порты, MTU, сниффинг, логи, адрес проверки, User-Agent и HWID — обычно менять не нужно', [
           number('SOCKS-порт', 'Локальный SOCKS5-прокси', s.socksPort, (v) => s.socksPort = v),
           number('HTTP-порт', 'Используется системным прокси', s.httpPort, (v) => s.httpPort = v),
+          toggle(
+              'Пароль на локальные порты',
+              'Другие программы смогут ходить через порты SOCKS и HTTP только с логином и паролем. HTTP-порт '
+                  'остаётся без пароля в режимах «Смешанный» и «Прокси»: им пользуется Windows, а она пароль '
+                  'передать не умеет',
+              s.portAuth,
+              (v) => state.setPortAuth(v)),
+          if (s.portAuth)
+            _Row(
+              title: 'Логин и пароль портов',
+              subtitle: 'Логин ${AppSettings.portUser}, пароль ${s.portPassword}',
+              trailing: IconButton(
+                tooltip: 'Скопировать пароль',
+                icon: const Icon(Icons.copy_rounded),
+                onPressed: () => Clipboard.setData(ClipboardData(text: s.portPassword)),
+              ),
+            ),
           number('Порт API статистики', 'Для счётчиков трафика', s.apiPort, (v) => s.apiPort = v),
           toggle('IPv6', 'Включить IPv6 в туннеле и DNS', s.ipv6, (v) => s.ipv6 = v),
           toggle('Сниффинг', 'Определять домен по TLS/HTTP/QUIC — нужен для маршрутизации по сайтам', s.sniffing,
