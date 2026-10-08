@@ -406,6 +406,11 @@ class _SettingsPageState extends State<SettingsPage> {
         ]),
     ];
 
+    // Ушли в другой раздел меню — поиск сбрасывается: вернувшись, человек видит все настройки.
+    if (state.pageIndex != AppState.settingsPage && _query.isNotEmpty) {
+      _search.clear();
+      _query = '';
+    }
     final query = _query.trim().toLowerCase();
     final found = sections.any((s) => switch (s) {
           _Section s => _found(s.title, s.children, query).isNotEmpty,

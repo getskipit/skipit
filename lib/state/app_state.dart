@@ -282,6 +282,7 @@ class AppState extends ChangeNotifier {
 
   /// Разделы меню по порядку: главная, серверы, маршрутизация, логи, настройки.
   static const routingPage = 2;
+  static const settingsPage = 4;
 
   void openPage(int index) {
     pageIndex = index;
@@ -713,12 +714,40 @@ class AppState extends ChangeNotifier {
       servers.where((s) => s.subscriptionId == subscriptionId).toList();
 
   /// Серверы в том порядке, в каком они стоят на главной: закреплённые подписки, остальные подписки,
-  /// затем свои серверы. Так же идёт список в меню значка в трее.
+  /// затем свои серверы — без скрытых. Так же идёт список в меню значка в трее.
   List<ServerProfile> get serversInListOrder => [
         for (final sub in [...subscriptions.where((s) => s.pinned), ...subscriptions.where((s) => !s.pinned)])
-          ...serversOf(sub.id),
-        ...serversOf(null),
+          if (!sub.hidden) ...serversOf(sub.id).where((s) => !s.hidden),
+        ...serversOf(null).where((s) => !s.hidden),
       ];
+
+  /// Виден ли сервер на главной и в меню трея: не скрыт ни он сам, ни его подписка.
+  bool isShown(ServerProfile server) =>
+      !server.hidden && !(subscriptionById(server.subscriptionId)?.hidden ?? false);
+
+  /// Скрыть подписку с главной или вернуть её (раздел «Серверы» показывает её всегда).
+  void setSubscriptionHidden(Subscription sub, bool hidden) {
+    sub.hidden = hidden;
+    changed();
+    _leaveHiddenServer();
+  }
+
+  /// Скрыть отдельный сервер с главной или вернуть его.
+  void setServerHidden(ServerProfile server, bool hidden) {
+    server.hidden = hidden;
+    changed();
+    _leaveHiddenServer();
+  }
+
+  /// Выбранный сервер только что скрыли: выбор переходит на первый видимый (если такой есть).
+  void _leaveHiddenServer() {
+    final selected = selectedServer;
+    if (selected == null || isShown(selected)) return;
+    final next = serversInListOrder.firstOrNull;
+    if (next == null) return;
+    toast('Выбранный сервер скрыт', detail: 'Теперь выбран «${next.name}»');
+    unawaited(selectServer(next.id));
+  }
 
   Subscription? subscriptionById(String? id) {
     for (final s in subscriptions) {
@@ -915,6 +944,7 @@ class AppState extends ChangeNotifier {
                 subscriptionId: sub.id,
                 delayMs: prev.delayMs,
                 warning: s.warning,
+                hidden: prev.hidden,
               ));
       }
       if (fresh.isEmpty && fetched.result.servers.isEmpty) {
@@ -1270,7 +1300,7 @@ class AppState extends ChangeNotifier {
       }
 
       if (settings.autoSelect && selectedServer != null) {
-        final group = serversOf(selectedServer!.subscriptionId);
+        final group = serversOf(selectedServer!.subscriptionId).where(isShown).toList();
         await ping(group);
         final best = bestOf(group);
         if (best != null) settings.selectedServerId = best.id;

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show mergeSort;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -20,7 +21,11 @@ import 'widgets.dart';
 
 /// Список серверов на главной: поиск, группы подписок с информацией, строки серверов.
 class ServersPanel extends StatefulWidget {
-  const ServersPanel({super.key, this.scrollable = true});
+  const ServersPanel({super.key, this.scrollable = true, this.manage = false});
+
+  /// Раздел «Серверы»: видны и скрытые подписки и серверы (приглушённые), сверху — счётчик.
+  /// На главной (false) скрытое не показывается.
+  final bool manage;
 
   /// false — панель встроена в общий прокручиваемый список (узкое окно).
   final bool scrollable;
@@ -75,6 +80,25 @@ class _ServersPanelState extends State<ServersPanel> {
     return servers.where((s) => Flags.toPlain(s.name).toLowerCase().contains(_query)).toList();
   }
 
+  /// Серверы подписки, как их показывает этот список: на главной без скрытых, в выбранном порядке.
+  List<ServerProfile> _view(AppState state, String? subscriptionId) {
+    final list = [
+      for (final s in state.serversOf(subscriptionId))
+        if (widget.manage || !s.hidden) s,
+    ];
+    switch (state.settings.serverSort) {
+      case 'delay':
+        // Непроверенные и недоступные — в конце, в прежнем порядке.
+        int rank(ServerProfile s) => (s.delayMs ?? -1) > 0 ? s.delayMs! : 1 << 30;
+        mergeSort(list, compare: (a, b) => rank(a).compareTo(rank(b)));
+      case 'name':
+        mergeSort(list,
+            compare: (a, b) =>
+                Flags.toPlain(a.name).toLowerCase().compareTo(Flags.toPlain(b.name).toLowerCase()));
+    }
+    return list;
+  }
+
   Future<void> _add(BuildContext context) async {
     final text = await promptText(
       context,
@@ -95,8 +119,8 @@ class _ServersPanelState extends State<ServersPanel> {
     final groups = <(Subscription?, List<ServerProfile>)>[
       // Закреплённые подписки — первыми; внутри каждой группы порядок остаётся прежним.
       for (final sub in [...state.subscriptions.where((s) => s.pinned), ...state.subscriptions.where((s) => !s.pinned)])
-        (sub, _filter(sub, state.serversOf(sub.id))),
-      if (state.serversOf(null).isNotEmpty) (null, _filter(null, state.serversOf(null))),
+        if (widget.manage || !sub.hidden) (sub, _filter(sub, _view(state, sub.id))),
+      if (_view(state, null).isNotEmpty) (null, _filter(null, _view(state, null))),
       // При поиске группы без совпадений не показываем.
     ].where((g) => _query.isEmpty || g.$2.isNotEmpty).toList();
     // Порядок меняется только среди закреплённых и только в полном списке (без поиска).
@@ -138,11 +162,19 @@ class _ServersPanelState extends State<ServersPanel> {
       ),
       _MenuAction(
         tooltip: 'Ещё',
-        items: const [
-          AppMenuItem('add', 'Добавить подписку', icon: Icons.add_rounded),
-          AppMenuItem('paste', 'Вставить из буфера', icon: Icons.content_paste_rounded, hint: 'Ctrl+V'),
-          AppMenuItem.divider(),
-          AppMenuItem('update', 'Обновить все подписки', icon: Icons.sync_rounded),
+        items: [
+          const AppMenuItem('add', 'Добавить подписку', icon: Icons.add_rounded),
+          const AppMenuItem('paste', 'Вставить из буфера', icon: Icons.content_paste_rounded, hint: 'Ctrl+V'),
+          const AppMenuItem.divider(),
+          const AppMenuItem('update', 'Обновить все подписки', icon: Icons.sync_rounded),
+          const AppMenuItem.divider(),
+          // Порядок серверов внутри подписки — один на главную и на раздел «Серверы».
+          for (final (value, label) in const [
+            ('provider', 'Порядок: как у провайдера'),
+            ('delay', 'Порядок: по задержке'),
+            ('name', 'Порядок: по названию'),
+          ])
+            AppMenuItem('sort-$value', label, checked: state.settings.serverSort == value),
         ],
         onSelected: (v) {
           switch (v) {
@@ -152,20 +184,42 @@ class _ServersPanelState extends State<ServersPanel> {
               importFromClipboard(context);
             case 'update':
               state.updateAllSubscriptions();
+            case final String sort when sort.startsWith('sort-'):
+              state.settings.serverSort = sort.substring(5);
+              state.changed();
           }
         },
       ),
     ]);
 
+    final hiddenSubs = state.subscriptions.where((s) => s.hidden).length;
+    final hiddenServers = state.servers.where((s) => !state.isShown(s)).length;
     final children = <Widget>[
       header,
+      // Счётчик раздела «Серверы»: сколько всего и сколько из этого спрятано с главной.
+      if (widget.manage && hasAny)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
+          child: Text(
+            'Подписок: ${state.subscriptions.length}${hiddenSubs > 0 ? ' (скрыто $hiddenSubs)' : ''}  ·  '
+            'серверов: ${state.servers.length}${hiddenServers > 0 ? ' (скрыто $hiddenServers)' : ''}. '
+            'Скрытое не показывается на главной и в меню значка в трее.',
+            style: TextStyle(color: C.muted, fontSize: 12),
+          ),
+        ),
       const SizedBox(height: 14),
       if (!hasAny)
         _EmptyState(onAdd: () => _add(context))
       else if (groups.isEmpty)
         Panel(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Center(child: Text('По запросу «$_query» ничего не найдено', style: TextStyle(color: C.muted))),
+          child: Center(
+            child: Text(
+                _query.isEmpty
+                    ? 'Все подписки и серверы скрыты. Вернуть их можно в разделе «Серверы»'
+                    : 'По запросу «$_query» ничего не найдено',
+                style: TextStyle(color: C.muted)),
+          ),
         )
       else
         for (final (sub, list) in groups)
@@ -502,7 +556,8 @@ class _GroupCardState extends State<_GroupCard> {
           );
 
     return AnimatedOpacity(
-      opacity: _dragging ? 0.45 : 1,
+      // Скрытая с главной подписка (видна только в разделе «Серверы») — приглушена.
+      opacity: _dragging ? 0.45 : ((sub?.hidden ?? false) ? 0.55 : 1),
       duration: const Duration(milliseconds: 140),
       child: Container(
       decoration: BoxDecoration(
@@ -547,6 +602,7 @@ class _GroupCardState extends State<_GroupCard> {
                           child: const Icon(Icons.push_pin_rounded, size: 14, color: C.orange),
                         ),
                       ],
+                      if (sub?.hidden ?? false) ...[const SizedBox(width: 8), const Tag('скрыта')],
                     ]),
                     const SizedBox(height: 2),
                     Text(subtitle, maxLines: 1, style: TextStyle(color: C.muted, fontSize: 11.5)),
@@ -576,6 +632,8 @@ class _GroupCardState extends State<_GroupCard> {
                     items: [
                       AppMenuItem('pin', sub.pinned ? 'Открепить' : 'Закрепить вверху',
                           icon: sub.pinned ? Icons.push_pin_outlined : Icons.push_pin_rounded),
+                      AppMenuItem('hide', sub.hidden ? 'Показывать на главной' : 'Скрыть с главной',
+                          icon: sub.hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded),
                       const AppMenuItem('edit', 'Изменить', icon: Icons.edit_rounded),
                       const AppMenuItem('copy', 'Скопировать ссылку', icon: Icons.link_rounded),
                       const AppMenuItem.divider(),
@@ -586,6 +644,11 @@ class _GroupCardState extends State<_GroupCard> {
                         case 'pin':
                           sub.pinned = !sub.pinned;
                           state.changed();
+                        case 'hide':
+                          state.setSubscriptionHidden(sub, !sub.hidden);
+                          if (sub.hidden) {
+                            state.toast('Подписка скрыта с главной', detail: 'Вернуть её можно в разделе «Серверы»');
+                          }
                         case 'edit':
                           await _edit(state, sub);
                         case 'copy':
@@ -693,6 +756,8 @@ class _ServerRow extends StatelessWidget {
     final v = await showAppMenu<String>(context, at: at, items: [
       const AppMenuItem('ping', 'Проверить задержку (пинг)', icon: Icons.speed_rounded),
       const AppMenuItem('json', 'Показать JSON', icon: Icons.data_object_rounded),
+      AppMenuItem('hide', server.hidden ? 'Показывать на главной' : 'Скрыть с главной',
+          icon: server.hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded),
       if (server.subscriptionId == null) ...const [
         AppMenuItem.divider(),
         AppMenuItem('delete', 'Удалить', icon: Icons.delete_outline_rounded, danger: true),
@@ -704,6 +769,9 @@ class _ServerRow extends StatelessWidget {
         await state.ping([server]);
       case 'json':
         await _showJson(context, state);
+      case 'hide':
+        state.setServerHidden(server, !server.hidden);
+        if (server.hidden) state.toast('Сервер скрыт с главной', detail: 'Вернуть его можно в разделе «Серверы»');
       case 'delete':
         state.deleteServer(server);
     }
@@ -797,21 +865,29 @@ class _ServerRow extends StatelessWidget {
               color: selected ? C.orange : Colors.transparent,
             ),
             const SizedBox(width: 13),
-            country != null ? FlagIcon.round(country, size: 26) : _NoFlag(server: server),
+            // Скрытый с главной сервер (виден только в разделе «Серверы») — приглушён.
+            Opacity(
+              opacity: server.hidden ? 0.5 : 1,
+              child: country != null ? FlagIcon.round(country, size: 26) : _NoFlag(server: server),
+            ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                FlagText(name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: 4),
-                Wrap(spacing: 6, runSpacing: 4, children: [
-                  Tag(server.protocolLabel, color: C.isDark ? C.orangeLight : C.orange),
-                  if (server.transportLabel.isNotEmpty) Tag(server.transportLabel),
-                  if (server.isJson) Tag('JSON', color: C.cyan),
+              child: Opacity(
+                opacity: server.hidden ? 0.5 : 1,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  FlagText(name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Wrap(spacing: 6, runSpacing: 4, children: [
+                    Tag(server.protocolLabel, color: C.isDark ? C.orangeLight : C.orange),
+                    if (server.transportLabel.isNotEmpty) Tag(server.transportLabel),
+                    if (server.isJson) Tag('JSON', color: C.cyan),
+                    if (server.hidden) const Tag('скрыт'),
+                  ]),
                 ]),
-              ]),
+              ),
             ),
             if (server.warning != null)
               Tooltip(

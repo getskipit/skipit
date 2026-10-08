@@ -12,6 +12,7 @@ class ServerProfile {
     this.subscriptionId,
     this.delayMs,
     this.warning,
+    this.hidden = false,
   }) : id = id ?? newId();
 
   final String id;
@@ -36,6 +37,9 @@ class ServerProfile {
 
   /// Предупреждение парсера (например, неподдерживаемый параметр).
   String? warning;
+
+  /// Скрыт с главной и из меню значка в трее; в разделе «Серверы» остаётся.
+  bool hidden;
 
   String get protocolLabel => switch (protocol) {
         'vless' => 'VLESS',
@@ -81,6 +85,7 @@ class ServerProfile {
         'subscriptionId': subscriptionId,
         'delayMs': delayMs,
         'warning': warning,
+        'hidden': hidden,
       };
 
   factory ServerProfile.fromJson(Map<String, dynamic> j) => ServerProfile(
@@ -94,5 +99,6 @@ class ServerProfile {
         subscriptionId: j['subscriptionId'] as String?,
         delayMs: asInt(j['delayMs']),
         warning: j['warning'] as String?,
+        hidden: parseBool(j['hidden']),
       );
 }

@@ -271,8 +271,8 @@ class _ShellState extends State<Shell> {
   Widget build(BuildContext context) {
     final pages = [
       const HomePage(),
-      // Тот же список подписок и серверов, что справа на главной, — на всю ширину окна.
-      const Padding(padding: EdgeInsets.fromLTRB(24, 24, 24 - scrollGutter, 0), child: ServersPanel()),
+      // Раздел «Серверы»: все подписки и серверы, включая скрытые с главной, на всю ширину окна.
+      const Padding(padding: EdgeInsets.fromLTRB(24, 24, 24 - scrollGutter, 0), child: ServersPanel(manage: true)),
       const RoutingHubPage(),
       const LogsPage(),
       const SettingsPage(),

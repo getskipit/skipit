@@ -103,6 +103,10 @@ class AppSettings {
   String? selectedServerId;
   String? selectedRoutingId;
 
+  /// Порядок серверов внутри подписки: `provider` — как прислал провайдер, `delay` — по задержке
+  /// (непроверенные и недоступные в конце), `name` — по названию.
+  String serverSort = 'provider';
+
   /// «Мой DNS»: вместо DNS провайдера (или профиля — у обычных серверов) работают два своих адреса:
   /// удалённый — через VPN, локальный — напрямую.
   bool ownDns = false;
@@ -153,6 +157,7 @@ class AppSettings {
         'theme': theme.name,
         'selectedServerId': selectedServerId,
         'selectedRoutingId': selectedRoutingId,
+        'serverSort': serverSort,
         'ownDns': ownDns,
         'ownDnsRemote': ownDnsRemote,
         'ownDnsDomestic': ownDnsDomestic,
@@ -206,6 +211,7 @@ class AppSettings {
     s.theme = AppTheme.values.asNameMap()[j['theme']] ?? s.theme;
     s.selectedServerId = j['selectedServerId'] as String?;
     s.selectedRoutingId = j['selectedRoutingId'] as String?;
+    s.serverSort = const ['delay', 'name'].contains(j['serverSort']) ? j['serverSort'] as String : s.serverSort;
     s.ownDns = parseBool(j['ownDns'], s.ownDns);
     s.ownDnsRemote = j['ownDnsRemote'] as String? ?? s.ownDnsRemote;
     s.ownDnsDomestic = j['ownDnsDomestic'] as String? ?? s.ownDnsDomestic;

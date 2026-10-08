@@ -59,6 +59,16 @@ void main() {
     await search('ъъъ');
     expect(find.textContaining('Ничего не найдено'), findsOneWidget);
 
+    // Ушли в другой раздел и вернулись — поиск сброшен.
+    await search('порт');
+    await tester.tap(find.byIcon(Icons.bolt_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byIcon(Icons.tune_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Тема'), findsOneWidget);
+    expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Поиск по настройкам')).controller!.text, isEmpty);
+
+    await search('ъъъ');
     await tester.tap(find.byTooltip('Очистить'));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Тема'), findsOneWidget);

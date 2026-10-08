@@ -18,6 +18,7 @@ class Subscription {
     this.error,
     this.expanded = true,
     this.pinned = false,
+    this.hidden = false,
   }) : id = id ?? newId();
 
   final String id;
@@ -37,6 +38,9 @@ class Subscription {
 
   /// Закреплённые подписки показываются в списке первыми.
   bool pinned;
+
+  /// Скрыта с главной и из меню значка в трее; в разделе «Серверы» остаётся. Обновляется как обычно.
+  bool hidden;
 
   String get displayName {
     if (name.isNotEmpty) return name;
@@ -113,6 +117,7 @@ class Subscription {
         'error': error,
         'expanded': expanded,
         'pinned': pinned,
+        'hidden': hidden,
       };
 
   factory Subscription.fromJson(Map<String, dynamic> j) => Subscription(
@@ -131,5 +136,6 @@ class Subscription {
         error: j['error'] as String?,
         expanded: parseBool(j['expanded'], true),
         pinned: parseBool(j['pinned']),
+        hidden: parseBool(j['hidden']),
       );
 }
