@@ -470,7 +470,13 @@ class _RoutingEditorState extends State<_RoutingEditor> {
           maxLines: 6,
           minLines: 6,
           style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-          decoration: InputDecoration(labelText: label, hintText: hint, alignLabelWithHint: true),
+          // Примеры видны в пустом поле сразу, а не только когда в него щёлкнули.
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            alignLabelWithHint: true,
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+          ),
         ),
       );
 
@@ -516,29 +522,45 @@ class _RoutingEditorState extends State<_RoutingEditor> {
                 ),
               ]),
               const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'В списках — по одной записи в строке.\n'
+                  'Сайты: example.com — сайт со всеми поддоменами; full:example.com — только этот адрес; '
+                  'geosite:youtube — готовый список сайтов.\n'
+                  'IP: 1.2.3.4 — один адрес; 10.0.0.0/8 — диапазон адресов; geoip:ru — готовый список адресов.',
+                  style: TextStyle(color: C.muted, fontSize: 12, height: 1.4),
+                ),
+              ),
+              const SizedBox(height: 12),
               Row(children: [
-                _area('proxySites', 'Через VPN — сайты', 'geosite:youtube\ninstagram.com'),
+                _area('proxySites', 'Через VPN — сайты', 'instagram.com\nfull:api.example.com\ngeosite:youtube'),
                 const SizedBox(width: 12),
-                _area('proxyIp', 'Через VPN — IP', 'geoip:ru-blocked\n149.154.160.0/20'),
+                _area('proxyIp', 'Через VPN — IP', '149.154.167.99\n149.154.160.0/20\ngeoip:ru-blocked'),
               ]),
               const SizedBox(height: 12),
               Row(children: [
-                _area('directSites', 'Напрямую — сайты', 'geosite:category-ru\ndomain:ru'),
+                _area('directSites', 'Напрямую — сайты', 'gosuslugi.ru\nfull:lk.example.ru\ngeosite:category-ru'),
                 const SizedBox(width: 12),
-                _area('directIp', 'Напрямую — IP', 'geoip:ru\ngeoip:private'),
+                _area('directIp', 'Напрямую — IP', '77.88.8.8\n192.168.0.0/16\ngeoip:ru'),
               ]),
               const SizedBox(height: 12),
               Row(children: [
-                _area('blockSites', 'Блокировать — сайты', 'geosite:category-ads-all'),
+                _area('blockSites', 'Блокировать — сайты', 'ads.example.com\nfull:track.example.com\ngeosite:category-ads-all'),
                 const SizedBox(width: 12),
-                _area('blockIp', 'Блокировать — IP', ''),
+                _area('blockIp', 'Блокировать — IP', '203.0.113.5\n198.51.100.0/24'),
               ]),
               const SizedBox(height: 12),
               TextField(
                 controller: _hosts,
                 maxLines: 3,
                 style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-                decoration: const InputDecoration(labelText: 'DNS hosts (домен = IP)', alignLabelWithHint: true),
+                decoration: const InputDecoration(
+                  labelText: 'DNS hosts (домен = IP)',
+                  hintText: 'router.home = 192.168.1.1',
+                  alignLabelWithHint: true,
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                ),
               ),
             ]),
           ),
