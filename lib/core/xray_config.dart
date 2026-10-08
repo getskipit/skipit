@@ -514,13 +514,23 @@ class XrayConfig {
     _collectAddresses(outbounds, domains);
     // К DNS-серверу с пометкой «+local» ядро подключается само и его имя ищет своим же DNS. Без отдельной
     // записи имя сервера спрашивалось бы у него самого: каждое новое соединение с ним ждало отказа по
-    // времени, а вместе с ним — все запросы, что стояли в очереди.
-    for (final s in ((cfg['dns'] as Map?)?['servers'] as List? ?? const [])) {
+    // времени, а вместе с ним — все запросы, что стояли в очереди. Имя узнаётся у запасного DNS из того же
+    // конфига (общего и не «+local» — обычно он идёт через VPN), а если такого нет — напрямую, как адреса
+    // VPN-серверов.
+    final provided = (cfg['dns'] as Map?)?['servers'] as List? ?? const [];
+    final localDns = <String>{};
+    Object? spareDns;
+    for (final s in provided) {
       final address = s is Map ? s['address'] : s;
-      if (address is! String || !address.contains('+local://')) continue;
-      final host = Uri.tryParse(address)?.host ?? '';
-      if (host.isNotEmpty && InternetAddress.tryParse(host) == null) domains.add(host);
+      if (address is! String || address == 'localhost' || address == 'fakedns') continue;
+      if (address.contains('+local://')) {
+        final host = Uri.tryParse(address)?.host ?? '';
+        if (host.isNotEmpty && InternetAddress.tryParse(host) == null) localDns.add(host);
+      } else if (s is! Map || (s['domains'] as List? ?? const []).isEmpty) {
+        spareDns ??= s;
+      }
     }
+    if (spareDns == null) domains.addAll(localDns);
     outbounds.add(_dnsOutbound);
     cfg['outbounds'] = outbounds;
 
@@ -529,6 +539,9 @@ class XrayConfig {
     if (servers.isEmpty) servers.add('1.1.1.1');
     if (domains.isNotEmpty) {
       servers.add({'address': _bootstrapDns, 'domains': [for (final d in domains) 'full:$d'], 'skipFallback': true});
+    }
+    if (spareDns != null && localDns.isNotEmpty) {
+      servers.add({..._dnsEntry(spareDns), 'domains': [for (final d in localDns) 'full:$d'], 'skipFallback': true});
     }
     dns['servers'] = servers;
     cfg['dns'] = dns;

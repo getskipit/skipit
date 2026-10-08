@@ -246,8 +246,23 @@ void main() {
     final xray = File('core/skipit-xray.exe');
     for (final c in [cfg, own, viaDoh]) {
       XrayConfig.addTun(c, settings: AppSettings(), apps: AppRules());
-      // Имя DNS-сервера «+local» ядро узнаёт у запасного DNS напрямую, а не у него самого.
-      if (identical(c, viaDoh)) expect(jsonEncode((c['dns'] as Map)['servers']), contains('full:dns.example'));
+      // Имя DNS-сервера «+local» ядро узнаёт не у него самого, а у запасного DNS из того же конфига.
+      if (identical(c, viaDoh)) {
+        expect((c['dns'] as Map)['servers'], anyElement(equals(
+            {'address': 'https://cloudflare-dns.com/dns-query', 'domains': ['full:dns.example'], 'skipFallback': true})));
+        // Запасного нет — тогда напрямую, как адреса VPN-серверов.
+        final alone = jsonDecode(jsonEncode({
+          'dns': {
+            'servers': ['https+local://dns.example/dns-query'],
+          },
+          'outbounds': [
+            {'tag': 'proxy', 'protocol': 'freedom'},
+          ],
+        })) as Map<String, dynamic>;
+        XrayConfig.addTun(alone, settings: AppSettings(), apps: AppRules());
+        expect((alone['dns'] as Map)['servers'], anyElement(equals(
+            {'address': '77.88.8.8', 'domains': ['full:dns.example'], 'skipFallback': true})));
+      }
       XrayConfig.addDirectInbound(c, port: 20901, hosts: ['sub.example'], settings: AppSettings());
       XrayConfig.addCheckInbound(c, port: 20902);
       XrayConfig.resolveServersInside(c, settings: AppSettings());
