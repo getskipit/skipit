@@ -135,7 +135,7 @@ void main() {
         contains('через VPN-сервер'));
     expect(s('INFO [2014162670 0ms] router: found process path: D:\\vpn\\build\\dev\\core\\skipit-xray.exe'),
         'Соединение открыла программа skipit-xray.exe.');
-    expect(s('INFO [1 0ms] outbound/direct[direct]: outbound connection to 144.31.53.51:443'), contains('напрямую'));
+    expect(s('INFO [1 0ms] outbound/direct[direct]: outbound connection to 203.0.113.9:443'), contains('напрямую'));
     expect(s('DEBUG [1 0ms] router: match[2] process_name=[skipit-xray.exe skipit-sing-box.exe] => route(direct)'),
         contains('напрямую'));
     // Отказ в доступе к чужому процессу — это не «нужны права администратора».
