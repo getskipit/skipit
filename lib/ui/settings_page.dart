@@ -186,7 +186,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 : 'sing-box держит адаптер и передаёт трафик в Xray. Действует в режимах TUN и «Смешанный»',
             trailing: Segmented<TunCore>(
               value: s.tunCore,
-              items: const {TunCore.singbox: 'sing-box', TunCore.xray: 'Xray'},
+              items: const {TunCore.xray: 'Xray', TunCore.singbox: 'sing-box'},
               onChanged: (v) {
                 s.tunCore = v;
                 state.changed();

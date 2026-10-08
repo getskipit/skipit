@@ -209,7 +209,7 @@ Future<void> main(List<String> rawArgs) async {
       modes: [for (final m in trayModes) m == ConnectionMode.proxyOnly ? 'Порты' : m.label],
       mode: trayModes.indexOf(state.settings.mode),
       // Ядро TUN выбирается только в режимах с адаптером — в остальных переключателя в меню нет.
-      cores: state.usesTun ? const ['sing-box', 'Xray'] : const [],
+      cores: state.usesTun ? const ['Xray', 'sing-box'] : const [],
       core: TunCore.values.indexOf(state.settings.tunCore),
       killSwitch: state.usesTun ? state.settings.killSwitch : null,
       servers: [

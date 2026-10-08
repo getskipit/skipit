@@ -29,11 +29,11 @@ extension ConnectionModeLabel on ConnectionMode {
 
 /// Чем поднимается TUN-адаптер.
 enum TunCore {
-  /// sing-box держит адаптер и отдаёт трафик в SOCKS-порт Xray.
-  singbox,
-
   /// Адаптер поднимает сам Xray, без sing-box.
   xray,
+
+  /// sing-box держит адаптер и отдаёт трафик в SOCKS-порт Xray.
+  singbox,
 }
 
 enum PingType { tcp, realDelay }

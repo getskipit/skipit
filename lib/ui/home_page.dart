@@ -265,8 +265,8 @@ class _TunCorePicker extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             onTap: () async {
               final picked = await showAppMenu<TunCore>(context, centered: true, items: [
-                AppMenuItem(TunCore.singbox, 'sing-box', checked: value == TunCore.singbox),
                 AppMenuItem(TunCore.xray, 'Xray', checked: value == TunCore.xray),
+                AppMenuItem(TunCore.singbox, 'sing-box', checked: value == TunCore.singbox),
               ]);
               if (picked != null) onChanged(picked);
             },
