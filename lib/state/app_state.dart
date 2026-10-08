@@ -179,6 +179,7 @@ class AppState extends ChangeNotifier {
 
   /// Вход проверки DNS в ядре (см. [XrayConfig.addDnsCheckInbound]) и раздел dns его конфига.
   int? _dnsCheckPort;
+  String _dnsCheckPassword = '';
   Map<String, dynamic>? _dnsConfig;
   ConnRoute? _dnsCheckRoute;
 
@@ -199,7 +200,7 @@ class AppState extends ChangeNotifier {
       final nic = tunnel == null ? null : await DnsCheck.physicalNic([tunnel, ...WinSys.tunNames]);
       for (final probe in dnsProbes) {
         _dnsCheckRoute = null;
-        await DnsCheck.run(probe, checkPort: port, nic: nic);
+        await DnsCheck.run(probe, checkPort: port, password: _dnsCheckPassword, nic: nic);
         // Строка журнала ядра о том, куда ушёл запрос, приходит чуть позже ответа.
         await Future.delayed(const Duration(milliseconds: 200));
         probe.route = _dnsCheckRoute;
@@ -1046,6 +1047,13 @@ class AppState extends ChangeNotifier {
     if (isConnected && !same) unawaited(reconnect());
   }
 
+  /// Пароль на локальные порты SOCKS и HTTP.
+  void setPortAuth(bool on) {
+    settings.portAuth = on;
+    changed();
+    if (isConnected) unawaited(reconnect());
+  }
+
   /// «Мой DNS»: свои адреса DNS вместо DNS провайдера или профиля.
   void setOwnDns(bool on) {
     if (settings.ownDns == on) return;
@@ -1278,6 +1286,8 @@ class AppState extends ChangeNotifier {
       taken.add(session.httpPort);
       session.apiPort = await _pickPort(settings.apiPort, taken, 'статистика');
       _session = session;
+      // Сама программа ходит через свой HTTP-порт (обновления, подписки, geo-базы) — с тем же паролем.
+      Net.proxyAuth = session.httpAuth ? '${AppSettings.portUser}:${session.portPassword}' : null;
 
       final config = XrayConfig.build(server: server, routing: routing, settings: session);
       final xrayTun = this.xrayTun;
@@ -1335,7 +1345,8 @@ class AppState extends ChangeNotifier {
         if (++dnsCheckPort > checkPort + 200) throw CoreException('Не нашлось свободного порта для проверки DNS');
       }
       taken.add(dnsCheckPort);
-      XrayConfig.addDnsCheckInbound(config, port: dnsCheckPort);
+      _dnsCheckPassword = randomSecret();
+      XrayConfig.addDnsCheckInbound(config, port: dnsCheckPort, password: _dnsCheckPassword);
       _dnsCheckPort = dnsCheckPort;
       _dnsConfig = {'dns': config['dns']};
       dnsProbes = [];

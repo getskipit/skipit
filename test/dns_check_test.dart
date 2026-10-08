@@ -56,7 +56,7 @@ void main() {
 
   test('вход проверки DNS: правила для запросов DNS действуют и на него', () {
     final cfg = jsonDecode(jsonEncode(config)) as Map<String, dynamic>;
-    XrayConfig.addDnsCheckInbound(cfg, port: 20961);
+    XrayConfig.addDnsCheckInbound(cfg, port: 20961, password: 'p');
     final inbound = (cfg['inbounds'] as List).single as Map;
     expect(inbound['listen'], '127.0.0.1');
     final rules = (cfg['routing'] as Map)['rules'] as List;
@@ -72,7 +72,7 @@ void main() {
     // Ядро принимает оба вида конфига временной копии.
     for (final probe in DnsCheck.servers(config)) {
       final f = File('${Directory.systemTemp.path}\\skipit-dns-helper-test.json');
-      await f.writeAsString(jsonEncode(DnsCheck.helperConfig(probe, port: 20962, checkPort: 20963, nic: 'Ethernet')));
+      await f.writeAsString(jsonEncode(DnsCheck.helperConfig(probe, port: 20962, checkPort: 20963, password: 'secret', nic: 'Ethernet')));
       final r = await Process.run(AppPaths.xrayExe, ['run', '-test', '-c', f.path]);
       expect(r.exitCode, 0, reason: '${probe.label}\n${r.stdout}\n${r.stderr}');
       await f.delete();
@@ -100,14 +100,14 @@ void main() {
         {'tag': 'direct', 'protocol': 'freedom'},
       ],
     };
-    XrayConfig.addDnsCheckInbound(main, port: 20963);
+    XrayConfig.addDnsCheckInbound(main, port: 20963, password: 'secret');
     final core = await Process.start(AppPaths.xrayExe, ['run', '-c', 'stdin:']);
     core.stdin.add(utf8.encode(jsonEncode(main)));
     await core.stdin.close();
     await core.stdout.transform(utf8.decoder).firstWhere((line) => line.contains('started'));
 
     final probe = DnsProbe(address: '127.0.0.1', port: server.port, domains: 0);
-    await DnsCheck.run(probe, checkPort: 20963);
+    await DnsCheck.run(probe, checkPort: 20963, password: 'secret');
     core.kill();
     server.close();
 
@@ -118,7 +118,7 @@ void main() {
 
     // Сервер, которого нет, — «не ответил».
     final dead = DnsProbe(address: '127.0.0.1', port: 9, domains: 0);
-    await DnsCheck.run(dead, checkPort: 20964);
+    await DnsCheck.run(dead, checkPort: 20964, password: 'secret');
     expect(dead.ok, isFalse);
   }, timeout: const Timeout(Duration(seconds: 60)));
 }

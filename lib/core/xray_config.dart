@@ -130,7 +130,7 @@ class XrayConfig {
         'protocol': 'socks',
         'listen': listen,
         'port': settings.socksPort,
-        'settings': {'auth': 'noauth', 'udp': true},
+        'settings': _socksSettings(settings),
         'sniffing': sniffing,
       },
       {
@@ -138,7 +138,7 @@ class XrayConfig {
         'protocol': 'http',
         'listen': listen,
         'port': settings.httpPort,
-        'settings': <String, dynamic>{},
+        'settings': _httpSettings(settings),
         'sniffing': sniffing,
       },
       ...keep,
@@ -261,7 +261,7 @@ class XrayConfig {
           'protocol': 'socks',
           'listen': listen,
           'port': settings.socksPort,
-          'settings': {'auth': 'noauth', 'udp': true},
+          'settings': _socksSettings(settings),
           'sniffing': sniffing,
         },
         {
@@ -269,7 +269,7 @@ class XrayConfig {
           'protocol': 'http',
           'listen': listen,
           'port': settings.httpPort,
-          'settings': <String, dynamic>{},
+          'settings': _httpSettings(settings),
           'sniffing': sniffing,
         },
       ],
@@ -320,6 +320,19 @@ class XrayConfig {
           if (InternetAddress.tryParse('${s['address']}') != null)
             {'ip': [s['address']], 'port': '${s['port'] ?? 53}', 'outboundTag': tag},
       ];
+
+  /// Настройки локальных входов SOCKS и HTTP: с логином и паролем, если пароль на порты включён.
+  static Map<String, dynamic> _socksSettings(AppSettings s) => {
+        'auth': s.portAuth ? 'password' : 'noauth',
+        if (s.portAuth) 'accounts': [_account(s)],
+        'udp': true,
+      };
+
+  static Map<String, dynamic> _httpSettings(AppSettings s) => {
+        if (s.httpAuth) 'accounts': [_account(s)],
+      };
+
+  static Map<String, dynamic> _account(AppSettings s) => {'user': AppSettings.portUser, 'pass': s.portPassword};
 
   static const _direct = 'skipit-direct', _block = 'skipit-block';
 
@@ -718,8 +731,9 @@ class XrayConfig {
   /// Локальный вход для проверки DNS (см. DnsCheck): запрос к DNS-серверу, пришедший через него, идёт
   /// тем же путём, каким к этому серверу ходит само ядро. Для этого правила, привязанные к запросам
   /// встроенного DNS (inboundTag = тег dns), распространяются и на этот вход. Слушает только этот
-  /// компьютер. Вызывается последним — когда все правила уже на месте.
-  static void addDnsCheckInbound(Map<String, dynamic> cfg, {required int port}) {
+  /// компьютер и закрыт паролем [password] — своим на каждое подключение: без него другая программа
+  /// могла бы ходить через этот вход в VPN. Вызывается последним — когда все правила уже на месте.
+  static void addDnsCheckInbound(Map<String, dynamic> cfg, {required int port, required String password}) {
     cfg['inbounds'] = [
       ...(cfg['inbounds'] as List? ?? const []),
       {
@@ -727,7 +741,13 @@ class XrayConfig {
         'protocol': 'socks',
         'listen': '127.0.0.1',
         'port': port,
-        'settings': {'auth': 'noauth', 'udp': true},
+        'settings': {
+          'auth': 'password',
+          'accounts': [
+            {'user': AppSettings.portUser, 'pass': password},
+          ],
+          'udp': true,
+        },
       },
     ];
     final tag = (cfg['dns'] as Map?)?['tag'];

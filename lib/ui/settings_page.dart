@@ -191,6 +191,23 @@ class SettingsPage extends StatelessWidget {
               (v) => s.autoSelect = v),
           toggle('Разрешить подключения из локальной сети', 'Раздавать прокси другим устройствам (0.0.0.0)', s.allowLan,
               (v) => s.allowLan = v),
+          toggle(
+              'Пароль на локальные порты',
+              'Другие программы смогут ходить через порты SOCKS и HTTP только с логином и паролем. HTTP-порт '
+                  'остаётся без пароля в режимах «Смешанный» и «Прокси»: им пользуется Windows, а она пароль '
+                  'передать не умеет',
+              s.portAuth,
+              (v) => state.setPortAuth(v)),
+          if (s.portAuth)
+            _Row(
+              title: 'Логин и пароль портов',
+              subtitle: 'Логин ${AppSettings.portUser}, пароль ${s.portPassword}',
+              trailing: IconButton(
+                tooltip: 'Скопировать пароль',
+                icon: const Icon(Icons.copy_rounded),
+                onPressed: () => Clipboard.setData(ClipboardData(text: s.portPassword)),
+              ),
+            ),
         ]),
         _Section('Проверка задержки', [
           _Row(

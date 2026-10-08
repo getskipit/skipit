@@ -61,6 +61,12 @@ String scrubUrls(String text) => text.replaceAllMapped(
       RegExp(r'(https?://)([^/\s,;)]+)[^\s,;)]*', caseSensitive: false),
       (m) => '${m[1]}${m[2]!.split('@').last}/…',
     );
+/// Случайный пароль для локальных входов ядра: 32 шестнадцатеричных знака.
+String randomSecret() {
+  final random = Random.secure();
+  return [for (var i = 0; i < 16; i++) random.nextInt(256).toRadixString(16).padLeft(2, '0')].join();
+}
+
 String newId() =>
     '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
     '${_random.nextInt(0x7fffffff).toRadixString(36)}';

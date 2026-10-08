@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../models/settings.dart';
 import 'log_store.dart';
 import 'paths.dart';
 
@@ -92,9 +93,10 @@ class DnsCheck {
   }
 
   /// Конфиг временного ядра: вход DNS на [port], единственный DNS-сервер — проверяемый.
-  /// [checkPort] — вход проверки DNS основного ядра, [nic] — сетевая карта для серверов «+local»
-  /// (нужна, пока маршрут Windows ведёт в адаптер VPN).
-  static Map<String, dynamic> helperConfig(DnsProbe probe, {required int port, required int checkPort, String? nic}) {
+  /// [checkPort] и [password] — вход проверки DNS основного ядра и его пароль, [nic] — сетевая карта
+  /// для серверов «+local» (нужна, пока маршрут Windows ведёт в адаптер VPN).
+  static Map<String, dynamic> helperConfig(DnsProbe probe,
+      {required int port, required int checkPort, required String password, String? nic}) {
     // Пометка «+local» снимается: у временного ядра запрос идёт через выход, привязанный к сетевой карте.
     final address = probe.address.replaceFirst('+local://', '://');
     return {
@@ -131,7 +133,13 @@ class DnsCheck {
             'protocol': 'socks',
             'settings': {
               'servers': [
-                {'address': '127.0.0.1', 'port': checkPort},
+                {
+                  'address': '127.0.0.1',
+                  'port': checkPort,
+                  'users': [
+                    {'user': AppSettings.portUser, 'pass': password},
+                  ],
+                },
               ],
             },
           },
@@ -174,7 +182,7 @@ class DnsCheck {
   }
 
   /// Проверяет один сервер и записывает результат в [probe].
-  static Future<void> run(DnsProbe probe, {required int checkPort, String? nic}) async {
+  static Future<void> run(DnsProbe probe, {required int checkPort, required String password, String? nic}) async {
     Process? core;
     try {
       // Свободный порт для входа временного ядра.
@@ -195,7 +203,8 @@ class DnsCheck {
       unawaited(process.exitCode.then((_) {
         if (!started.isCompleted) started.complete(false);
       }));
-      process.stdin.add(utf8.encode(jsonEncode(helperConfig(probe, port: port, checkPort: checkPort, nic: nic))));
+      process.stdin.add(utf8
+          .encode(jsonEncode(helperConfig(probe, port: port, checkPort: checkPort, password: password, nic: nic))));
       await process.stdin.close();
       if (!await started.future.timeout(timeout, onTimeout: () => false)) {
         probe.error = 'не удалось запустить проверку';

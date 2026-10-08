@@ -16,9 +16,12 @@ class Net {
     final c = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15)
       ..idleTimeout = const Duration(seconds: 5);
-    if (proxyPort != null) c.findProxy = (_) => 'PROXY 127.0.0.1:$proxyPort';
+    if (proxyPort != null) c.findProxy = (_) => 'PROXY ${proxyAuth == null ? '' : '$proxyAuth@'}127.0.0.1:$proxyPort';
     return c;
   }
+
+  /// «логин:пароль» локального HTTP-порта, когда он закрыт паролем (см. AppSettings.httpAuth).
+  static String? proxyAuth;
 
   /// Загружает подписку. Если пришли простые ссылки, а включено «предпочитать JSON», пробует
   /// тот же адрес с `/json` (так Remnawave-панели отдают полный Xray-конфиг с правилами провайдера).

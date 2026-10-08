@@ -50,6 +50,16 @@ class AppSettings {
   int httpPort = 10809;
   int apiPort = 10813;
   bool allowLan = false;
+
+  /// Пароль на локальные порты: SOCKS и HTTP пускают только с логином [portUser] и паролем
+  /// [portPassword] (свой на каждой установке). Включён по умолчанию. См. также [httpAuth].
+  bool portAuth = true;
+  String portPassword = randomSecret();
+  static const portUser = 'skipit';
+
+  /// HTTP-порт остаётся без пароля в режимах «Смешанный» и «Прокси»: им пользуется системный прокси
+  /// Windows, а он пароль передать не умеет.
+  bool get httpAuth => portAuth && mode != ConnectionMode.mixed && mode != ConnectionMode.systemProxy;
   bool ipv6 = false;
   bool sniffing = true;
   int mtu = 9000;
@@ -111,6 +121,8 @@ class AppSettings {
         'httpPort': httpPort,
         'apiPort': apiPort,
         'allowLan': allowLan,
+        'portAuth': portAuth,
+        'portPassword': portPassword,
         'ipv6': ipv6,
         'sniffing': sniffing,
         'mtu': mtu,
@@ -156,6 +168,9 @@ class AppSettings {
     s.httpPort = asInt(j['httpPort']) ?? s.httpPort;
     s.apiPort = asInt(j['apiPort']) ?? s.apiPort;
     s.allowLan = parseBool(j['allowLan'], s.allowLan);
+    final portPassword = j['portPassword'] as String? ?? '';
+    if (portPassword.isNotEmpty) s.portPassword = portPassword;
+    s.portAuth = parseBool(j['portAuth'], s.portAuth);
     s.ipv6 = parseBool(j['ipv6'], s.ipv6);
     s.sniffing = parseBool(j['sniffing'], s.sniffing);
     s.mtu = asInt(j['mtu']) ?? s.mtu;
