@@ -11,7 +11,7 @@ import 'paths.dart';
 class DnsProbe {
   DnsProbe({required this.address, this.port, required this.domains, this.limitMs});
 
-  /// Адрес, как он записан в конфиге ядра (`https://…`, `https+local://…`, `77.88.8.8`).
+  /// Адрес, как он записан в конфиге ядра (`https://…`, `https+local://…`, `1.1.1.1`).
   final String address;
   final int? port;
 

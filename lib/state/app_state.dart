@@ -1380,8 +1380,8 @@ class AppState extends ChangeNotifier {
         dnsPort = port;
         XrayConfig.addDnsInbound(config, port: port, settings: session);
       }
-      // С Kill Switch имя VPN-сервера ядро узнаёт само: запрос Windows к DNS обычной сети был бы
-      // заблокирован, и подключение «висело» бы секунд двенадцать.
+      // Имя VPN-сервера ядро узнаёт само: запрос Windows к DNS обычной сети не выпускает защита от
+      // утечек DNS ядра Xray (а с Kill Switch — и он), и подключение иногда «висело» секунд двенадцать.
       if (xrayTun || (usesTun && settings.killSwitch)) XrayConfig.resolveServersInside(config, settings: session);
       // Вход проверки DNS — последним: к этому месту все правила уже на месте.
       var dnsCheckPort = checkPort + 1;
