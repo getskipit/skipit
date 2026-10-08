@@ -253,6 +253,10 @@ void main() {
       expect(tun['gateway'], ['172.19.0.1/30']);
       expect(tun['autoSystemRoutingTable'], ['0.0.0.0/0']);
       expect(tun['autoSystemWfpBlockLeak'], ['dns', 'misconfigtun']);
+      // Имя из соединения — только для выбора правила: адрес назначения ядро не подменяет ни на одном входе.
+      for (final i in (c['inbounds'] as List).where((i) => i['sniffing'] != null)) {
+        expect((i['sniffing'] as Map)['routeOnly'], isTrue, reason: '${i['tag']}');
+      }
       // Имя DNS-сервера «+local» ядро узнаёт не у него самого, а у запасного DNS из того же конфига.
       if (identical(c, viaDoh)) {
         expect((c['dns'] as Map)['servers'], anyElement(equals(

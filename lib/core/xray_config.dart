@@ -106,7 +106,7 @@ class XrayConfig {
     final sniffing = {
       'enabled': settings.sniffing,
       'destOverride': ['http', 'tls', 'quic'],
-      'routeOnly': false,
+      'routeOnly': true,
     };
 
     // Входы SOCKS/HTTP провайдера заменяем своими (теги те же — правила провайдера на них ссылаются),
@@ -210,7 +210,7 @@ class XrayConfig {
     final sniffing = {
       'enabled': settings.sniffing,
       'destOverride': ['http', 'tls', 'quic'],
-      'routeOnly': false,
+      'routeOnly': true,
     };
 
     final proxy = dropRemovedOptions(deepCopyMap(server.outbound))..['tag'] = 'proxy';
@@ -551,10 +551,13 @@ class XrayConfig {
         // которой у адаптера нет маршрута («misconfigtun»), — то есть IPv6, когда он выключен.
         'autoSystemWfpBlockLeak': const ['dns', 'misconfigtun'],
       },
+      // routeOnly: имя, прочитанное в соединении, участвует только в выборе правила, а соединение идёт на
+      // тот адрес, что выбрала программа (так же и у входов SOCKS/HTTP, и у sing-box). Иначе ядро шло бы
+      // по имени — а оно бывает служебным, которого нет в DNS: так не открывался голосовой чат в играх.
       'sniffing': {
         'enabled': settings.sniffing,
         'destOverride': ['http', 'tls', 'quic'],
-        'routeOnly': false,
+        'routeOnly': true,
       },
     };
     cfg['inbounds'] = [...(cfg['inbounds'] as List? ?? const []), tun];
