@@ -222,16 +222,18 @@ class SettingsPage extends StatelessWidget {
               s.portAuth,
               (v) => state.setPortAuth(v)),
           if (s.portAuth) ...[
-            _Row(
+            _PortSecretRow(
               title: 'Логин портов',
-              subtitle: s.portUser,
-              trailing: IconButton(
-                tooltip: 'Скопировать логин',
-                icon: const Icon(Icons.copy_rounded),
-                onPressed: () => Clipboard.setData(ClipboardData(text: s.portUser)),
-              ),
+              what: 'логин',
+              value: s.portUser,
+              onReset: state.resetPortUser,
             ),
-            _PortPasswordRow(state: state),
+            _PortSecretRow(
+              title: 'Пароль портов',
+              what: 'пароль',
+              value: s.portPassword,
+              onReset: state.resetPortPassword,
+            ),
           ],
           number('Порт API статистики', 'Для счётчиков трафика', s.apiPort, (v) => s.apiPort = v),
           toggle('IPv6', 'Включить IPv6 в туннеле и DNS', s.ipv6, (v) => s.ipv6 = v),
@@ -468,50 +470,53 @@ class _UserAgentFieldState extends State<_UserAgentField> {
       );
 }
 
-/// Пароль локальных портов: скрыт точками, пока его не попросят показать; копируется кнопкой.
-/// Третья кнопка выдаёт новые логин и пароль.
-class _PortPasswordRow extends StatefulWidget {
-  const _PortPasswordRow({required this.state});
-  final AppState state;
+/// Логин или пароль локальных портов: скрыт точками, пока его не попросят показать; копируется и
+/// сменяется на новый случайный кнопками.
+class _PortSecretRow extends StatefulWidget {
+  const _PortSecretRow({required this.title, required this.what, required this.value, required this.onReset});
+  final String title;
+
+  /// «логин» или «пароль» — для подсказок кнопок и вопроса о смене.
+  final String what;
+  final String value;
+  final VoidCallback onReset;
 
   @override
-  State<_PortPasswordRow> createState() => _PortPasswordRowState();
+  State<_PortSecretRow> createState() => _PortSecretRowState();
 }
 
-class _PortPasswordRowState extends State<_PortPasswordRow> {
+class _PortSecretRowState extends State<_PortSecretRow> {
   bool _shown = false;
 
   @override
-  Widget build(BuildContext context) {
-    final state = widget.state;
-    final password = state.settings.portPassword;
-    return _Row(
-      title: 'Пароль портов',
-      subtitle: _shown ? password : '•' * 16,
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        IconButton(
-          tooltip: _shown ? 'Скрыть пароль' : 'Показать пароль',
-          icon: Icon(_shown ? Icons.visibility_off_rounded : Icons.visibility_rounded),
-          onPressed: () => setState(() => _shown = !_shown),
-        ),
-        IconButton(
-          tooltip: 'Скопировать пароль',
-          icon: const Icon(Icons.copy_rounded),
-          onPressed: () => Clipboard.setData(ClipboardData(text: password)),
-        ),
-        IconButton(
-          tooltip: 'Новые логин и пароль',
-          icon: const Icon(Icons.refresh_rounded),
-          onPressed: () async {
-            final ok = await confirm(context, 'Сменить логин и пароль портов?',
-                'Старые перестанут действовать. Программам, в которые они вписаны, понадобятся новые.',
-                ok: 'Сменить');
-            if (ok) state.resetPortPassword();
-          },
-        ),
-      ]),
-    );
-  }
+  Widget build(BuildContext context) => _Row(
+        title: widget.title,
+        subtitle: _shown ? widget.value : '•' * 16,
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          IconButton(
+            tooltip: '${_shown ? 'Скрыть' : 'Показать'} ${widget.what}',
+            icon: Icon(_shown ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+            onPressed: () => setState(() => _shown = !_shown),
+          ),
+          IconButton(
+            tooltip: 'Скопировать ${widget.what}',
+            icon: const Icon(Icons.copy_rounded),
+            onPressed: () => Clipboard.setData(ClipboardData(text: widget.value)),
+          ),
+          IconButton(
+            tooltip: 'Новый ${widget.what}',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () async {
+              final ok = await confirm(
+                  context,
+                  'Сменить ${widget.what} портов?',
+                  'Старый ${widget.what} перестанет действовать. Программам, в которые он вписан, понадобится новый.',
+                  ok: 'Сменить');
+              if (ok) widget.onReset();
+            },
+          ),
+        ]),
+      );
 }
 
 class _Row extends StatelessWidget {

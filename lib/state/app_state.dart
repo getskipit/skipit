@@ -1054,11 +1054,16 @@ class AppState extends ChangeNotifier {
     if (isConnected) unawaited(reconnect());
   }
 
-  /// Новые случайные логин и пароль локальных портов; старые перестают действовать.
+  /// Новый случайный логин локальных портов; старый перестаёт действовать.
+  void resetPortUser() {
+    settings.portUser = randomLogin();
+    changed();
+    if (isConnected && settings.portAuth) unawaited(reconnect());
+  }
+
+  /// Новый случайный пароль локальных портов; старый перестаёт действовать.
   void resetPortPassword() {
-    settings
-      ..portUser = randomLogin()
-      ..portPassword = randomPassword();
+    settings.portPassword = randomPassword();
     changed();
     if (isConnected && settings.portAuth) unawaited(reconnect());
   }
