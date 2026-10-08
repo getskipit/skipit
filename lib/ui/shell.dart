@@ -340,12 +340,12 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
     _timer = Timer(Duration(seconds: long ? 8 : 4), dismiss);
   }
 
-  /// Значок и цвет вида уведомления; у простого сведения значка нет.
+  /// Значок и цвет вида уведомления; у простого сведения — «i».
   (IconData, Color)? get _badge => switch (widget.kind) {
         ToastKind.success => (Icons.check_rounded, C.green),
         ToastKind.error => (Icons.priority_high_rounded, C.red),
         ToastKind.update => (Icons.arrow_downward_rounded, C.isDark ? C.orangeLight : C.orange),
-        ToastKind.info => null,
+        ToastKind.info => (Icons.info_outline_rounded, C.cyan),
       };
 
   void dismiss() {
