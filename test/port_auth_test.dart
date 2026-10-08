@@ -28,15 +28,17 @@ void main() {
 
   Map inbound(Map<String, dynamic> cfg, String tag) => (cfg['inbounds'] as List).firstWhere((i) => i['tag'] == tag);
 
-  test('пароль стоит на SOCKS всегда, на HTTP — кроме режимов с системным прокси', () {
+  test('пароль стоит на SOCKS всегда, на HTTP — только в режиме «Только порты»', () {
     const account = [
       {'user': 'tester7', 'pass': 'Ab-9+x_Z.q'},
     ];
     for (final mode in ConnectionMode.values) {
       final cfg = XrayConfig.build(server: server, routing: routing, settings: settings(mode));
       expect(inbound(cfg, 'socks')['settings'], {'auth': 'password', 'accounts': account, 'udp': true});
-      final system = mode == ConnectionMode.mixed || mode == ConnectionMode.systemProxy;
-      expect(inbound(cfg, 'http')['settings'], system ? isEmpty : {'accounts': account}, reason: mode.name);
+      // HTTP-порт под паролем только в режиме «Только порты»: в остальных им пользуются Windows и
+      // программы, запомнившие системный прокси.
+      final open = mode != ConnectionMode.proxyOnly;
+      expect(inbound(cfg, 'http')['settings'], open ? isEmpty : {'accounts': account}, reason: mode.name);
     }
     // Выключен — порты как раньше.
     final open = XrayConfig.build(server: server, routing: routing, settings: AppSettings()..portAuth = false);

@@ -60,9 +60,11 @@ class AppSettings {
   /// Логин служебного входа проверки DNS (пароль у него свой на каждое подключение).
   static const serviceUser = 'skipit';
 
-  /// HTTP-порт остаётся без пароля в режимах «Смешанный» и «Прокси»: им пользуется системный прокси
-  /// Windows, а он пароль передать не умеет.
-  bool get httpAuth => portAuth && mode != ConnectionMode.mixed && mode != ConnectionMode.systemProxy;
+  /// HTTP-порт закрыт паролем только в режиме «Только порты». В «Смешанном» и «Прокси» им пользуется
+  /// системный прокси Windows, а он пароль передать не умеет. В «TUN» порт тоже открыт: программы,
+  /// запомнившие системный прокси в «Смешанном» (Telegram, Steam), продолжают ходить через него и после
+  /// смены режима — с паролем они остались бы без связи до перезапуска.
+  bool get httpAuth => portAuth && mode == ConnectionMode.proxyOnly;
   bool ipv6 = false;
   bool sniffing = true;
   int mtu = 9000;
