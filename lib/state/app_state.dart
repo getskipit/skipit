@@ -1687,7 +1687,7 @@ class AppState extends ChangeNotifier {
           save();
         }
       } else if (!silent) {
-        toast('У вас последняя версия');
+        toast('У вас установлена последняя версия');
       }
     } catch (e) {
       log.add('update', 'Проверка обновлений: $e');
