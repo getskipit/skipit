@@ -79,6 +79,16 @@ String randomPassword() {
   }
 }
 
+/// Случайный логин локальных портов: 10 строчных букв и цифр, первая — буква.
+String randomLogin() {
+  const letters = 'abcdefghijkmnopqrstuvwxyz', all = '${letters}23456789';
+  final random = Random.secure();
+  return [
+    letters[random.nextInt(letters.length)],
+    for (var i = 0; i < 9; i++) all[random.nextInt(all.length)],
+  ].join();
+}
+
 String newId() =>
     '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
     '${_random.nextInt(0x7fffffff).toRadixString(36)}';

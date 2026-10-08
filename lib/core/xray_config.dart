@@ -332,7 +332,7 @@ class XrayConfig {
         if (s.httpAuth) 'accounts': [_account(s)],
       };
 
-  static Map<String, dynamic> _account(AppSettings s) => {'user': AppSettings.portUser, 'pass': s.portPassword};
+  static Map<String, dynamic> _account(AppSettings s) => {'user': s.portUser, 'pass': s.portPassword};
 
   static const _direct = 'skipit-direct', _block = 'skipit-block';
 
@@ -744,7 +744,7 @@ class XrayConfig {
         'settings': {
           'auth': 'password',
           'accounts': [
-            {'user': AppSettings.portUser, 'pass': password},
+            {'user': AppSettings.serviceUser, 'pass': password},
           ],
           'udp': true,
         },

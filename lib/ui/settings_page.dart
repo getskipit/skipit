@@ -224,11 +224,11 @@ class SettingsPage extends StatelessWidget {
           if (s.portAuth) ...[
             _Row(
               title: 'Логин портов',
-              subtitle: AppSettings.portUser,
+              subtitle: s.portUser,
               trailing: IconButton(
                 tooltip: 'Скопировать логин',
                 icon: const Icon(Icons.copy_rounded),
-                onPressed: () => Clipboard.setData(const ClipboardData(text: AppSettings.portUser)),
+                onPressed: () => Clipboard.setData(ClipboardData(text: s.portUser)),
               ),
             ),
             _PortPasswordRow(state: state),
@@ -468,7 +468,8 @@ class _UserAgentFieldState extends State<_UserAgentField> {
       );
 }
 
-/// Пароль локальных портов: скрыт точками, пока его не попросят показать; копируется и сменяется кнопками.
+/// Пароль локальных портов: скрыт точками, пока его не попросят показать; копируется кнопкой.
+/// Третья кнопка выдаёт новые логин и пароль.
 class _PortPasswordRow extends StatefulWidget {
   const _PortPasswordRow({required this.state});
   final AppState state;
@@ -499,11 +500,11 @@ class _PortPasswordRowState extends State<_PortPasswordRow> {
           onPressed: () => Clipboard.setData(ClipboardData(text: password)),
         ),
         IconButton(
-          tooltip: 'Новый пароль',
+          tooltip: 'Новые логин и пароль',
           icon: const Icon(Icons.refresh_rounded),
           onPressed: () async {
-            final ok = await confirm(context, 'Сменить пароль портов?',
-                'Старый пароль перестанет действовать. Программам, в которые он вписан, понадобится новый.',
+            final ok = await confirm(context, 'Сменить логин и пароль портов?',
+                'Старые перестанут действовать. Программам, в которые они вписаны, понадобятся новые.',
                 ok: 'Сменить');
             if (ok) state.resetPortPassword();
           },

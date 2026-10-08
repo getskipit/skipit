@@ -23,13 +23,14 @@ void main() {
     ..httpPort = 20972
     ..apiPort = 20973
     ..portAuth = true
+    ..portUser = 'tester7'
     ..portPassword = 'Ab-9+x_Z.q';
 
   Map inbound(Map<String, dynamic> cfg, String tag) => (cfg['inbounds'] as List).firstWhere((i) => i['tag'] == tag);
 
   test('пароль стоит на SOCKS всегда, на HTTP — кроме режимов с системным прокси', () {
     const account = [
-      {'user': 'skipit', 'pass': 'Ab-9+x_Z.q'},
+      {'user': 'tester7', 'pass': 'Ab-9+x_Z.q'},
     ];
     for (final mode in ConnectionMode.values) {
       final cfg = XrayConfig.build(server: server, routing: routing, settings: settings(mode));
@@ -51,13 +52,17 @@ void main() {
     }
     expect(fresh.portPassword, isNot(AppSettings().portPassword));
     expect(AppSettings.fromJson(fresh.toJson()).portPassword, fresh.portPassword);
+    // Логин тоже случайный и свой у каждой установки.
+    expect(fresh.portUser, matches(RegExp(r'^[a-z][a-z0-9]{9}$')));
+    expect(fresh.portUser, isNot(AppSettings().portUser));
+    expect(AppSettings.fromJson(fresh.toJson()).portUser, fresh.portUser);
   });
 
   test('sing-box ходит в SOCKS-порт Xray с тем же паролем', () async {
     final tun = SingboxConfig.build(
         settings: settings(ConnectionMode.tun), routing: routing, apps: AppRules(), serverDomains: const []);
     final proxy = (tun['outbounds'] as List).first as Map;
-    expect(proxy['username'], 'skipit');
+    expect(proxy['username'], 'tester7');
     expect(proxy['password'], 'Ab-9+x_Z.q');
     final singbox = File('core/skipit-sing-box.exe');
     if (!singbox.existsSync()) return;
@@ -93,10 +98,10 @@ void main() {
       Net.proxyAuth = null;
       await expectLater(Net.download(url, path, proxyPort: s.httpPort), throwsA(isA<HttpException>()));
 
-      Net.proxyAuth = 'skipit:wrong';
+      Net.proxyAuth = 'tester7:wrong';
       await expectLater(Net.download(url, path, proxyPort: s.httpPort), throwsA(isA<HttpException>()));
 
-      Net.proxyAuth = '${AppSettings.portUser}:${s.portPassword}';
+      Net.proxyAuth = '${s.portUser}:${s.portPassword}';
       await Net.download(url, path, proxyPort: s.httpPort);
       expect(await File(path).readAsString(), 'ok');
     } finally {

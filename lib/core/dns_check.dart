@@ -137,7 +137,7 @@ class DnsCheck {
                   'address': '127.0.0.1',
                   'port': checkPort,
                   'users': [
-                    {'user': AppSettings.portUser, 'pass': password},
+                    {'user': AppSettings.serviceUser, 'pass': password},
                   ],
                 },
               ],

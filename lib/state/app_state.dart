@@ -1054,9 +1054,11 @@ class AppState extends ChangeNotifier {
     if (isConnected) unawaited(reconnect());
   }
 
-  /// Новый случайный пароль локальных портов; старый перестаёт действовать.
+  /// Новые случайные логин и пароль локальных портов; старые перестают действовать.
   void resetPortPassword() {
-    settings.portPassword = randomPassword();
+    settings
+      ..portUser = randomLogin()
+      ..portPassword = randomPassword();
     changed();
     if (isConnected && settings.portAuth) unawaited(reconnect());
   }
@@ -1294,7 +1296,7 @@ class AppState extends ChangeNotifier {
       session.apiPort = await _pickPort(settings.apiPort, taken, 'статистика');
       _session = session;
       // Сама программа ходит через свой HTTP-порт (обновления, подписки, geo-базы) — с тем же паролем.
-      Net.proxyAuth = session.httpAuth ? '${AppSettings.portUser}:${session.portPassword}' : null;
+      Net.proxyAuth = session.httpAuth ? '${session.portUser}:${session.portPassword}' : null;
 
       final config = XrayConfig.build(server: server, routing: routing, settings: session);
       final xrayTun = this.xrayTun;

@@ -55,7 +55,10 @@ class AppSettings {
   /// [portPassword] (свой на каждой установке). Включён по умолчанию. См. также [httpAuth].
   bool portAuth = true;
   String portPassword = randomPassword();
-  static const portUser = 'skipit';
+  String portUser = randomLogin();
+
+  /// Логин служебного входа проверки DNS (пароль у него свой на каждое подключение).
+  static const serviceUser = 'skipit';
 
   /// HTTP-порт остаётся без пароля в режимах «Смешанный» и «Прокси»: им пользуется системный прокси
   /// Windows, а он пароль передать не умеет.
@@ -122,6 +125,7 @@ class AppSettings {
         'apiPort': apiPort,
         'allowLan': allowLan,
         'portAuth': portAuth,
+        'portUser': portUser,
         'portPassword': portPassword,
         'ipv6': ipv6,
         'sniffing': sniffing,
@@ -168,6 +172,8 @@ class AppSettings {
     s.httpPort = asInt(j['httpPort']) ?? s.httpPort;
     s.apiPort = asInt(j['apiPort']) ?? s.apiPort;
     s.allowLan = parseBool(j['allowLan'], s.allowLan);
+    final portUser = j['portUser'] as String? ?? '';
+    if (portUser.isNotEmpty) s.portUser = portUser;
     final portPassword = j['portPassword'] as String? ?? '';
     if (portPassword.isNotEmpty) s.portPassword = portPassword;
     s.portAuth = parseBool(j['portAuth'], s.portAuth);

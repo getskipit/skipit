@@ -145,7 +145,7 @@ class SingboxConfig {
           'server': '127.0.0.1',
           'server_port': settings.socksPort,
           'version': '5',
-          if (settings.portAuth) ...{'username': AppSettings.portUser, 'password': settings.portPassword},
+          if (settings.portAuth) ...{'username': settings.portUser, 'password': settings.portPassword},
         },
         {'type': 'direct', 'tag': 'direct'},
       ],
