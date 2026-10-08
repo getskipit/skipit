@@ -228,13 +228,9 @@ class _DnsCardState extends State<_DnsCard> {
       RoutingProfile.splitDns(state.settings.ownDnsDomestic),
     ];
     // Чего ядро, которое сейчас отвечает за DNS, из введённого не возьмёт.
-    final singbox = state.usesTun && !state.xrayTun;
-    final skipped = singbox
-        ? (all.any((list) => list.length > 1) ? 'Ядро sing-box берёт из каждого поля только первый адрес.' : null)
-        : (all.any((list) => list.any((a) => a.startsWith('tls://')))
-            ? 'DoT (tls://) ядро Xray не умеет и такие адреса пропускает. Они работают в режимах TUN и '
-                '«Смешанный» с ядром TUN sing-box.'
-            : null);
+    final skipped = all.any((list) => list.any((a) => a.startsWith('tls://')))
+        ? 'DoT (tls://) ядро Xray не умеет и такие адреса пропускает — работать будут остальные из списка.'
+        : null;
 
     // Адрес применяется, когда его закончили вводить: по Enter или уходу из поля, а не на каждую букву —
     // подключённый VPN при смене DNS переподключается.

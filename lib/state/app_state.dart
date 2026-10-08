@@ -1261,6 +1261,17 @@ class AppState extends ChangeNotifier {
       }
       taken.add(checkPort);
       XrayConfig.addCheckInbound(config, port: checkPort);
+      // Адаптер держит sing-box: запросы DNS он пересылает ядру Xray на отдельный локальный порт.
+      int? dnsPort;
+      if (usesTun && !xrayTun) {
+        var port = checkPort + 1;
+        while (taken.contains(port) || !await _portFree(port)) {
+          if (++port > checkPort + 200) throw CoreException('Не нашлось свободного порта для DNS');
+        }
+        taken.add(port);
+        dnsPort = port;
+        XrayConfig.addDnsInbound(config, port: port);
+      }
       // С Kill Switch имя VPN-сервера ядро узнаёт само: запрос Windows к DNS обычной сети был бы
       // заблокирован, и подключение «висело» бы секунд двенадцать.
       if (usesTun && settings.killSwitch) XrayConfig.resolveServersInside(config, settings: session);
@@ -1336,7 +1347,8 @@ class AppState extends ChangeNotifier {
             apps: appRules,
             serverDomains: domains,
             statsPort: tunStatsPort,
-            statsSecret: tunStatsSecret);
+            statsSecret: tunStatsSecret,
+            xrayDnsPort: dnsPort);
         final tunText = const JsonEncoder.withIndent('  ').convert(tun);
         await _debugCopy(AppPaths.tunConfigFile, tunText);
         final logStart = log.lines.length;

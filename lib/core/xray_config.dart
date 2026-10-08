@@ -512,21 +512,7 @@ class XrayConfig {
     final defaultTag = (first['tag'] ??= 'proxy') as String;
     final domains = <String>{...directDomains};
     _collectAddresses(outbounds, domains);
-    outbounds.addAll([
-      {
-        'tag': dnsOut,
-        'protocol': 'dns',
-        'settings': {
-          // На запросы адресов (A и AAAA) отвечает встроенный DNS Xray. На остальные (SRV, TXT, PTR…) —
-          // пустой ответ без ошибки. Отказ (код 5) Windows принимала за сбой сервера и шла к DNS сетевой
-          // карты, закрытому защитой от утечек: программа ждала 12 секунд и получала ошибку.
-          'rules': [
-            {'action': 'hijack', 'qType': '1,28'},
-            {'action': 'return', 'rCode': 0},
-          ],
-        },
-      },
-    ]);
+    outbounds.add(_dnsOutbound);
     cfg['outbounds'] = outbounds;
 
     final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
@@ -659,6 +645,47 @@ class XrayConfig {
       if (domains.isNotEmpty) {'inboundTag': inbound, 'domain': domains, 'outboundTag': direct},
       if (ips.isNotEmpty) {'inboundTag': inbound, 'ip': ips, 'outboundTag': direct},
       {'inboundTag': inbound, 'outboundTag': block},
+      ...(routing['rules'] as List? ?? const []),
+    ];
+    cfg['routing'] = routing;
+  }
+
+  /// Выход, который отвечает на запросы DNS встроенным DNS Xray.
+  static const _dnsOutbound = {
+    'tag': 'skipit-dns',
+    'protocol': 'dns',
+    'settings': {
+      // На запросы адресов (A и AAAA) отвечает встроенный DNS Xray. На остальные (SRV, TXT, PTR…) —
+      // пустой ответ без ошибки. Отказ (код 5) Windows принимала за сбой сервера и шла к DNS сетевой
+      // карты, закрытому защитой от утечек: программа ждала 12 секунд и получала ошибку.
+      'rules': [
+        {'action': 'hijack', 'qType': '1,28'},
+        {'action': 'return', 'rCode': 0},
+      ],
+    },
+  };
+
+  static const dnsInTag = 'skipit-dns-port';
+
+  /// Локальный вход DNS для режима, где адаптер держит sing-box: тот пересылает сюда запросы программ,
+  /// и отвечает на них встроенный DNS Xray — со всеми серверами из конфига, запасными и правилами
+  /// провайдера, как в режиме «TUN на ядре Xray». Слушает только этот компьютер.
+  static void addDnsInbound(Map<String, dynamic> cfg, {required int port}) {
+    cfg['inbounds'] = [
+      ...(cfg['inbounds'] as List? ?? const []),
+      {
+        'tag': dnsInTag,
+        'protocol': 'dokodemo-door',
+        'listen': '127.0.0.1',
+        'port': port,
+        // Адрес назначения ни на что не влияет: все запросы с этого входа забирает правило ниже.
+        'settings': {'address': _tunDns, 'port': 53, 'network': 'tcp,udp'},
+      },
+    ];
+    cfg['outbounds'] = [...(cfg['outbounds'] as List), _dnsOutbound];
+    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    routing['rules'] = [
+      {'inboundTag': const [dnsInTag], 'outboundTag': 'skipit-dns'},
       ...(routing['rules'] as List? ?? const []),
     ];
     cfg['routing'] = routing;

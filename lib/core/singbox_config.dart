@@ -68,6 +68,7 @@ class SingboxConfig {
     required List<String> serverDomains,
     int? statsPort,
     String statsSecret = '',
+    int? xrayDnsPort,
   }) {
     final rules = <Map<String, dynamic>>[
       {'action': 'sniff'},
@@ -110,7 +111,12 @@ class SingboxConfig {
       'log': {'level': settings.logLevel == 'warning' ? 'warn' : settings.logLevel, 'timestamp': false},
       'dns': {
         'servers': [
-          _dnsServer('remote', routing.remoteDnsAddress, detour: 'proxy'),
+          // Запросы программ пересылаются ядру Xray (см. XrayConfig.addDnsInbound): у него полный список
+          // DNS с запасными и правила провайдера. Без порта — прежняя схема: удалённый DNS через VPN.
+          if (xrayDnsPort != null)
+            {'type': 'udp', 'tag': 'remote', 'server': '127.0.0.1', 'server_port': xrayDnsPort}
+          else
+            _dnsServer('remote', routing.remoteDnsAddress, detour: 'proxy'),
           _dnsServer('local', routing.domesticDnsAddress),
           {'type': 'udp', 'tag': 'bootstrap', 'server': '77.88.8.8'},
         ],

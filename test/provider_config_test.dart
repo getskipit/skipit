@@ -165,6 +165,11 @@ void main() {
       {'address': 'tcp+local://77.88.8.1', 'domains': ['domain:ru'], 'skipFallback': true},
     ]);
 
+    // Адаптер держит sing-box: запросы DNS он пересылает ядру Xray, и отвечает тот же список с запасными.
+    XrayConfig.addDnsInbound(link, port: 20953);
+    expect(((link['routing'] as Map)['rules'] as List).first,
+        {'inboundTag': ['skipit-dns-port'], 'outboundTag': 'skipit-dns'});
+
     final xray = File('core/skipit-xray.exe');
     for (final c in [provider, link]) {
       if (!xray.existsSync()) continue;
@@ -175,10 +180,10 @@ void main() {
       await f.delete();
     }
 
-    // Ядро sing-box берёт первый адрес из каждого поля; DoT оно умеет.
-    final tun = SingboxConfig.build(settings: state.settings, routing: routing, apps: AppRules(), serverDomains: const []);
+    final tun = SingboxConfig.build(
+        settings: state.settings, routing: routing, apps: AppRules(), serverDomains: const [], xrayDnsPort: 20953);
     expect(((tun['dns'] as Map)['servers'] as List).first,
-        {'type': 'tls', 'tag': 'remote', 'server': '1.1.1.1', 'detour': 'proxy'});
+        {'type': 'udp', 'tag': 'remote', 'server': '127.0.0.1', 'server_port': 20953});
     final singbox = File('core/skipit-sing-box.exe');
     if (singbox.existsSync()) {
       final f = File('${Directory.systemTemp.path}\\skipit-own-dns-tun-test.json');
