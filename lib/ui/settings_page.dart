@@ -44,7 +44,7 @@ Future<void> installAppUpdate(BuildContext context) async {
     if (!context.mounted) return;
     final show = await confirm(context, 'Windows не разрешила запустить установщик', Updates.launchFailure(e),
         ok: 'Показать файл');
-    if (show) await Process.run('explorer', ['/select,$installer']);
+    if (show) await Process.run(AppPaths.explorer, ['/select,$installer']);
     return;
   }
   await state.shutdown();
@@ -265,7 +265,7 @@ class SettingsPage extends StatelessWidget {
             trailing: GhostButton(
               label: 'Открыть',
               icon: Icons.folder_open_rounded,
-              onPressed: () => Process.run('explorer', [AppPaths.dataDir.path]),
+              onPressed: () => Process.run(AppPaths.explorer, [AppPaths.dataDir.path]),
             ),
           ),
           // Подписки на диске зашифрованы для этой учётной записи Windows: перенести их на другой

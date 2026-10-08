@@ -69,14 +69,14 @@ class WinSys {
     final args = ['--elevated', ...extraArgs].map(quote).join(',');
     final script =
         "Start-Process -FilePath '${AppPaths.exe.replaceAll("'", "''")}' -ArgumentList $args -Verb RunAs";
-    final r = await Process.run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script]);
+    final r = await Process.run(AppPaths.powershell, ['-NoProfile', '-NonInteractive', '-Command', script]);
     return r.exitCode == 0;
   }
 
   // ---------- системный прокси ----------
 
   static Future<String?> _regQuery(String key, String value) async {
-    final r = await Process.run('reg', ['query', key, '/v', value]);
+    final r = await Process.run(AppPaths.system('reg'), ['query', key, '/v', value]);
     if (r.exitCode != 0) return null;
     for (final line in (r.stdout as String).split(RegExp(r'\r?\n'))) {
       final m = RegExp('^\\s*${RegExp.escape(value)}\\s+REG_\\w+\\s*(.*)\$').firstMatch(line);
@@ -86,10 +86,10 @@ class WinSys {
   }
 
   static Future<void> _regSet(String key, String value, String type, String data) =>
-      Process.run('reg', ['add', key, '/v', value, '/t', type, '/d', data, '/f']);
+      Process.run(AppPaths.system('reg'), ['add', key, '/v', value, '/t', type, '/d', data, '/f']);
 
   static Future<void> _regDelete(String key, String value) =>
-      Process.run('reg', ['delete', key, '/v', value, '/f']);
+      Process.run(AppPaths.system('reg'), ['delete', key, '/v', value, '/f']);
 
   static Future<SystemProxyState> readProxy() async {
     final enable = await _regQuery(_internetSettingsKey, 'ProxyEnable');
@@ -161,7 +161,7 @@ class WinSys {
 
   static Future<String?> _powershell(String script) async {
     final r = await Process.run(
-      'powershell',
+      AppPaths.powershell,
       ['-NoProfile', '-STA', '-Command', '[Console]::OutputEncoding=[Text.Encoding]::UTF8; $script'],
       stdoutEncoding: utf8,
     );
@@ -388,7 +388,7 @@ class WinSys {
 
   static Future<void> openUrl(String url) async {
     if (!isSafeUrl(url)) return;
-    await Process.run('explorer', [url.trim()]);
+    await Process.run(AppPaths.explorer, [url.trim()]);
   }
 
   /// Сетевой адаптер, через который сейчас идёт трафик в интернет (лучший маршрут до 8.8.8.8).
@@ -458,7 +458,7 @@ class WinSys {
     // Удалять устройства может только администратор; без прав TUN всё равно не используется.
     if (!isAdmin()) return;
     try {
-      await Process.run('powershell', ['-NoProfile', '-NonInteractive', '-Command', _ownTunIds + script])
+      await Process.run(AppPaths.powershell, ['-NoProfile', '-NonInteractive', '-Command', _ownTunIds + script])
           .timeout(const Duration(seconds: 20));
     } catch (_) {}
   }
@@ -605,6 +605,6 @@ class WinSys {
   static bool ownTunActive() => tunNames.contains(defaultRouteAdapter()?.alias);
 
   static Future<void> killPid(int pid) async {
-    await Process.run('taskkill', ['/F', '/T', '/PID', '$pid']);
+    await Process.run(AppPaths.system('taskkill'), ['/F', '/T', '/PID', '$pid']);
   }
 }

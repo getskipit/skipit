@@ -123,6 +123,10 @@ void main() {
 
     await expectLater(Updates.verify(f.path, '0' * 64), throwsA(isA<Exception>()));
     expect(f.existsSync(), isFalse, reason: 'подменённый файл должен быть удалён');
+
+    await f.writeAsString('настоящий установщик');
+    await expectLater(Updates.verify(f.path, null), throwsA(isA<Exception>()));
+    expect(f.existsSync(), isFalse, reason: 'без контрольной суммы установщик не остаётся на диске');
   });
 
   test('скачивание сообщает, сколько уже получено, — окно показывает проценты', () async {

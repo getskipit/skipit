@@ -124,7 +124,7 @@ class _LogsPageState extends State<LogsPage> {
               GhostButton(
                 label: 'Папка',
                 icon: Icons.folder_open_rounded,
-                onPressed: () => Process.run('explorer', [AppPaths.logDir.path]),
+                onPressed: () => Process.run(AppPaths.explorer, [AppPaths.logDir.path]),
               ),
               // Builder: меню выбора появляется под самой кнопкой.
               Builder(

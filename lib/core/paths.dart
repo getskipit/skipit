@@ -67,18 +67,26 @@ class AppPaths {
     } catch (_) {}
   }
 
-  /// Ядра лежат в папке `core` рядом с exe (релиз) или в корне проекта (flutter run).
+  /// Ядра лежат в папке `core` рядом с exe (релиз) или в корне проекта (flutter run, тесты).
+  /// Собранная программа в текущей папке их не ищет: туда мог бы подложить свой файл кто угодно.
   static Directory _findCoreDir() {
     final exeDir = File(Platform.resolvedExecutable).parent;
     final candidates = [
       Directory('${exeDir.path}\\core'),
-      Directory('${Directory.current.path}\\core'),
+      if (!const bool.fromEnvironment('dart.vm.product')) Directory('${Directory.current.path}\\core'),
     ];
     for (final dir in candidates) {
       if (File('${dir.path}\\skipit-xray.exe').existsSync()) return dir;
     }
     return candidates.first;
   }
+
+  /// Программы Windows запускаются по полному пути: по одному имени Windows сначала ищет файл в папке
+  /// самой программы и в текущей папке, а там мог бы оказаться подложенный.
+  static final String _winDir = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+  static String get powershell => '$_winDir\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+  static String get explorer => '$_winDir\\explorer.exe';
+  static String system(String name) => '$_winDir\\System32\\$name.exe';
 
   static String get exe => Platform.resolvedExecutable;
   // У ядер свои имена: другие VPN-клиенты (например, Happ) закрывают чужие процессы xray.exe.

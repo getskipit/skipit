@@ -59,6 +59,6 @@ class IconCache {
         'foreach (\$i in \$items) { try { '
         '\$ico = [System.Drawing.Icon]::ExtractAssociatedIcon(\$i.path); '
         '\$ico.ToBitmap().Save(\$i.out, [System.Drawing.Imaging.ImageFormat]::Png) } catch {} }';
-    await Process.run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script]);
+    await Process.run(AppPaths.powershell, ['-NoProfile', '-NonInteractive', '-Command', script]);
   }
 }

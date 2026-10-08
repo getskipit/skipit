@@ -144,13 +144,13 @@ class Updates {
 
   /// SHA-256 файла средствами Windows (certutil) — без сторонних пакетов.
   static Future<String> sha256Of(String path) async {
-    final r = await Process.run('certutil', ['-hashfile', path, 'SHA256']);
+    final r = await Process.run(AppPaths.system('certutil'), ['-hashfile', path, 'SHA256']);
     final m = RegExp(r'^[0-9a-fA-F ]{64,}$', multiLine: true).firstMatch(r.stdout as String);
     if (r.exitCode != 0 || m == null) throw Exception('Не удалось посчитать контрольную сумму');
     return m.group(0)!.replaceAll(' ', '').toLowerCase();
   }
 
-  /// Контрольная сумма установщика из релиза. null — файла с суммой в релизе нет (релизы до 1.0.2).
+  /// Контрольная сумма установщика из релиза. null — получить файл с суммой не удалось.
   static Future<String?> expectedSha256(Release release, {int? proxyPort}) async {
     final r = await _get(release.checksumUrl, proxyPort);
     if (r.status != 200) return null;
@@ -158,16 +158,15 @@ class Updates {
   }
 
   /// Сверяет скачанный файл с контрольной суммой из релиза. Не совпало — файл удаляется.
-  /// Если суммы нет ([expected] == null), проверка пропускается: остаётся защита HTTPS.
+  /// Без суммы ([expected] == null) файл тоже удаляется: несверенный установщик не запускается.
   static Future<void> verify(String path, String? expected) async {
-    if (expected == null) return;
-    final actual = await sha256Of(path);
-    if (actual != expected.toLowerCase()) {
-      try {
-        await File(path).delete();
-      } catch (_) {}
-      throw Exception('Файл повреждён или подменён: контрольная сумма не совпала');
-    }
+    if (expected != null && await sha256Of(path) == expected.toLowerCase()) return;
+    try {
+      await File(path).delete();
+    } catch (_) {}
+    throw Exception(expected == null
+        ? 'Не удалось получить контрольную сумму установщика — без сверки он не запускается. Попробуйте ещё раз'
+        : 'Файл повреждён или подменён: контрольная сумма не совпала');
   }
 
   /// Версия установленного ядра (`xray version` / `sing-box version`).
