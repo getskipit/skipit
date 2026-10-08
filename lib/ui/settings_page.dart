@@ -52,12 +52,28 @@ Future<void> installAppUpdate(BuildContext context) async {
   exit(0);
 }
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
 
   /// Версии уже определены, и какого-то ядра нет на месте.
   static bool _coresMissing(AppState state) =>
       state.coreVersions.isNotEmpty && CoreSpec.all.any((c) => state.coreVersions[c.name] == null);
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  /// Поиск по настройкам: остаются строки, в названии или подписи которых есть введённый текст.
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
@@ -110,11 +126,7 @@ class SettingsPage extends StatelessWidget {
           ),
         );
 
-    return ListView(
-      primary: true,
-      padding: const EdgeInsets.only(bottom: 28),
-      children: [
-        const PageHeader('Настройки', subtitle: 'Изменения портов и ядра применяются при следующем подключении'),
+    final sections = <Widget>[
         _Section('Оформление', [
           _Row(
             title: 'Тема',
@@ -383,8 +395,8 @@ class SettingsPage extends StatelessWidget {
             subtitle: [
               for (final core in CoreSpec.all) '${core.name} ${state.coreVersions[core.name] ?? '— не найдено'}',
             ].join(' · '),
-            subtitleColor: _coresMissing(state) ? C.red : null,
-            trailing: _coresMissing(state)
+            subtitleColor: SettingsPage._coresMissing(state) ? C.red : null,
+            trailing: SettingsPage._coresMissing(state)
                 ? Tooltip(
                     message: 'Ядро не найдено — переустановите SkipIt',
                     child: Icon(Icons.error_rounded, color: C.red, size: 20),
@@ -392,9 +404,125 @@ class SettingsPage extends StatelessWidget {
                 : const SizedBox.shrink(),
           ),
         ]),
-      ],
+    ];
+
+    final query = _query.trim().toLowerCase();
+    final found = sections.any((s) => switch (s) {
+          _Section s => _found(s.title, s.children, query).isNotEmpty,
+          _CollapsibleSection s => _found(s.title, s.children, query).isNotEmpty,
+          _ => true,
+        });
+    return _SettingsQuery(
+      query: query,
+      child: ListView(
+        primary: true,
+        padding: const EdgeInsets.only(bottom: 28),
+        children: [
+          PageHeader('Настройки', subtitle: 'Изменения портов и ядра применяются при следующем подключении', actions: [
+            SizedBox(
+              width: 260,
+              child: TextField(
+                controller: _search,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  hintText: 'Поиск по настройкам',
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Очистить',
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          onPressed: () => setState(() {
+                            _search.clear();
+                            _query = '';
+                          }),
+                        ),
+                ),
+              ),
+            ),
+          ]),
+          ...sections,
+          if (!found)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text('Ничего не найдено. Попробуйте другое слово — например, «порт» или «трей».',
+                  style: TextStyle(color: C.muted, fontSize: 13)),
+            ),
+        ],
+      ),
     );
   }
+}
+
+/// Текст поиска по настройкам (строчными буквами; пустой — поиска нет) — для разделов страницы.
+class _SettingsQuery extends InheritedWidget {
+  const _SettingsQuery({required this.query, required super.child});
+  final String query;
+
+  static String of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_SettingsQuery>()?.query ?? '';
+
+  @override
+  bool updateShouldNotify(_SettingsQuery old) => old.query != query;
+}
+
+/// Ключевые слова строк настроек (по названию строки): слова, которыми настройку ищут, хотя в её
+/// названии и подписи их нет.
+const _keywords = <String, String>{
+  'Тема': 'оформление цвет тёмная темная светлая ночная dark light вид',
+  'Меньше анимаций': 'анимация плавность тормозит лагает производительность слабый компьютер',
+  'Права администратора': 'админ администратор uac перезапуск',
+  'Запускать от имени администратора': 'админ администратор uac права',
+  'Запускать вместе с Windows': 'автозапуск автозагрузка старт включение компьютера',
+  'Сворачивать в трей при закрытии': 'трей значок крестик закрыть фон свернуть',
+  'Уведомления Windows': 'оповещения сообщения всплывающие',
+  'Подключаться при запуске': 'автоподключение автозапуск старт',
+  'Переподключаться при сбое': 'обрыв падение автоматически восстановить',
+  'Ядро для TUN': 'xray sing-box singbox адаптер ядро',
+  'Kill Switch': 'килл свитч защита утечка обрыв блокировка интернета',
+  'Автовыбор сервера': 'лучший быстрый пинг авто',
+  'Разрешить подключения из локальной сети': 'lan wifi роутер телефон раздать другим устройствам',
+  'Тип проверки': 'пинг задержка ping tcp скорость',
+  'Обновлять при запуске': 'подписка серверы список',
+  'Обновлять через VPN': 'подписка прокси',
+  'SOCKS-порт': 'порт прокси proxy socks5 10808',
+  'HTTP-порт': 'порт прокси proxy 10809',
+  'Пароль на локальные порты': 'логин авторизация защита доступ безопасность',
+  'Логин портов': 'пароль авторизация пользователь',
+  'Пароль портов': 'логин авторизация сменить сбросить',
+  'Порт API статистики': 'порт счётчик трафик 10813',
+  'IPv6': 'ipv6 айпи адрес',
+  'Сниффинг': 'sniffing домен определение',
+  'MTU TUN-адаптера': 'mtu пакет адаптер',
+  'Уровень логов': 'журнал логи отладка debug info warning подробность',
+  'Адрес для проверки': 'пинг задержка url ссылка тест',
+  'User-Agent': 'ua юзер агент заголовок подписка',
+  'Отправлять HWID': 'устройство идентификатор лимит',
+  'HWID устройства': 'идентификатор устройство скопировать',
+  'Папка данных': 'файлы логи журнал открыть',
+  'Перенос настроек': 'экспорт импорт резервная копия бэкап backup сохранить перенести',
+  'Версия SkipIt': 'обновление обновить update новая версия',
+  'Канал обновлений': 'бета beta стабильный обновление',
+  'Ядра': 'xray sing-box версия ядро',
+};
+
+/// Строки раздела [title], подходящие под поиск [query]: по названию строки, её подписи и ключевым
+/// словам — должны найтись все слова запроса. Если под поиск подходит название раздела — весь раздел.
+List<Widget> _found(String title, List<Widget> rows, String query) {
+  if (query.isEmpty) return rows;
+  final words = query.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  bool has(String text) => words.every(text.toLowerCase().contains);
+  if (has(title)) return rows;
+  return [
+    for (final row in rows)
+      if (switch (row) {
+        _Row r => has('${r.title} ${r.subtitle} ${_keywords[r.title] ?? ''}'),
+        _PortSecretRow r => has('${r.title} ${_keywords[r.title] ?? ''}'),
+        _ => false,
+      })
+        row,
+  ];
 }
 
 class _Section extends StatelessWidget {
@@ -403,25 +531,30 @@ class _Section extends StatelessWidget {
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(title.toUpperCase(),
-                style: const TextStyle(color: C.orange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
-          ),
-          Panel(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-            child: Column(children: [
-              for (var i = 0; i < children.length; i++) ...[
-                if (i > 0) const Divider(height: 1),
-                children[i],
-              ],
-            ]),
-          ),
-        ]),
-      );
+  Widget build(BuildContext context) {
+    // При поиске остаются только подходящие строки; раздел без них не показывается.
+    final rows = _found(title, children, _SettingsQuery.of(context));
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(title.toUpperCase(),
+              style: const TextStyle(color: C.orange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
+        ),
+        Panel(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+          child: Column(children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) const Divider(height: 1),
+              rows[i],
+            ],
+          ]),
+        ),
+      ]),
+    );
+  }
 }
 
 /// Поле User-Agent с кнопкой «Сбросить»: она появляется, когда значение отличается от стандартного.
@@ -565,7 +698,16 @@ class _CollapsibleSectionState extends State<_CollapsibleSection> {
   bool _open = false;
 
   @override
-  Widget build(BuildContext context) => Padding(
+  Widget build(BuildContext context) {
+    // При поиске раздел раскрыт сам и показывает только подходящие строки.
+    final query = _SettingsQuery.of(context);
+    final rows = _found(widget.title, widget.children, query);
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final open = _open || query.isNotEmpty;
+    return _card(rows, open);
+  }
+
+  Widget _card(List<Widget> rows, bool open) => Padding(
         padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
         // Заголовок и содержимое — одна карточка: раскрытый список не «отрывается» от своего заголовка.
         child: Container(
@@ -594,7 +736,7 @@ class _CollapsibleSectionState extends State<_CollapsibleSection> {
                       ]),
                     ),
                     AnimatedRotation(
-                      turns: _open ? 0.5 : 0,
+                      turns: open ? 0.5 : 0,
                       duration: const Duration(milliseconds: 260),
                       curve: Curves.easeOutCubic,
                       child: Icon(Icons.expand_more_rounded, color: hovered ? C.orange : C.muted),
@@ -604,11 +746,11 @@ class _CollapsibleSectionState extends State<_CollapsibleSection> {
               ),
             ),
             Reveal(
-              open: _open,
+              open: open,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: Column(children: [
-                  for (final child in widget.children) ...[const Divider(height: 1), child],
+                  for (final child in rows) ...[const Divider(height: 1), child],
                   const SizedBox(height: 4),
                 ]),
               ),
