@@ -487,6 +487,9 @@ class _RoutingEditorState extends State<_RoutingEditor> {
           width: 760,
           child: SingleChildScrollView(
             controller: _scroll,
+            // Сверху — место для подписи первого поля (она стоит на его рамке и иначе срезается краем
+            // прокрутки), справа — для полосы прокрутки, чтобы она не ложилась на поля.
+            padding: const EdgeInsets.only(top: 8, right: 16),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: _name, decoration: const InputDecoration(labelText: 'Название')),
               const SizedBox(height: 12),
