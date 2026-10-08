@@ -24,6 +24,20 @@ class SingboxConfig {
         if (detour != null) 'detour': detour,
       };
     }
+    // DNS поверх TLS (DoT), по TCP и обычный с портом: tls://…, tcp://…, udp://… или адрес:порт.
+    final uri = InternetAddress.tryParse(address) != null
+        ? null
+        : Uri.tryParse(address.contains('://') ? address : 'udp://$address');
+    if (uri != null && uri.host.isNotEmpty && const ['tls', 'tcp', 'udp'].contains(uri.scheme)) {
+      return {
+        'type': uri.scheme,
+        'tag': tag,
+        'server': uri.host,
+        if (uri.hasPort) 'server_port': uri.port,
+        if (InternetAddress.tryParse(uri.host) == null) 'domain_resolver': 'bootstrap',
+        if (detour != null) 'detour': detour,
+      };
+    }
     return {'type': 'udp', 'tag': tag, 'server': address, if (detour != null) 'detour': detour};
   }
 

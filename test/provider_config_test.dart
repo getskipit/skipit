@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/link_parser.dart';
 import 'package:skipit/core/paths.dart';
+import 'package:skipit/core/singbox_config.dart';
 import 'package:skipit/core/xray_config.dart';
 import 'package:skipit/models/app_rules.dart';
 import 'package:skipit/models/routing.dart';
@@ -114,6 +115,77 @@ void main() {
     for (final server in [provider, link]) {
       final dns = XrayConfig.build(server: server, routing: routing, settings: state.settings)['dns'] as Map;
       expect((dns['servers'] as List).first, '9.9.9.9');
+    }
+  });
+
+  test('«Мой DNS»: несколько адресов через запятую; обычный DNS, TCP, DoH и DoT', () async {
+    expect(RoutingProfile.splitDns(' 1.1.1.1, https://dns.google/dns-query;tls://1.1.1.1\n8.8.8.8 '),
+        ['1.1.1.1', 'https://dns.google/dns-query', 'tls://1.1.1.1', '8.8.8.8']);
+    expect(XrayConfig.dnsServer('1.1.1.1'), '1.1.1.1');
+    expect(XrayConfig.dnsServer('udp://1.1.1.1'), '1.1.1.1');
+    expect(XrayConfig.dnsServer('udp://1.1.1.1:5353'), {'address': '1.1.1.1', 'port': 5353});
+    expect(XrayConfig.dnsServer('9.9.9.9:9953'), {'address': '9.9.9.9', 'port': 9953});
+    expect(XrayConfig.dnsServer('2001:4860:4860::8888'), '2001:4860:4860::8888');
+    expect(XrayConfig.dnsServer('tcp://8.8.8.8'), 'tcp://8.8.8.8');
+    expect(XrayConfig.dnsServer('tcp://8.8.8.8', direct: true), 'tcp+local://8.8.8.8');
+    expect(XrayConfig.dnsServer('https://dns.google/dns-query', direct: true), 'https+local://dns.google/dns-query');
+    // DNS поверх TLS ядро Xray не умеет: такой адрес оно пропускает.
+    expect(XrayConfig.dnsServer('tls://1.1.1.1'), isNull);
+
+    await AppPaths.init();
+    final state = AppState()..routingProfiles.add(RoutingProfile.global());
+    state.settings
+      ..ownDns = true
+      ..ownDnsRemote = 'tls://1.1.1.1, https://dns.google/dns-query, 8.8.8.8:53'
+      ..ownDnsDomestic = '77.88.8.8, tcp://77.88.8.1';
+    final routing = state.routingForConfig;
+
+    final provider = XrayConfig.build(
+        server: LinkParser.parseText(_provider).servers.single, routing: routing, settings: state.settings);
+    expect((provider['dns'] as Map)['servers'], [
+      'https://dns.google/dns-query',
+      {'address': '8.8.8.8', 'port': 53},
+      {'address': '77.88.8.8', 'domains': ['domain:ru']},
+      {'address': 'tcp+local://77.88.8.1', 'domains': ['domain:ru']},
+    ]);
+    expect(((provider['routing'] as Map)['rules'] as List).first,
+        {'ip': ['77.88.8.8'], 'port': '53', 'outboundTag': 'skipit-direct'});
+
+    final link = XrayConfig.build(
+        server: LinkParser.parseLink(
+            'vless://b831381d-6324-4d53-ad4f-8cda48b30811@example.com:443?type=tcp&security=tls&sni=example.com#a')!,
+        routing: routing
+          ..directSites = ['domain:ru']
+          ..directIp = [],
+        settings: state.settings);
+    expect((link['dns'] as Map)['servers'], [
+      'https://dns.google/dns-query',
+      {'address': '8.8.8.8', 'port': 53},
+      {'address': '77.88.8.8', 'domains': ['domain:ru'], 'skipFallback': true},
+      {'address': 'tcp+local://77.88.8.1', 'domains': ['domain:ru'], 'skipFallback': true},
+    ]);
+
+    final xray = File('core/skipit-xray.exe');
+    for (final c in [provider, link]) {
+      if (!xray.existsSync()) continue;
+      final f = File('${Directory.systemTemp.path}\\skipit-own-dns-test.json');
+      await f.writeAsString(jsonEncode(c));
+      final r = await Process.run(xray.absolute.path, ['run', '-test', '-c', f.path]);
+      expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+      await f.delete();
+    }
+
+    // Ядро sing-box берёт первый адрес из каждого поля; DoT оно умеет.
+    final tun = SingboxConfig.build(settings: state.settings, routing: routing, apps: AppRules(), serverDomains: const []);
+    expect(((tun['dns'] as Map)['servers'] as List).first,
+        {'type': 'tls', 'tag': 'remote', 'server': '1.1.1.1', 'detour': 'proxy'});
+    final singbox = File('core/skipit-sing-box.exe');
+    if (singbox.existsSync()) {
+      final f = File('${Directory.systemTemp.path}\\skipit-own-dns-tun-test.json');
+      await f.writeAsString(jsonEncode(tun));
+      final r = await Process.run(singbox.absolute.path, ['check', '-c', f.path]);
+      expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+      await f.delete();
     }
   });
 

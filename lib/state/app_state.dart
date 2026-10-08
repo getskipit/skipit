@@ -652,8 +652,12 @@ class AppState extends ChangeNotifier {
   RoutingProfile get routingForConfig {
     final profile = selectedRouting;
     if (!settings.ownDns) return profile;
+    final remote = RoutingProfile.splitDns(settings.ownDnsRemote);
+    final domestic = RoutingProfile.splitDns(settings.ownDnsDomestic);
     return RoutingProfile.fromJson(profile.toJson())
-      ..setDns(remote: settings.ownDnsRemote, domestic: settings.ownDnsDomestic);
+      ..setDns(remote: remote.firstOrNull ?? '', domestic: domestic.firstOrNull ?? '')
+      ..remoteDnsAll = remote.isEmpty ? null : remote
+      ..domesticDnsAll = domestic.isEmpty ? null : domestic;
   }
 
   RoutingProfile get selectedRouting => routingProfiles.firstWhere(
@@ -1228,10 +1232,10 @@ class AppState extends ChangeNotifier {
           throw CoreException('Не найден файл wintun.dll рядом с ядром Xray — без него Xray не может создать адаптер. '
               'Переустановите SkipIt или выберите ядро TUN «sing-box».');
         }
-        final domestic = Uri.tryParse(routing.domesticDnsAddress);
         XrayConfig.addTun(config, settings: session, apps: appRules, directDomains: [
-          if (domestic != null && domestic.scheme == 'https' && InternetAddress.tryParse(domestic.host) == null)
-            domestic.host,
+          for (final domestic in routing.domesticDnsList.map(Uri.tryParse))
+            if (domestic != null && domestic.scheme == 'https' && InternetAddress.tryParse(domestic.host) == null)
+              domestic.host,
         ]);
         _appliedAppRules = appRules.signature;
         await _tunCleanup;

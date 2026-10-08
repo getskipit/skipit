@@ -216,13 +216,12 @@ class XrayConfig {
     final proxy = dropRemovedOptions(deepCopyMap(server.outbound))..['tag'] = 'proxy';
 
     final directDomains = normalizeDomains(routing.directSites);
-    final domesticDns = routing.domesticDnsAddress;
-    final rules = <Map<String, dynamic>>[];
-
-    // DNS-сервер для российских доменов ходит напрямую.
-    if (InternetAddress.tryParse(domesticDns) != null) {
-      rules.add({'ip': [domesticDns], 'port': '53', 'outboundTag': 'direct'});
-    }
+    final remoteDns = _dnsServers(routing.remoteDnsList, fallback: '1.1.1.1');
+    final domesticDns = _dnsServers(routing.domesticDnsList, direct: true, fallback: '77.88.8.8');
+    final rules = <Map<String, dynamic>>[
+      // DNS-сервер для российских доменов ходит напрямую.
+      ..._directDnsRules(domesticDns, 'direct'),
+    ];
 
     void add(List<String> domains, List<String> ips, String tag) {
       final d = normalizeDomains(domains);
@@ -250,9 +249,9 @@ class XrayConfig {
       'dns': {
         if (routing.dnsHosts.isNotEmpty) 'hosts': routing.dnsHosts,
         'servers': [
-          routing.remoteDnsAddress,
+          ...remoteDns,
           if (directDomains.isNotEmpty)
-            {'address': domesticDns, 'domains': directDomains, 'skipFallback': true},
+            for (final s in domesticDns) {..._dnsEntry(s), 'domains': directDomains, 'skipFallback': true},
         ],
         'queryStrategy': settings.ipv6 ? 'UseIP' : 'UseIPv4',
       },
@@ -289,6 +288,38 @@ class XrayConfig {
       'routing': {'domainStrategy': routing.domainStrategy, 'rules': rules},
     };
   }
+
+  /// Адрес DNS из поля ввода → запись для Xray (строка или, если указан порт, объект). `1.1.1.1` и
+  /// `udp://…` — обычный DNS, `tcp://…` и `https://…` (DoH) ядро понимает как есть. DNS поверх TLS
+  /// (`tls://`, DoT) ядро Xray не умеет — null. [direct]: ядро идёт к серверу само, мимо правил.
+  static Object? dnsServer(String address, {bool direct = false}) {
+    var a = address.trim();
+    if (a.isEmpty || a.startsWith('tls://')) return null;
+    if (a.startsWith('https://') || a.startsWith('tcp://')) return direct ? a.replaceFirst('://', '+local://') : a;
+    if (a.startsWith('udp://')) a = a.substring(6);
+    if (InternetAddress.tryParse(a) != null) return a;
+    final uri = Uri.tryParse('udp://$a');
+    if (uri == null || uri.host.isEmpty) return null;
+    return uri.hasPort ? {'address': uri.host, 'port': uri.port} : uri.host;
+  }
+
+  static List<Object> _dnsServers(List<String> addresses, {bool direct = false, required String fallback}) {
+    final servers = [
+      for (final a in addresses)
+        if (dnsServer(a, direct: direct) case final s?) s,
+    ];
+    return servers.isEmpty ? [fallback] : servers;
+  }
+
+  static Map<String, dynamic> _dnsEntry(Object server) =>
+      server is Map ? server.cast<String, dynamic>() : {'address': server};
+
+  /// Обычный DNS по IP-адресу идёт через правила — для локальных серверов нужно правило «напрямую».
+  static List<Map<String, dynamic>> _directDnsRules(List<Object> servers, String tag) => [
+        for (final s in servers.map(_dnsEntry))
+          if (InternetAddress.tryParse('${s['address']}') != null)
+            {'ip': [s['address']], 'port': '${s['port'] ?? 53}', 'outboundTag': tag},
+      ];
 
   static const _direct = 'skipit-direct', _block = 'skipit-block';
 
@@ -363,15 +394,15 @@ class XrayConfig {
   /// удалённый DNS профиля. Локальный идёт напрямую, удалённый — через VPN-сервер.
   static void useOwnDns(Map<String, dynamic> cfg, RoutingProfile profile, AppSettings settings) {
     final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
-    final address = profile.domesticDnsAddress;
-    // «+local»: к такому DoH ядро идёт само, мимо правил, — то есть напрямую.
-    final domestic = address.startsWith('https://') ? address.replaceFirst('https://', 'https+local://') : address;
+    final domestic = _dnsServers(profile.domesticDnsList, direct: true, fallback: '77.88.8.8');
     final directDomains = hasOwnRules(profile) ? normalizeDomains(profile.directSites) : const <String>[];
     dns['servers'] = [
-      profile.remoteDnsAddress,
+      ..._dnsServers(profile.remoteDnsList, fallback: '1.1.1.1'),
       for (final s in (dns['servers'] as List? ?? const []))
-        if (s is Map && (s['domains'] as List? ?? const []).isNotEmpty) {...s, 'address': domestic}..remove('port'),
-      if (directDomains.isNotEmpty) {'address': domestic, 'domains': directDomains, 'skipFallback': true},
+        if (s is Map && (s['domains'] as List? ?? const []).isNotEmpty)
+          for (final d in domestic) {...({...s}..remove('port')), ..._dnsEntry(d)},
+      if (directDomains.isNotEmpty)
+        for (final d in domestic) {..._dnsEntry(d), 'domains': directDomains, 'skipFallback': true},
     ];
     if (profile.dnsHosts.isNotEmpty) dns['hosts'] = {...?(dns['hosts'] as Map?), ...profile.dnsHosts};
     final tag = (dns['tag'] ??= _dnsTag) as String;
@@ -381,7 +412,7 @@ class XrayConfig {
     _addOwnOutbounds(cfg, settings);
     final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     routing['rules'] = [
-      if (InternetAddress.tryParse(address) != null) {'ip': [address], 'port': '53', 'outboundTag': _direct},
+      ..._directDnsRules(domestic, _direct),
       if (vpn != null) {'inboundTag': [tag], ...vpn},
       ...(routing['rules'] as List? ?? const []),
     ];

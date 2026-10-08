@@ -83,6 +83,16 @@ class RoutingProfile {
   String get domesticDnsAddress =>
       dnsAddress(domesticDnsType, domesticDnsDomain, domesticDnsIp, fallback: '77.88.8.8');
 
+  /// Полные списки DNS из блока «Мой DNS»: первый адрес — основной, остальные — запасные. В профиле
+  /// не хранятся; без них список — это один адрес профиля.
+  List<String>? remoteDnsAll, domesticDnsAll;
+
+  List<String> get remoteDnsList => remoteDnsAll ?? [remoteDnsAddress];
+  List<String> get domesticDnsList => domesticDnsAll ?? [domesticDnsAddress];
+
+  /// Несколько адресов из одного поля: через запятую, точку с запятой или пробел.
+  static List<String> splitDns(String text) => text.split(RegExp(r'[,;\s]+')).where((a) => a.isNotEmpty).toList();
+
   /// Адреса DNS в том виде, как их вводят в поле: «https://…» — DNS по HTTPS, иначе IP-адрес сервера.
   void setDns({required String remote, required String domestic}) {
     remote = remote.trim();

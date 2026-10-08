@@ -223,6 +223,18 @@ class _DnsCardState extends State<_DnsCard> {
     final own = state.settings.ownDns;
     final other = widget.fromProvider ? 'из конфига провайдера' : 'из выбранного профиля';
     void apply() => state.setOwnDnsServers(_remote.text, _domestic.text);
+    final all = [
+      RoutingProfile.splitDns(state.settings.ownDnsRemote),
+      RoutingProfile.splitDns(state.settings.ownDnsDomestic),
+    ];
+    // Чего ядро, которое сейчас отвечает за DNS, из введённого не возьмёт.
+    final singbox = state.usesTun && !state.xrayTun;
+    final skipped = singbox
+        ? (all.any((list) => list.length > 1) ? 'Ядро sing-box берёт из каждого поля только первый адрес.' : null)
+        : (all.any((list) => list.any((a) => a.startsWith('tls://')))
+            ? 'DoT (tls://) ядро Xray не умеет и такие адреса пропускает. Они работают в режимах TUN и '
+                '«Смешанный» с ядром TUN sing-box.'
+            : null);
 
     // Адрес применяется, когда его закончили вводить: по Enter или уходу из поля, а не на каждую букву —
     // подключённый VPN при смене DNS переподключается.
@@ -262,16 +274,22 @@ class _DnsCardState extends State<_DnsCard> {
         if (own) ...[
           const SizedBox(height: 14),
           Row(children: [
-            field(_remote, 'Удалённый DNS (через VPN)', 'https://1.1.1.1/dns-query'),
+            field(_remote, 'Удалённые DNS (через VPN)', 'https://1.1.1.1/dns-query, 8.8.8.8'),
             const SizedBox(width: 12),
-            field(_domestic, 'Локальный DNS (напрямую)', '77.88.8.8'),
+            field(_domestic, 'Локальные DNS (напрямую)', '77.88.8.8, 77.88.8.1'),
           ]),
           const SizedBox(height: 8),
           Text(
-            'Адрес вида https://… — DNS по HTTPS, иначе IP-адрес сервера. Удалённый отвечает за сайты, которые идут '
-            'через VPN, локальный — за те, что идут напрямую. Применяется по Enter или когда вы уходите из поля.',
+            'Можно несколько адресов через запятую: первый — основной, остальные — запасные. Виды адресов: '
+            '1.1.1.1 или udp://… — обычный DNS, tcp://… — по TCP, https://… — DoH, tls://… — DoT. Удалённые отвечают '
+            'за сайты, которые идут через VPN, локальные — за те, что идут напрямую. Применяется по Enter или когда '
+            'вы уходите из поля.',
             style: TextStyle(color: C.muted, fontSize: 12),
           ),
+          if (skipped != null) ...[
+            const SizedBox(height: 6),
+            Text(skipped, style: const TextStyle(color: C.orange, fontSize: 12)),
+          ],
         ],
       ]),
     );
