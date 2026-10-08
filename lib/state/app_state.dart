@@ -290,7 +290,7 @@ class AppState extends ChangeNotifier {
   }
 
   /// Какая маршрутизация сейчас действует — коротко, для главной.
-  /// У серверов с JSON-конфигом провайдера работают его правила, а правила выбранного профиля — поверх них.
+  /// У серверов с JSON-конфигом провайдера работают его правила, а правила выбранного профиля — вместе с ними.
   /// [sites] — правила для сайтов и IP, [apps] — правила по программам (null, если их нет
   /// или режим подключения их не применяет).
   ({String sites, String? apps}) get routingSummary {
@@ -1310,7 +1310,7 @@ class AppState extends ChangeNotifier {
       if (server == null) throw CoreException('Сначала добавьте и выберите сервер');
 
       final routing = routingForConfig;
-      // У серверов с JSON-конфигом провайдера действуют его правила, а правила профиля — поверх них.
+      // У серверов с JSON-конфигом провайдера действуют его правила, а правила профиля — вместе с ними.
       final provider = XrayConfig.providerConfig(server);
       if (provider != null) {
         final own = XrayConfig.hasOwnRules(routing) && XrayConfig.needsGeoFiles(routing);

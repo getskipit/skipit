@@ -194,7 +194,7 @@ void main() {
     }
   });
 
-  test('свой профиль и свой DNS ложатся поверх конфига провайдера', () async {
+  test('свой профиль и свой DNS работают вместе с конфигом провайдера', () async {
     final server = LinkParser.parseText(_provider).servers.single;
     final profile = RoutingProfile(
       name: 'Мои правила',

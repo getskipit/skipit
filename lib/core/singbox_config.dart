@@ -100,8 +100,9 @@ class SingboxConfig {
     }
 
     final dnsRules = <Map<String, dynamic>>[
-      // Адрес VPN-сервера резолвим напрямую, иначе Xray не сможет к нему подключиться.
-      if (serverDomains.isNotEmpty) {'domain': serverDomains, 'server': 'local'},
+      // Адрес VPN-сервера узнаём напрямую, иначе Xray не сможет к нему подключиться, — у того же
+      // сервера, что и ядро Xray (см. XrayConfig.bootstrapDns), а не у локального DNS профиля.
+      if (serverDomains.isNotEmpty) {'domain': serverDomains, 'server': 'bootstrap'},
       if (directApps.isNotEmpty) {..._processMatch(directApps), 'server': 'local'},
     ];
 
@@ -118,8 +119,8 @@ class SingboxConfig {
           else
             _dnsServer('remote', routing.remoteDnsAddress, detour: 'proxy'),
           _dnsServer('local', routing.domesticDnsAddress),
-          // У sing-box такой сервер один — первый из списка (по умолчанию 1.1.1.1).
-          _dnsServer('bootstrap', XrayConfig.bootstrapDns(settings).first),
+          // У sing-box такой сервер один — первый из списка (по умолчанию 1.1.1.1); по TCP, как у Xray.
+          _dnsServer('bootstrap', 'tcp://${XrayConfig.bootstrapDns(settings).first}'),
         ],
         'rules': dnsRules,
         'final': finalOutbound == 'proxy' ? 'remote' : 'local',
