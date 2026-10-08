@@ -206,11 +206,13 @@ void main() {
       dnsHosts: {'router.example': '192.168.1.1'},
     );
 
-    // Списки профиля стоят перед правилами провайдера; «через VPN» — в его балансировщик (автовыбор).
+    // Списки профиля стоят после правил провайдера, перед его «всё остальное»: провайдеру они не
+    // противоречат. «Через VPN» — в его балансировщик (автовыбор).
     final cfg = XrayConfig.build(server: server, routing: profile, settings: AppSettings());
     final rules = (cfg['routing'] as Map)['rules'] as List;
     expect(rules.length, 9 + 4);
-    expect(rules.take(4), [
+    expect(rules.last, {'type': 'field', 'network': 'tcp,udp', 'balancerTag': 'PROXY'});
+    expect(rules.sublist(8, 12), [
       {'domain': ['domain:ads.example'], 'outboundTag': 'skipit-block'},
       {'domain': ['domain:example.org'], 'balancerTag': 'PROXY'},
       {'domain': ['domain:example.com'], 'outboundTag': 'skipit-direct'},

@@ -373,9 +373,10 @@ class XrayConfig {
   /// Есть ли у профиля свои правила для сайтов и IP. Встроенный «Весь трафик через VPN» — это «правил нет».
   static bool hasOwnRules(RoutingProfile r) => r.id != RoutingProfile.globalPresetId && r.ruleCount > 0;
 
-  /// Свой профиль поверх правил провайдера: его списки «блокировать», «через VPN» и «напрямую» стоят
-  /// перед правилами провайдера и потому решают первыми. Что делать с остальным трафиком и когда
-  /// узнавать адрес сайта (domainStrategy), по-прежнему определяет конфиг провайдера.
+  /// Свой профиль вместе с правилами провайдера: его списки «блокировать», «через VPN» и «напрямую»
+  /// стоят после всех правил провайдера, перед его правилом «всё остальное». Они решают только за то,
+  /// о чём провайдер ничего не сказал, и потому не могут ему противоречить: при споре действует правило
+  /// провайдера. Когда узнавать адрес сайта (domainStrategy), тоже определяет конфиг провайдера.
   /// «Через VPN» — это балансировщик провайдера, если он есть: автовыбор сервера сохраняется.
   static void addOwnRules(Map<String, dynamic> cfg, RoutingProfile profile, AppSettings settings) {
     if (!hasOwnRules(profile)) return;
@@ -395,7 +396,14 @@ class XrayConfig {
     if (own.isEmpty) return;
     _addOwnOutbounds(cfg, settings);
     final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
-    routing['rules'] = [...own, ...(routing['rules'] as List? ?? const [])];
+    final rules = [...(routing['rules'] as List? ?? const [])];
+    // Правило «всё остальное»: без условий, кроме сети. Нет такого — свои правила идут последними.
+    final rest = rules.indexWhere((r) =>
+        r is Map &&
+        r.keys.every(const {'type', 'network', 'outboundTag', 'balancerTag', 'ruleTag'}.contains) &&
+        const {null, 'tcp,udp', 'udp,tcp'}.contains(r['network']));
+    rules.insertAll(rest < 0 ? rules.length : rest, own);
+    routing['rules'] = rules;
     cfg['routing'] = routing;
   }
 
