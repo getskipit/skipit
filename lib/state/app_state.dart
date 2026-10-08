@@ -162,7 +162,7 @@ class AppState extends ChangeNotifier {
   String? get firewallBlockedCore => linkDown && _firewallHits >= 3 ? _firewallCore : null;
 
   Future<void> showCoreFile(String exe) =>
-      Process.run('explorer', ['/select,${AppPaths.coreDir.path}\\$exe']);
+      Process.run(AppPaths.explorer, ['/select,${AppPaths.coreDir.path}\\$exe']);
 
   // --- Проверка связи через VPN ---
 
@@ -245,12 +245,16 @@ class AppState extends ChangeNotifier {
   }
 
   /// Какая маршрутизация сейчас действует — коротко, для главной.
-  /// У серверов с JSON-конфигом провайдера работают его правила, выбранный профиль не применяется.
+  /// У серверов с JSON-конфигом провайдера работают его правила, а правила выбранного профиля — поверх них.
   /// [sites] — правила для сайтов и IP, [apps] — правила по программам (null, если их нет
   /// или режим подключения их не применяет).
   ({String sites, String? apps}) get routingSummary {
     final server = selectedServer;
-    final sites = server != null && XrayConfig.providerConfig(server) != null ? 'Правила провайдера' : selectedRouting.name;
+    final sites = server == null || XrayConfig.providerConfig(server) == null
+        ? selectedRouting.name
+        : XrayConfig.hasOwnRules(selectedRouting)
+            ? 'Правила провайдера + ${selectedRouting.name}'
+            : 'Правила провайдера';
     final count = appRules.enabledMatches.length;
     final apps = !usesTun
         ? null
@@ -979,19 +983,18 @@ class AppState extends ChangeNotifier {
     if (isConnected) await reconnect();
   }
 
-  /// Действует ли сейчас выбранный профиль маршрутизации: у серверов с JSON-конфигом провайдера
-  /// работают его правила, профиль не применяется.
-  bool get routingApplies {
-    final server = selectedServer;
-    return server == null || XrayConfig.providerConfig(server) == null;
-  }
-
   void setRouting(String id) {
     final same = settings.selectedRoutingId == id;
     settings.selectedRoutingId = id;
     changed();
-    // Переподключаемся, только если это что-то меняет: профиль другой и он действует.
-    if (isConnected && !same && routingApplies) unawaited(reconnect());
+    if (isConnected && !same) unawaited(reconnect());
+  }
+
+  /// «Мой DNS»: у сервера с конфигом провайдера DNS берётся из выбранного профиля.
+  void setOwnDns(bool on) {
+    settings.ownDns = on;
+    changed();
+    if (isConnected) unawaited(reconnect());
   }
 
   Future<void> setMode(ConnectionMode mode) async {
@@ -1175,10 +1178,11 @@ class AppState extends ChangeNotifier {
       if (server == null) throw CoreException('Сначала добавьте и выберите сервер');
 
       final routing = selectedRouting;
-      // У серверов с JSON-конфигом провайдера действуют его правила, профиль не применяется.
+      // У серверов с JSON-конфигом провайдера действуют его правила, а правила профиля — поверх них.
       final provider = XrayConfig.providerConfig(server);
       if (provider != null) {
-        if (XrayConfig.configNeedsGeoFiles(provider)) await _ensureGeoFiles(routing, force: true);
+        final own = XrayConfig.hasOwnRules(routing) && XrayConfig.needsGeoFiles(routing);
+        if (own || XrayConfig.configNeedsGeoFiles(provider)) await _ensureGeoFiles(routing, force: true);
       } else {
         await _ensureGeoFiles(routing);
       }
@@ -1650,7 +1654,7 @@ class AppState extends ChangeNotifier {
       // Запускаем только то, что совпало с контрольной суммой из релиза.
       final expected = await Updates.expectedSha256(release, proxyPort: _updateProxy);
       await Updates.verify(path, expected);
-      log.add('update', 'Скачан установщик ${release.version}${expected != null ? ', контрольная сумма совпала' : ''}');
+      log.add('update', 'Скачан установщик ${release.version}, контрольная сумма совпала');
       return path;
     } finally {
       downloadingAppUpdate = false;

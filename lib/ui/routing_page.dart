@@ -31,7 +31,7 @@ class RoutingPage extends StatelessWidget {
       state.routingProfiles.add(result);
     }
     state.changed();
-    if (state.isConnected && state.routingApplies && state.settings.selectedRoutingId == result.id) {
+    if (state.isConnected && state.settings.selectedRoutingId == result.id) {
       await state.reconnect();
     }
   }
@@ -92,7 +92,7 @@ class RoutingPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
           children: [
             if (provider != null)
-              _ProviderRulesCard(serverName: server!.name, config: provider)
+              _ProviderRulesCard(serverName: server!.name, config: provider, profile: state.selectedRouting)
             else if (state.selectedRouting.id == RoutingProfile.globalPresetId)
               Panel(
                 child: Row(children: [
@@ -112,25 +112,21 @@ class RoutingPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 8),
                 child: Text(
-                  provider != null ? 'СВОИ ПРОФИЛИ — НЕ ДЕЙСТВУЮТ, ПОКА ВЫБРАН СЕРВЕР С ПРАВИЛАМИ ПРОВАЙДЕРА' : 'СВОИ ПРОФИЛИ',
+                  provider != null ? 'СВОИ ПРОФИЛИ — ДЕЙСТВУЮТ ПОВЕРХ ПРАВИЛ ПРОВАЙДЕРА' : 'СВОИ ПРОФИЛИ',
                   style: const TextStyle(color: C.orange, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4),
                 ),
               ),
-              Opacity(
-                opacity: provider != null ? 0.5 : 1,
-                child: Column(children: [
-                  for (final r in own)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _ProfileTile(profile: r, onEdit: () => _edit(context, state, r)),
-                    ),
-                ]),
-              ),
+              for (final r in own)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ProfileTile(profile: r, onEdit: () => _edit(context, state, r)),
+                ),
             ],
             const SizedBox(height: 8),
             Text(
               'Профиль — это набор правил: какие сайты и IP идут через VPN, какие напрямую, какие блокируются. '
-              'Клик по профилю включает его, повторный клик — выключает. Профиль от провайдера добавляется '
+              'Клик по профилю включает его, повторный клик — выключает. У сервера с правилами провайдера '
+              'из профиля берутся три списка сайтов и IP: они решают первыми. Профиль от провайдера добавляется '
               'кнопкой «Из буфера» или приходит вместе с подпиской.',
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
@@ -141,14 +137,18 @@ class RoutingPage extends StatelessWidget {
   }
 }
 
-/// Правила из JSON-конфига провайдера — действуют для выбранного сервера вместо профилей.
+/// Правила из JSON-конфига провайдера — действуют для выбранного сервера; правила выбранного
+/// профиля [profile] стоят перед ними, а DNS профиля заменяет DNS провайдера по выключателю.
 class _ProviderRulesCard extends StatelessWidget {
-  const _ProviderRulesCard({required this.serverName, required this.config});
+  const _ProviderRulesCard({required this.serverName, required this.config, required this.profile});
   final String serverName;
   final Map<String, dynamic> config;
+  final RoutingProfile profile;
 
   @override
   Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final ownRules = XrayConfig.hasOwnRules(profile);
     final s = XrayConfig.summarize(config);
     final balancers = ((config['routing'] as Map?)?['balancers'] as List?)?.length ?? 0;
     final proxies = (config['outbounds'] as List? ?? const [])
@@ -190,6 +190,32 @@ class _ProviderRulesCard extends StatelessWidget {
                 '${proxies > 1 ? ' · серверов в конфиге: $proxies' : ''}${balancers > 0 ? ', автовыбор' : ''}'),
         if (s.block > 0 || s.blockNotes.isNotEmpty)
           line(Icons.block_rounded, C.red, 'Блокируется', s.blockNotes.isEmpty ? 'правил: ${s.block}' : s.blockNotes.join(', ')),
+        line(
+            Icons.layers_rounded,
+            ownRules ? C.orange : C.muted,
+            'Свои правила',
+            ownRules
+                ? 'профиль «${profile.name}» (правил: ${profile.ruleCount}) — решает первым, остальное по правилам провайдера'
+                : 'нет — включите свой профиль ниже, и его правила встанут перед правилами провайдера'),
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Row(children: [
+            Icon(Icons.dns_rounded, size: 18, color: state.settings.ownDns ? C.orange : C.muted),
+            const SizedBox(width: 10),
+            const SizedBox(width: 120, child: Text('Мой DNS', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+            Expanded(
+              child: Text(
+                state.settings.ownDns
+                    ? 'удалённый ${profile.remoteDnsAddress} (через VPN), локальный ${profile.domesticDnsAddress} '
+                        '(напрямую) — из профиля «${profile.name}»'
+                    : 'выключен — работает DNS провайдера',
+                style: TextStyle(color: C.muted, fontSize: 13),
+              ),
+            ),
+            const SizedBox(width: 12),
+            AppSwitch(value: state.settings.ownDns, onChanged: state.setOwnDns),
+          ]),
+        ),
       ]),
     );
   }

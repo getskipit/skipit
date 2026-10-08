@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/link_parser.dart';
 import 'package:skipit/core/xray_config.dart';
+import 'package:skipit/models/app_rules.dart';
 import 'package:skipit/models/routing.dart';
 import 'package:skipit/models/settings.dart';
 
@@ -83,6 +84,72 @@ void main() {
     if (xray.existsSync()) {
       final f = File('${Directory.systemTemp.path}\\skipit-provider-test.json');
       await f.writeAsString(jsonEncode(cfg));
+      final r = await Process.run(xray.absolute.path, ['run', '-test', '-c', f.path]);
+      expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+      await f.delete();
+    }
+  });
+
+  test('свой профиль и свой DNS ложатся поверх конфига провайдера', () async {
+    final server = LinkParser.parseText(_provider).servers.single;
+    final profile = RoutingProfile(
+      name: 'Мои правила',
+      proxySites: ['example.org'],
+      directSites: ['domain:example.com'],
+      directIp: ['203.0.113.0/24'],
+      blockSites: ['ads.example'],
+      domesticDnsIp: '77.88.8.1',
+      dnsHosts: {'router.example': '192.168.1.1'},
+    );
+
+    // Списки профиля стоят перед правилами провайдера; «через VPN» — в его балансировщик (автовыбор).
+    final cfg = XrayConfig.build(server: server, routing: profile, settings: AppSettings());
+    final rules = (cfg['routing'] as Map)['rules'] as List;
+    expect(rules.length, 9 + 4);
+    expect(rules.take(4), [
+      {'domain': ['domain:ads.example'], 'outboundTag': 'skipit-block'},
+      {'domain': ['domain:example.org'], 'balancerTag': 'PROXY'},
+      {'domain': ['domain:example.com'], 'outboundTag': 'skipit-direct'},
+      {'ip': ['203.0.113.0/24'], 'outboundTag': 'skipit-direct'},
+    ]);
+    // Без выключателя «Мой DNS» остаётся DNS провайдера.
+    expect(((cfg['dns'] as Map)['servers'] as List).last, '1.1.1.1');
+
+    // «Мой DNS»: общий DNS провайдера заменён удалённым из профиля, запись «для таких-то сайтов» спрашивает
+    // локальный; локальный идёт напрямую, остальные запросы DNS — через VPN.
+    final own = XrayConfig.build(server: server, routing: profile, settings: AppSettings()..ownDns = true);
+    final dns = own['dns'] as Map;
+    expect(dns['servers'], [
+      'https://cloudflare-dns.com/dns-query',
+      {'address': '77.88.8.1', 'domains': ['domain:ru']},
+      {'address': '77.88.8.1', 'domains': ['domain:example.com'], 'skipFallback': true},
+    ]);
+    expect(dns['hosts'], {'router.example': '192.168.1.1'});
+    expect(((own['routing'] as Map)['rules'] as List).take(2), [
+      {'ip': ['77.88.8.1'], 'port': '53', 'outboundTag': 'skipit-direct'},
+      {'inboundTag': ['dns-in'], 'balancerTag': 'PROXY'},
+    ]);
+
+    // Локальный DNS по HTTPS ядро спрашивает само, мимо правил, — то есть напрямую.
+    final doh = RoutingProfile(name: 'DoH', domesticDnsType: 'DoH', domesticDnsDomain: 'https://dns.example/dns-query');
+    final viaDoh = XrayConfig.build(server: server, routing: doh, settings: AppSettings()..ownDns = true);
+    expect(jsonEncode((viaDoh['dns'] as Map)['servers']), contains('https+local://dns.example/dns-query'));
+    // Встроенный профиль «Весь трафик через VPN» правил не добавляет.
+    final plain = XrayConfig.build(server: server, routing: RoutingProfile.global(), settings: AppSettings());
+    expect(((plain['routing'] as Map)['rules'] as List).length, 9);
+
+    // Со всем, что программа дописывает при подключении, теги выходов не повторяются и ядро конфиг принимает.
+    final xray = File('core/skipit-xray.exe');
+    for (final c in [cfg, own, viaDoh]) {
+      XrayConfig.addTun(c, settings: AppSettings(), apps: AppRules());
+      XrayConfig.addDirectInbound(c, port: 20901, hosts: ['sub.example'], settings: AppSettings());
+      XrayConfig.addCheckInbound(c, port: 20902);
+      XrayConfig.resolveServersInside(c, settings: AppSettings());
+      final tags = [for (final o in c['outbounds'] as List) o['tag']];
+      expect(tags.toSet().length, tags.length, reason: '$tags');
+      if (!xray.existsSync()) continue;
+      final f = File('${Directory.systemTemp.path}\\skipit-own-rules-test.json');
+      await f.writeAsString(jsonEncode(c));
       final r = await Process.run(xray.absolute.path, ['run', '-test', '-c', f.path]);
       expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
       await f.delete();

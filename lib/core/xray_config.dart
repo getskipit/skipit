@@ -199,7 +199,12 @@ class XrayConfig {
     required AppSettings settings,
   }) {
     final provider = providerConfig(server);
-    if (provider != null) return buildFromProvider(provider, settings);
+    if (provider != null) {
+      final cfg = buildFromProvider(provider, settings);
+      addOwnRules(cfg, routing, settings);
+      if (settings.ownDns) useOwnDns(cfg, routing, settings);
+      return cfg;
+    }
 
     final listen = settings.allowLan ? '0.0.0.0' : '127.0.0.1';
     final sniffing = {
@@ -285,6 +290,104 @@ class XrayConfig {
     };
   }
 
+  static const _direct = 'skipit-direct', _block = 'skipit-block';
+
+  /// Свои выходы «напрямую» и «блокировать»: добавляются, если их в конфиге ещё нет.
+  static void _addOwnOutbounds(Map<String, dynamic> cfg, AppSettings settings) {
+    final outbounds = [...(cfg['outbounds'] as List)];
+    bool has(String tag) => outbounds.any((o) => o is Map && o['tag'] == tag);
+    if (!has(_direct)) {
+      outbounds.add({
+        'tag': _direct,
+        'protocol': 'freedom',
+        'streamSettings': {
+          'sockopt': {'domainStrategy': settings.ipv6 ? 'UseIP' : 'UseIPv4'},
+        },
+      });
+    }
+    if (!has(_block)) outbounds.add({'tag': _block, 'protocol': 'blackhole'});
+    cfg['outbounds'] = outbounds;
+  }
+
+  /// Куда идёт трафик «через VPN»: у провайдера с автовыбором сервера — в его балансировщик,
+  /// иначе — в первый выход, который ведёт на VPN-сервер. null — такого выхода в конфиге нет.
+  static Map<String, String>? _vpnTarget(Map<String, dynamic> cfg) {
+    final rules = (cfg['routing'] as Map?)?['rules'] as List? ?? const [];
+    final balancer = rules.reversed
+        .whereType<Map>()
+        .where((r) => r['inboundTag'] == null && r['balancerTag'] is String)
+        .map((r) => r['balancerTag'] as String)
+        .firstOrNull;
+    if (balancer != null) return {'balancerTag': balancer};
+    final proxy = (cfg['outbounds'] as List)
+        .whereType<Map>()
+        .where((o) => !const ['freedom', 'blackhole', 'dns', 'loopback'].contains(o['protocol']))
+        .firstOrNull;
+    return proxy == null ? null : {'outboundTag': (proxy['tag'] ??= 'proxy') as String};
+  }
+
+  /// Есть ли у профиля свои правила для сайтов и IP. Встроенный «Весь трафик через VPN» — это «правил нет».
+  static bool hasOwnRules(RoutingProfile r) => r.id != RoutingProfile.globalPresetId && r.ruleCount > 0;
+
+  /// Свой профиль поверх правил провайдера: его списки «блокировать», «через VPN» и «напрямую» стоят
+  /// перед правилами провайдера и потому решают первыми. Что делать с остальным трафиком и когда
+  /// узнавать адрес сайта (domainStrategy), по-прежнему определяет конфиг провайдера.
+  /// «Через VPN» — это балансировщик провайдера, если он есть: автовыбор сервера сохраняется.
+  static void addOwnRules(Map<String, dynamic> cfg, RoutingProfile profile, AppSettings settings) {
+    if (!hasOwnRules(profile)) return;
+    final vpn = _vpnTarget(cfg);
+    final own = <Map<String, dynamic>>[];
+    void add(List<String> domains, List<String> ips, Map<String, String>? target) {
+      if (target == null) return;
+      final d = normalizeDomains(domains);
+      final i = normalizeIps(ips);
+      if (d.isNotEmpty) own.add({'domain': d, ...target});
+      if (i.isNotEmpty) own.add({'ip': i, ...target});
+    }
+
+    add(profile.blockSites, profile.blockIp, const {'outboundTag': _block});
+    add(profile.proxySites, profile.proxyIp, vpn);
+    add(profile.directSites, profile.directIp, const {'outboundTag': _direct});
+    if (own.isEmpty) return;
+    _addOwnOutbounds(cfg, settings);
+    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    routing['rules'] = [...own, ...(routing['rules'] as List? ?? const [])];
+    cfg['routing'] = routing;
+  }
+
+  /// Тег встроенного DNS, если провайдер не дал своего: по нему запросы DNS узнаются в правилах.
+  static const _dnsTag = 'skipit-dns-in';
+
+  /// Свой DNS вместо DNS провайдера (выключатель «Мой DNS»). Записи провайдера «для таких-то сайтов»
+  /// (с полем domains) остаются, но спрашивают локальный DNS профиля; все остальные заменяет одна —
+  /// удалённый DNS профиля. Локальный идёт напрямую, удалённый — через VPN-сервер.
+  static void useOwnDns(Map<String, dynamic> cfg, RoutingProfile profile, AppSettings settings) {
+    final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    final address = profile.domesticDnsAddress;
+    // «+local»: к такому DoH ядро идёт само, мимо правил, — то есть напрямую.
+    final domestic = address.startsWith('https://') ? address.replaceFirst('https://', 'https+local://') : address;
+    final directDomains = hasOwnRules(profile) ? normalizeDomains(profile.directSites) : const <String>[];
+    dns['servers'] = [
+      profile.remoteDnsAddress,
+      for (final s in (dns['servers'] as List? ?? const []))
+        if (s is Map && (s['domains'] as List? ?? const []).isNotEmpty) {...s, 'address': domestic}..remove('port'),
+      if (directDomains.isNotEmpty) {'address': domestic, 'domains': directDomains, 'skipFallback': true},
+    ];
+    if (profile.dnsHosts.isNotEmpty) dns['hosts'] = {...?(dns['hosts'] as Map?), ...profile.dnsHosts};
+    final tag = (dns['tag'] ??= _dnsTag) as String;
+    cfg['dns'] = dns;
+
+    final vpn = _vpnTarget(cfg);
+    _addOwnOutbounds(cfg, settings);
+    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    routing['rules'] = [
+      if (InternetAddress.tryParse(address) != null) {'ip': [address], 'port': '53', 'outboundTag': _direct},
+      if (vpn != null) {'inboundTag': [tag], ...vpn},
+      ...(routing['rules'] as List? ?? const []),
+    ];
+    cfg['routing'] = routing;
+  }
+
   /// Выходы, через которые ходят другие выходы (цепочка `dialerProxy` / `proxySettings` в конфиге
   /// провайдера). В счётчике трафика они не учитываются: тот же трафик уже посчитан на основном выходе.
   static Set<String> chainedOutbounds(Map<String, dynamic> cfg) {
@@ -344,8 +447,9 @@ class XrayConfig {
     required AppRules apps,
     List<String> directDomains = const [],
   }) {
-    const direct = 'skipit-direct', block = 'skipit-block', dnsOut = 'skipit-dns';
+    const direct = _direct, block = _block, dnsOut = 'skipit-dns';
     final inbound = [tunTag];
+    _addOwnOutbounds(cfg, settings);
 
     final tun = {
       'tag': tunTag,
@@ -391,14 +495,6 @@ class XrayConfig {
           ],
         },
       },
-      {
-        'tag': direct,
-        'protocol': 'freedom',
-        'streamSettings': {
-          'sockopt': {'domainStrategy': settings.ipv6 ? 'UseIP' : 'UseIPv4'},
-        },
-      },
-      {'tag': block, 'protocol': 'blackhole'},
     ]);
     cfg['outbounds'] = outbounds;
 
@@ -485,17 +581,9 @@ class XrayConfig {
   /// SOCKS-порт не затрагивается: через него в Xray приходит весь трафик из адаптера от sing-box.
   static void addProxyAppRules(Map<String, dynamic> cfg, {required AppSettings settings, required AppRules apps}) {
     if (apps.mode == AppRoutingMode.off) return;
-    const direct = 'skipit-direct';
-    final outbounds = [...(cfg['outbounds'] as List)];
-    final defaultTag = ((outbounds.first as Map)['tag'] ??= 'proxy') as String;
-    outbounds.add({
-      'tag': direct,
-      'protocol': 'freedom',
-      'streamSettings': {
-        'sockopt': {'domainStrategy': settings.ipv6 ? 'UseIP' : 'UseIPv4'},
-      },
-    });
-    cfg['outbounds'] = outbounds;
+    const direct = _direct;
+    final defaultTag = (((cfg['outbounds'] as List).first as Map)['tag'] ??= 'proxy') as String;
+    _addOwnOutbounds(cfg, settings);
     final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     final rules = [...(routing['rules'] as List? ?? const [])];
     routing['rules'] = [
@@ -519,7 +607,7 @@ class XrayConfig {
     required List<String> hosts,
     required AppSettings settings,
   }) {
-    const direct = 'skipit-direct', block = 'skipit-block';
+    const direct = _direct, block = _block;
     cfg['inbounds'] = [
       ...(cfg['inbounds'] as List? ?? const []),
       {
@@ -530,19 +618,7 @@ class XrayConfig {
         'settings': <String, dynamic>{},
       },
     ];
-    final outbounds = [...(cfg['outbounds'] as List)];
-    bool has(String tag) => outbounds.any((o) => o is Map && o['tag'] == tag);
-    if (!has(direct)) {
-      outbounds.add({
-        'tag': direct,
-        'protocol': 'freedom',
-        'streamSettings': {
-          'sockopt': {'domainStrategy': settings.ipv6 ? 'UseIP' : 'UseIPv4'},
-        },
-      });
-    }
-    if (!has(block)) outbounds.add({'tag': block, 'protocol': 'blackhole'});
-    cfg['outbounds'] = outbounds;
+    _addOwnOutbounds(cfg, settings);
 
     final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     final domains = [for (final h in hosts.toSet()) if (InternetAddress.tryParse(h) == null) 'full:$h'];
@@ -583,24 +659,14 @@ class XrayConfig {
 
     final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     final rules = [...(routing['rules'] as List? ?? const [])];
-    // Куда идёт трафик «через VPN»: у провайдера с автовыбором сервера — в его балансировщик,
-    // иначе — в первый выход, который ведёт на VPN-сервер.
-    final balancer = rules.reversed
-        .whereType<Map>()
-        .where((r) => r['inboundTag'] == null && r['balancerTag'] is String)
-        .map((r) => r['balancerTag'] as String)
-        .firstOrNull;
-    final proxy = outbounds
-        .whereType<Map>()
-        .where((o) => !const ['freedom', 'blackhole', 'dns', 'loopback'].contains(o['protocol']))
-        .firstOrNull;
-    if (balancer == null && proxy == null) return;
+    final vpn = _vpnTarget(cfg);
+    if (vpn == null) return;
     const inbound = [checkInTag];
     routing['rules'] = [
       {
         'inboundTag': inbound,
         'domain': ['full:$checkHost'],
-        if (balancer != null) 'balancerTag': balancer else 'outboundTag': proxy!['tag'] ??= 'proxy',
+        ...vpn,
       },
       {'inboundTag': inbound, 'outboundTag': block},
       ...rules,

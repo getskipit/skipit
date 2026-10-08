@@ -90,6 +90,9 @@ class AppSettings {
   String? selectedServerId;
   String? selectedRoutingId;
 
+  /// «Мой DNS»: у серверов с конфигом провайдера DNS берётся из выбранного профиля маршрутизации.
+  bool ownDns = false;
+
   /// Состояние, которое нужно восстановить после сбоя.
   bool systemProxyActive = false;
   SystemProxyState? previousProxy;
@@ -131,6 +134,7 @@ class AppSettings {
         'theme': theme.name,
         'selectedServerId': selectedServerId,
         'selectedRoutingId': selectedRoutingId,
+        'ownDns': ownDns,
         'systemProxyActive': systemProxyActive,
         'previousProxy': previousProxy?.toJson(),
         'lastXrayPid': lastXrayPid,
@@ -176,6 +180,7 @@ class AppSettings {
     s.theme = AppTheme.values.asNameMap()[j['theme']] ?? s.theme;
     s.selectedServerId = j['selectedServerId'] as String?;
     s.selectedRoutingId = j['selectedRoutingId'] as String?;
+    s.ownDns = parseBool(j['ownDns'], s.ownDns);
     s.systemProxyActive = parseBool(j['systemProxyActive']);
     final prev = j['previousProxy'];
     s.previousProxy = prev is Map<String, dynamic> ? SystemProxyState.fromJson(prev) : null;
