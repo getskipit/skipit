@@ -525,36 +525,15 @@ class XrayConfig {
     final defaultTag = (first['tag'] ??= 'proxy') as String;
     final domains = <String>{...directDomains};
     _collectAddresses(outbounds, domains);
-    // К DNS-серверу с пометкой «+local» ядро подключается само и его имя ищет своим же DNS. Без отдельной
-    // записи имя сервера спрашивалось бы у него самого: каждое новое соединение с ним ждало отказа по
-    // времени, а вместе с ним — все запросы, что стояли в очереди. Имя узнаётся у запасного DNS из того же
-    // конфига (общего и не «+local» — обычно он идёт через VPN), а если такого нет — напрямую, как адреса
-    // VPN-серверов.
-    final provided = (cfg['dns'] as Map?)?['servers'] as List? ?? const [];
-    final localDns = <String>{};
-    Object? spareDns;
-    for (final s in provided) {
-      final address = s is Map ? s['address'] : s;
-      if (address is! String || address == 'localhost' || address == 'fakedns') continue;
-      if (address.contains('+local://')) {
-        final host = Uri.tryParse(address)?.host ?? '';
-        if (host.isNotEmpty && InternetAddress.tryParse(host) == null) localDns.add(host);
-      } else if (s is! Map || (s['domains'] as List? ?? const []).isEmpty) {
-        spareDns ??= s;
-      }
-    }
-    if (spareDns == null) domains.addAll(localDns);
     outbounds.add(_dnsOutbound);
     cfg['outbounds'] = outbounds;
+    resolveLocalDnsNames(cfg, settings: settings);
 
     final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     final servers = [...(dns['servers'] as List? ?? const [])];
     if (servers.isEmpty) servers.add('1.1.1.1');
     if (domains.isNotEmpty) {
       servers.add({'address': _bootstrapDns, 'domains': [for (final d in domains) 'full:$d'], 'skipFallback': true});
-    }
-    if (spareDns != null && localDns.isNotEmpty) {
-      servers.add({..._dnsEntry(spareDns), 'domains': [for (final d in localDns) 'full:$d'], 'skipFallback': true});
     }
     dns['servers'] = servers;
     cfg['dns'] = dns;
@@ -700,12 +679,49 @@ class XrayConfig {
     },
   };
 
+  /// К DNS-серверу с пометкой «+local» ядро подключается само и его имя ищет своим же DNS. Без отдельной
+  /// записи имя сервера спрашивалось бы у него самого: каждое новое соединение с ним ждало отказа по
+  /// времени, а вместе с ним — все запросы, что стояли в очереди. Имя узнаётся у запасного DNS из того же
+  /// конфига (общего и не «+local» — обычно он идёт через VPN), а если такого нет — напрямую у
+  /// [_bootstrapDns], как адреса VPN-серверов. Нужно везде, где на запросы программ отвечает DNS ядра.
+  static void resolveLocalDnsNames(Map<String, dynamic> cfg, {required AppSettings settings}) {
+    final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>();
+    final servers = [...(dns?['servers'] as List? ?? const [])];
+    final localDns = <String>{};
+    Object? spareDns;
+    for (final s in servers) {
+      final address = s is Map ? s['address'] : s;
+      if (address is! String || address == 'localhost' || address == 'fakedns') continue;
+      if (address.contains('+local://')) {
+        final host = Uri.tryParse(address)?.host ?? '';
+        if (host.isNotEmpty && InternetAddress.tryParse(host) == null) localDns.add(host);
+      } else if (s is! Map || (s['domains'] as List? ?? const []).isEmpty) {
+        spareDns ??= s;
+      }
+    }
+    if (dns == null || localDns.isEmpty) return;
+    final names = [for (final d in localDns) 'full:$d'];
+    servers.add({..._dnsEntry(spareDns ?? _bootstrapDns), 'domains': names, 'skipFallback': true});
+    dns['servers'] = servers;
+    cfg['dns'] = dns;
+    if (spareDns != null) return;
+
+    _addOwnOutbounds(cfg, settings);
+    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    routing['rules'] = [
+      {'ip': [_bootstrapDns], 'port': '53', 'outboundTag': _direct},
+      ...(routing['rules'] as List? ?? const []),
+    ];
+    cfg['routing'] = routing;
+  }
+
   static const dnsInTag = 'skipit-dns-port';
 
   /// Локальный вход DNS для режима, где адаптер держит sing-box: тот пересылает сюда запросы программ,
   /// и отвечает на них встроенный DNS Xray — со всеми серверами из конфига, запасными и правилами
   /// провайдера, как в режиме «TUN на ядре Xray». Слушает только этот компьютер.
-  static void addDnsInbound(Map<String, dynamic> cfg, {required int port}) {
+  static void addDnsInbound(Map<String, dynamic> cfg, {required int port, required AppSettings settings}) {
+    resolveLocalDnsNames(cfg, settings: settings);
     cfg['inbounds'] = [
       ...(cfg['inbounds'] as List? ?? const []),
       {

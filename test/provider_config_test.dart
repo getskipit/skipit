@@ -166,7 +166,7 @@ void main() {
     ]);
 
     // Адаптер держит sing-box: запросы DNS он пересылает ядру Xray, и отвечает тот же список с запасными.
-    XrayConfig.addDnsInbound(link, port: 20953);
+    XrayConfig.addDnsInbound(link, port: 20953, settings: state.settings);
     expect(((link['routing'] as Map)['rules'] as List).first,
         {'inboundTag': ['skipit-dns-port'], 'outboundTag': 'skipit-dns'});
 

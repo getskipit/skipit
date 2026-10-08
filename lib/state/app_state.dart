@@ -1348,7 +1348,7 @@ class AppState extends ChangeNotifier {
         }
         taken.add(port);
         dnsPort = port;
-        XrayConfig.addDnsInbound(config, port: port);
+        XrayConfig.addDnsInbound(config, port: port, settings: session);
       }
       // С Kill Switch имя VPN-сервера ядро узнаёт само: запрос Windows к DNS обычной сети был бы
       // заблокирован, и подключение «висело» бы секунд двенадцать.
