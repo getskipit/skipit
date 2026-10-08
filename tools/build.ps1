@@ -1,5 +1,5 @@
 # Сборка SkipIt: программа + установщик SkipIt-Setup-Windows-<версия>.exe.
-#   powershell -ExecutionPolicy Bypass -File tools\build.ps1 [-Version 1.0.8]
+#   powershell -ExecutionPolicy Bypass -File tools\build.ps1 [-Version 1.1.0]
 # Без -Version берётся версия по умолчанию из lib\version.dart.
 # Результат: build\installer\SkipIt-Setup-Windows-<версия>.exe и файл .sha256 с его контрольной суммой
 
