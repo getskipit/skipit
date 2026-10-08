@@ -101,6 +101,8 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
 /// администратора для TUN, если их нет.
 Future<void> connectOrToggle(BuildContext context) async {
   final state = AppScope.read(context);
+  // Другой VPN ещё закрывается — подключение начнётся само, второе нажатие ничего не меняет.
+  if (state.closingOtherVpn) return;
   var ignoreOtherVpn = false;
   if (!state.isConnected && !state.isBusy) {
     final conflicts = state.findVpnConflicts();

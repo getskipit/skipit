@@ -50,6 +50,8 @@ class _HomePageState extends State<HomePage> {
       ConnStatus.connected => 'Защищено',
       ConnStatus.connecting => 'Подключаемся…',
       ConnStatus.disconnecting => 'Отключаемся…',
+      // Перед подключением закрывается другой VPN — это уже часть подключения, а не простой.
+      ConnStatus.disconnected when state.closingOtherVpn => 'Подключаемся…',
       ConnStatus.disconnected => 'Не подключено',
     };
 
@@ -95,7 +97,7 @@ class _HomePageState extends State<HomePage> {
         child: ConnectButton(
           connected: connected,
           // Стрелки «летят» только при подключении; отключение мгновенное, для него анимация не нужна.
-          busy: state.status == ConnStatus.connecting,
+          busy: state.status == ConnStatus.connecting || state.closingOtherVpn,
           onTap: () => connectOrToggle(context),
         ),
       ),
@@ -111,7 +113,9 @@ class _HomePageState extends State<HomePage> {
       Text(
         connected && state.connectedAt != null
             ? formatDuration(DateTime.now().difference(state.connectedAt!))
-            : (state.status == ConnStatus.connecting ? 'Нажмите, чтобы отменить' : 'Нажмите, чтобы подключиться'),
+            : state.closingOtherVpn
+                ? 'Закрываю другой VPN…'
+                : (state.status == ConnStatus.connecting ? 'Нажмите, чтобы отменить' : 'Нажмите, чтобы подключиться'),
         style: TextStyle(
           color: connected ? (C.isDark ? C.orangeLight : C.orange) : C.muted,
           fontSize: connected ? 18 : 13,

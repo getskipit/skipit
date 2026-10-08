@@ -1170,9 +1170,20 @@ class AppState extends ChangeNotifier {
       settings.mode == ConnectionMode.proxyOnly ? const [] : WinSys.vpnConflicts();
 
   /// Закрывает мешающие VPN по выбору пользователя.
+  /// Идёт закрытие другого VPN перед подключением (несколько секунд): окно показывает это как ход
+  /// подключения, а не как «Не подключено».
+  bool closingOtherVpn = false;
+
   Future<void> closeVpnConflicts(List<VpnConflict> conflicts) async {
     log.add('app', 'Закрываю мешающие VPN: ${conflicts.map((c) => c.name).join(', ')}');
-    await WinSys.closeVpnConflicts(conflicts);
+    closingOtherVpn = true;
+    notifyListeners();
+    try {
+      await WinSys.closeVpnConflicts(conflicts);
+    } finally {
+      closingOtherVpn = false;
+      notifyListeners();
+    }
   }
 
   /// Подключение попросили не из окна (значок в трее), а нужен вопрос пользователю —
