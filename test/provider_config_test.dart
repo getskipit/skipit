@@ -3,10 +3,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/link_parser.dart';
+import 'package:skipit/core/paths.dart';
 import 'package:skipit/core/xray_config.dart';
 import 'package:skipit/models/app_rules.dart';
 import 'package:skipit/models/routing.dart';
 import 'package:skipit/models/settings.dart';
+import 'package:skipit/state/app_state.dart';
 
 /// JSON-подписка в духе Remnawave: балансировщик, DNS-вход, правила «напрямую/через VPN/блок».
 const _provider = '''
@@ -87,6 +89,31 @@ void main() {
       final r = await Process.run(xray.absolute.path, ['run', '-test', '-c', f.path]);
       expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
       await f.delete();
+    }
+  });
+
+  test('«Мой DNS»: адреса берутся из настроек, сохранённый профиль не меняется', () async {
+    await AppPaths.init();
+    final state = AppState()..routingProfiles.add(RoutingProfile.global());
+    expect(state.routingForConfig, same(state.selectedRouting));
+
+    state.settings
+      ..ownDns = true
+      ..ownDnsRemote = '9.9.9.9'
+      ..ownDnsDomestic = 'https://dns.example/dns-query';
+    final routing = state.routingForConfig;
+    expect(routing.remoteDnsAddress, '9.9.9.9');
+    expect(routing.domesticDnsAddress, 'https://dns.example/dns-query');
+    expect(routing.id, RoutingProfile.globalPresetId);
+    expect(state.selectedRouting.remoteDnsAddress, 'https://cloudflare-dns.com/dns-query');
+
+    // Действует и на сервер с конфигом провайдера, и на обычную ссылку.
+    final provider = LinkParser.parseText(_provider).servers.single;
+    final link = LinkParser.parseLink(
+        'vless://b831381d-6324-4d53-ad4f-8cda48b30811@example.com:443?type=tcp&security=tls&sni=example.com#a')!;
+    for (final server in [provider, link]) {
+      final dns = XrayConfig.build(server: server, routing: routing, settings: state.settings)['dns'] as Map;
+      expect((dns['servers'] as List).first, '9.9.9.9');
     }
   });
 

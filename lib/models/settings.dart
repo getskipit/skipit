@@ -90,8 +90,11 @@ class AppSettings {
   String? selectedServerId;
   String? selectedRoutingId;
 
-  /// «Мой DNS»: у серверов с конфигом провайдера DNS берётся из выбранного профиля маршрутизации.
+  /// «Мой DNS»: вместо DNS провайдера (или профиля — у обычных серверов) работают два своих адреса:
+  /// удалённый — через VPN, локальный — напрямую.
   bool ownDns = false;
+  String ownDnsRemote = 'https://cloudflare-dns.com/dns-query';
+  String ownDnsDomestic = '77.88.8.8';
 
   /// Состояние, которое нужно восстановить после сбоя.
   bool systemProxyActive = false;
@@ -135,6 +138,8 @@ class AppSettings {
         'selectedServerId': selectedServerId,
         'selectedRoutingId': selectedRoutingId,
         'ownDns': ownDns,
+        'ownDnsRemote': ownDnsRemote,
+        'ownDnsDomestic': ownDnsDomestic,
         'systemProxyActive': systemProxyActive,
         'previousProxy': previousProxy?.toJson(),
         'lastXrayPid': lastXrayPid,
@@ -181,6 +186,8 @@ class AppSettings {
     s.selectedServerId = j['selectedServerId'] as String?;
     s.selectedRoutingId = j['selectedRoutingId'] as String?;
     s.ownDns = parseBool(j['ownDns'], s.ownDns);
+    s.ownDnsRemote = j['ownDnsRemote'] as String? ?? s.ownDnsRemote;
+    s.ownDnsDomestic = j['ownDnsDomestic'] as String? ?? s.ownDnsDomestic;
     s.systemProxyActive = parseBool(j['systemProxyActive']);
     final prev = j['previousProxy'];
     s.previousProxy = prev is Map<String, dynamic> ? SystemProxyState.fromJson(prev) : null;

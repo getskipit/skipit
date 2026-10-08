@@ -83,6 +83,18 @@ class RoutingProfile {
   String get domesticDnsAddress =>
       dnsAddress(domesticDnsType, domesticDnsDomain, domesticDnsIp, fallback: '77.88.8.8');
 
+  /// Адреса DNS в том виде, как их вводят в поле: «https://…» — DNS по HTTPS, иначе IP-адрес сервера.
+  void setDns({required String remote, required String domestic}) {
+    remote = remote.trim();
+    remoteDnsType = remote.startsWith('https://') ? 'DoH' : 'DoU';
+    remoteDnsDomain = remote.startsWith('https://') ? remote : '';
+    remoteDnsIp = remote.startsWith('https://') ? '' : remote;
+    domestic = domestic.trim();
+    domesticDnsType = domestic.startsWith('https://') ? 'DoH' : 'DoU';
+    domesticDnsDomain = domestic.startsWith('https://') ? domestic : '';
+    domesticDnsIp = domestic.startsWith('https://') ? '' : domestic;
+  }
+
   /// Адрес DNS-сервера в формате Xray. `localhost` не используем: в режиме TUN
   /// системный DNS снова попадёт в туннель.
   static String dnsAddress(String type, String domain, String ip, {required String fallback}) {

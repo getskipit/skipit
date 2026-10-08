@@ -92,7 +92,7 @@ class RoutingPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
           children: [
             if (provider != null)
-              _ProviderRulesCard(serverName: server!.name, config: provider, profile: state.selectedRouting)
+              _ProviderRulesCard(serverName: server!.name, config: provider)
             else if (state.selectedRouting.id == RoutingProfile.globalPresetId)
               Panel(
                 child: Row(children: [
@@ -108,11 +108,13 @@ class RoutingPage extends StatelessWidget {
                 ]),
               ),
             const SizedBox(height: 14),
+            _DnsCard(state: state, fromProvider: provider != null),
+            const SizedBox(height: 14),
             if (own.isNotEmpty) ...[
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 8),
                 child: Text(
-                  provider != null ? 'СВОИ ПРОФИЛИ — ДЕЙСТВУЮТ ПОВЕРХ ПРАВИЛ ПРОВАЙДЕРА' : 'СВОИ ПРОФИЛИ',
+                  provider != null ? 'СВОИ ПРОФИЛИ — РАБОТАЮТ ВМЕСТЕ С ПРАВИЛАМИ ПРОВАЙДЕРА' : 'СВОИ ПРОФИЛИ',
                   style: const TextStyle(color: C.orange, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4),
                 ),
               ),
@@ -125,8 +127,9 @@ class RoutingPage extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Профиль — это набор правил: какие сайты и IP идут через VPN, какие напрямую, какие блокируются. '
-              'Клик по профилю включает его, повторный клик — выключает. У сервера с правилами провайдера '
-              'из профиля берутся три списка сайтов и IP: они решают первыми. Профиль от провайдера добавляется '
+              'Клик по профилю включает его, повторный клик — выключает. С правилами провайдера профиль работает '
+              'вместе: из него берутся три списка сайтов и IP, всё остальное идёт по правилам провайдера; если сайт '
+              'есть и там, и там — решает ваш профиль. Профиль от провайдера добавляется '
               'кнопкой «Из буфера» или приходит вместе с подпиской.',
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
@@ -137,18 +140,14 @@ class RoutingPage extends StatelessWidget {
   }
 }
 
-/// Правила из JSON-конфига провайдера — действуют для выбранного сервера; правила выбранного
-/// профиля [profile] стоят перед ними, а DNS профиля заменяет DNS провайдера по выключателю.
+/// Правила из JSON-конфига провайдера — действуют для выбранного сервера вместе с выбранным профилем.
 class _ProviderRulesCard extends StatelessWidget {
-  const _ProviderRulesCard({required this.serverName, required this.config, required this.profile});
+  const _ProviderRulesCard({required this.serverName, required this.config});
   final String serverName;
   final Map<String, dynamic> config;
-  final RoutingProfile profile;
 
   @override
   Widget build(BuildContext context) {
-    final state = AppScope.of(context);
-    final ownRules = XrayConfig.hasOwnRules(profile);
     final s = XrayConfig.summarize(config);
     final balancers = ((config['routing'] as Map?)?['balancers'] as List?)?.length ?? 0;
     final proxies = (config['outbounds'] as List? ?? const [])
@@ -190,32 +189,90 @@ class _ProviderRulesCard extends StatelessWidget {
                 '${proxies > 1 ? ' · серверов в конфиге: $proxies' : ''}${balancers > 0 ? ', автовыбор' : ''}'),
         if (s.block > 0 || s.blockNotes.isNotEmpty)
           line(Icons.block_rounded, C.red, 'Блокируется', s.blockNotes.isEmpty ? 'правил: ${s.block}' : s.blockNotes.join(', ')),
-        line(
-            Icons.layers_rounded,
-            ownRules ? C.orange : C.muted,
-            'Свои правила',
-            ownRules
-                ? 'профиль «${profile.name}» (правил: ${profile.ruleCount}) — решает первым, остальное по правилам провайдера'
-                : 'нет — включите свой профиль ниже, и его правила встанут перед правилами провайдера'),
-        Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: Row(children: [
-            Icon(Icons.dns_rounded, size: 18, color: state.settings.ownDns ? C.orange : C.muted),
-            const SizedBox(width: 10),
-            const SizedBox(width: 120, child: Text('Мой DNS', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-            Expanded(
-              child: Text(
-                state.settings.ownDns
-                    ? 'удалённый ${profile.remoteDnsAddress} (через VPN), локальный ${profile.domesticDnsAddress} '
-                        '(напрямую) — из профиля «${profile.name}»'
-                    : 'выключен — работает DNS провайдера',
-                style: TextStyle(color: C.muted, fontSize: 13),
-              ),
+      ]),
+    );
+  }
+}
+
+/// Чей DNS работает: провайдера (у обычных серверов — из профиля) или свой, с двумя адресами.
+class _DnsCard extends StatefulWidget {
+  const _DnsCard({required this.state, required this.fromProvider});
+  final AppState state;
+
+  /// Выбран сервер с конфигом провайдера: без «Мой DNS» работает DNS из этого конфига.
+  final bool fromProvider;
+
+  @override
+  State<_DnsCard> createState() => _DnsCardState();
+}
+
+class _DnsCardState extends State<_DnsCard> {
+  late final _remote = TextEditingController(text: widget.state.settings.ownDnsRemote);
+  late final _domestic = TextEditingController(text: widget.state.settings.ownDnsDomestic);
+
+  @override
+  void dispose() {
+    _remote.dispose();
+    _domestic.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final own = state.settings.ownDns;
+    final other = widget.fromProvider ? 'из конфига провайдера' : 'из выбранного профиля';
+    void apply() => state.setOwnDnsServers(_remote.text, _domestic.text);
+
+    // Адрес применяется, когда его закончили вводить: по Enter или уходу из поля, а не на каждую букву —
+    // подключённый VPN при смене DNS переподключается.
+    Widget field(TextEditingController controller, String label, String hint) => Expanded(
+          child: Focus(
+            onFocusChange: (focused) {
+              if (!focused) apply();
+            },
+            child: TextField(
+              controller: controller,
+              onSubmitted: (_) => apply(),
+              decoration: InputDecoration(labelText: label, hintText: hint),
             ),
+          ),
+        );
+
+    return Panel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.dns_rounded, color: own ? C.orange : C.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('DNS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              const SizedBox(height: 2),
+              Text(own ? 'Работают свои серверы — вместо DNS $other' : 'Работает DNS $other',
+                  style: TextStyle(color: C.muted, fontSize: 12)),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          Segmented<bool>(
+            value: own,
+            items: {false: widget.fromProvider ? 'Провайдера' : 'Из профиля', true: 'Мой DNS'},
+            onChanged: state.setOwnDns,
+          ),
+        ]),
+        if (own) ...[
+          const SizedBox(height: 14),
+          Row(children: [
+            field(_remote, 'Удалённый DNS (через VPN)', 'https://1.1.1.1/dns-query'),
             const SizedBox(width: 12),
-            AppSwitch(value: state.settings.ownDns, onChanged: state.setOwnDns),
+            field(_domestic, 'Локальный DNS (напрямую)', '77.88.8.8'),
           ]),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            'Адрес вида https://… — DNS по HTTPS, иначе IP-адрес сервера. Удалённый отвечает за сайты, которые идут '
+            'через VPN, локальный — за те, что идут напрямую. Применяется по Enter или когда вы уходите из поля.',
+            style: TextStyle(color: C.muted, fontSize: 12),
+          ),
+        ],
       ]),
     );
   }
@@ -317,14 +374,7 @@ class _RoutingEditorState extends State<_RoutingEditor> {
 
   void _save() {
     p.name = _name.text.trim().isEmpty ? 'Профиль' : _name.text.trim();
-    final remote = _remoteDns.text.trim();
-    p.remoteDnsType = remote.startsWith('https://') ? 'DoH' : 'DoU';
-    p.remoteDnsDomain = remote.startsWith('https://') ? remote : '';
-    p.remoteDnsIp = remote.startsWith('https://') ? '' : remote;
-    final domestic = _domesticDns.text.trim();
-    p.domesticDnsType = domestic.startsWith('https://') ? 'DoH' : 'DoU';
-    p.domesticDnsDomain = domestic.startsWith('https://') ? domestic : '';
-    p.domesticDnsIp = domestic.startsWith('https://') ? '' : domestic;
+    p.setDns(remote: _remoteDns.text, domestic: _domesticDns.text);
     p.proxySites = _lines('proxySites');
     p.proxyIp = _lines('proxyIp');
     p.directSites = _lines('directSites');

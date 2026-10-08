@@ -714,7 +714,7 @@ class _ServerRow extends StatelessWidget {
     final String json;
     try {
       json = const JsonEncoder.withIndent('  ')
-          .convert(XrayConfig.build(server: server, routing: state.selectedRouting, settings: state.settings));
+          .convert(XrayConfig.build(server: server, routing: state.routingForConfig, settings: state.settings));
     } catch (e) {
       state.toast('Не удалось собрать конфиг: $e');
       return;

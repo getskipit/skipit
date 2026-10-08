@@ -647,6 +647,15 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  /// Профиль, с которым собирается конфиг: при включённом «Мой DNS» адреса DNS в нём — из настроек,
+  /// а не из самого профиля. Сохранённый профиль при этом не меняется.
+  RoutingProfile get routingForConfig {
+    final profile = selectedRouting;
+    if (!settings.ownDns) return profile;
+    return RoutingProfile.fromJson(profile.toJson())
+      ..setDns(remote: settings.ownDnsRemote, domestic: settings.ownDnsDomestic);
+  }
+
   RoutingProfile get selectedRouting => routingProfiles.firstWhere(
         (r) => r.id == settings.selectedRoutingId,
         orElse: () => routingProfiles.firstWhere((r) => r.id == RoutingProfile.globalPresetId),
@@ -990,11 +999,24 @@ class AppState extends ChangeNotifier {
     if (isConnected && !same) unawaited(reconnect());
   }
 
-  /// «Мой DNS»: у сервера с конфигом провайдера DNS берётся из выбранного профиля.
+  /// «Мой DNS»: свои адреса DNS вместо DNS провайдера или профиля.
   void setOwnDns(bool on) {
+    if (settings.ownDns == on) return;
     settings.ownDns = on;
     changed();
     if (isConnected) unawaited(reconnect());
+  }
+
+  /// Адреса из блока «Мой DNS». Переподключение — только если они изменились и сейчас в деле.
+  void setOwnDnsServers(String remote, String domestic) {
+    remote = remote.trim();
+    domestic = domestic.trim();
+    if (remote == settings.ownDnsRemote && domestic == settings.ownDnsDomestic) return;
+    settings
+      ..ownDnsRemote = remote
+      ..ownDnsDomestic = domestic;
+    changed();
+    if (isConnected && settings.ownDns) unawaited(reconnect());
   }
 
   Future<void> setMode(ConnectionMode mode) async {
@@ -1177,7 +1199,7 @@ class AppState extends ChangeNotifier {
       final server = selectedServer;
       if (server == null) throw CoreException('Сначала добавьте и выберите сервер');
 
-      final routing = selectedRouting;
+      final routing = routingForConfig;
       // У серверов с JSON-конфигом провайдера действуют его правила, а правила профиля — поверх них.
       final provider = XrayConfig.providerConfig(server);
       if (provider != null) {
