@@ -54,7 +54,7 @@ class AppSettings {
   /// Пароль на локальные порты: SOCKS и HTTP пускают только с логином [portUser] и паролем
   /// [portPassword] (свой на каждой установке). Включён по умолчанию. См. также [httpAuth].
   bool portAuth = true;
-  String portPassword = randomSecret();
+  String portPassword = randomPassword();
   static const portUser = 'skipit';
 
   /// HTTP-порт остаётся без пароля в режимах «Смешанный» и «Прокси»: им пользуется системный прокси

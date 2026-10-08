@@ -1056,7 +1056,7 @@ class AppState extends ChangeNotifier {
 
   /// Новый случайный пароль локальных портов; старый перестаёт действовать.
   void resetPortPassword() {
-    settings.portPassword = randomSecret();
+    settings.portPassword = randomPassword();
     changed();
     if (isConnected && settings.portAuth) unawaited(reconnect());
   }

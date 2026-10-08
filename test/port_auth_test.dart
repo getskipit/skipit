@@ -23,13 +23,13 @@ void main() {
     ..httpPort = 20972
     ..apiPort = 20973
     ..portAuth = true
-    ..portPassword = 'c0ffee';
+    ..portPassword = 'Ab-9+x_Z.q';
 
   Map inbound(Map<String, dynamic> cfg, String tag) => (cfg['inbounds'] as List).firstWhere((i) => i['tag'] == tag);
 
   test('пароль стоит на SOCKS всегда, на HTTP — кроме режимов с системным прокси', () {
     const account = [
-      {'user': 'skipit', 'pass': 'c0ffee'},
+      {'user': 'skipit', 'pass': 'Ab-9+x_Z.q'},
     ];
     for (final mode in ConnectionMode.values) {
       final cfg = XrayConfig.build(server: server, routing: routing, settings: settings(mode));
@@ -44,7 +44,11 @@ void main() {
     // По умолчанию включён, пароль у каждой установки свой и переживает сохранение настроек.
     final fresh = AppSettings.fromJson({});
     expect(fresh.portAuth, isTrue);
-    expect(fresh.portPassword, hasLength(32));
+    // 24 знака: буквы в обоих регистрах, цифры и знаки «-+_.» — и ничего, что ломает адрес прокси.
+    expect(fresh.portPassword, matches(RegExp(r'^[A-Za-z0-9+_.\-]{24}$')));
+    for (final kind in ['[A-Z]', '[a-z]', '[0-9]', r'[+_.\-]']) {
+      expect(fresh.portPassword, contains(RegExp(kind)), reason: kind);
+    }
     expect(fresh.portPassword, isNot(AppSettings().portPassword));
     expect(AppSettings.fromJson(fresh.toJson()).portPassword, fresh.portPassword);
   });
@@ -54,7 +58,7 @@ void main() {
         settings: settings(ConnectionMode.tun), routing: routing, apps: AppRules(), serverDomains: const []);
     final proxy = (tun['outbounds'] as List).first as Map;
     expect(proxy['username'], 'skipit');
-    expect(proxy['password'], 'c0ffee');
+    expect(proxy['password'], 'Ab-9+x_Z.q');
     final singbox = File('core/skipit-sing-box.exe');
     if (!singbox.existsSync()) return;
     final f = File('${Directory.systemTemp.path}\\skipit-port-auth-tun-test.json');

@@ -67,6 +67,18 @@ String randomSecret() {
   return [for (var i = 0; i < 16; i++) random.nextInt(256).toRadixString(16).padLeft(2, '0')].join();
 }
 
+/// Случайный пароль локальных портов: 24 знака — заглавные и строчные буквы, цифры и знаки «-+_.»,
+/// каждого вида хотя бы по одному. Знаков вроде «@», «:», «/» нет: они ломают адрес прокси.
+String randomPassword() {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ', lower = 'abcdefghijkmnopqrstuvwxyz', digits = '23456789', signs = '-+_.';
+  const all = '$upper$lower$digits$signs';
+  final random = Random.secure();
+  while (true) {
+    final password = [for (var i = 0; i < 24; i++) all[random.nextInt(all.length)]].join();
+    if ([upper, lower, digits, signs].every((kind) => password.split('').any(kind.contains))) return password;
+  }
+}
+
 String newId() =>
     '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
     '${_random.nextInt(0x7fffffff).toRadixString(36)}';
