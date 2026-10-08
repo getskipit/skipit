@@ -14,6 +14,7 @@ import '../version.dart';
 import 'home_page.dart';
 import 'logs_page.dart';
 import 'routing_hub_page.dart';
+import 'servers_panel.dart';
 import 'settings_page.dart';
 import 'smooth_scroll.dart';
 import 'flag_text.dart';
@@ -164,6 +165,7 @@ class _ShellState extends State<Shell> {
 
   static const _items = [
     (Icons.bolt_rounded, 'Главная'),
+    (Icons.storage_rounded, 'Серверы'),
     (Icons.alt_route_rounded, 'Маршрутизация'),
     (Icons.receipt_long_rounded, 'Логи'),
     (Icons.tune_rounded, 'Настройки'),
@@ -269,16 +271,19 @@ class _ShellState extends State<Shell> {
   Widget build(BuildContext context) {
     final pages = [
       const HomePage(),
+      // Тот же список подписок и серверов, что справа на главной, — на всю ширину окна.
+      const Padding(padding: EdgeInsets.fromLTRB(24, 24, 24 - scrollGutter, 0), child: ServersPanel()),
       const RoutingHubPage(),
       const LogsPage(),
       const SettingsPage(),
     ];
     return Scaffold(
       backgroundColor: C.bg,
-      // Ctrl+V (и Ctrl+Shift+V) на главной — импорт ссылки или конфига из буфера. В других разделах
-      // сочетание ничего не добавляет: подписка, появившаяся из журнала или настроек, была бы неожиданной.
+      // Ctrl+V (и Ctrl+Shift+V) на главной и в «Серверах» — импорт ссылки или конфига из буфера. В других
+      // разделах сочетание ничего не добавляет: подписка, появившаяся из журнала или настроек, была бы
+      // неожиданной.
       body: Shortcuts(
-        shortcuts: _index != 0
+        shortcuts: _index > 1
             ? const {}
             : const {
                 SingleActivator(LogicalKeyboardKey.keyV, control: true): _PasteIntent(),

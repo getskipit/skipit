@@ -34,7 +34,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(background(), Palette.light.bg);
-    expect(state.pageIndex, 3);
+    expect(state.pageIndex, 4);
     expect(tester.takeException(), isNull);
 
     state.settings.theme = AppTheme.dark;

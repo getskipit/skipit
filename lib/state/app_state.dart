@@ -280,8 +280,8 @@ class AppState extends ChangeNotifier {
   /// Открытый раздел меню — живёт здесь, чтобы пережить перестройку окна при смене темы.
   int pageIndex = 0;
 
-  /// Разделы меню по порядку: главная, маршрутизация, логи, настройки.
-  static const routingPage = 1;
+  /// Разделы меню по порядку: главная, серверы, маршрутизация, логи, настройки.
+  static const routingPage = 2;
 
   void openPage(int index) {
     pageIndex = index;
