@@ -18,6 +18,10 @@ class DnsProbe {
   /// Для скольких сайтов сервер назначен; 0 — общий, для всех остальных.
   int domains;
 
+  /// Служебный сервер, который программа добавила сама: у него ядро узнаёт только адрес VPN-сервера
+  /// (см. XrayConfig.bootstrapDns), адреса сайтов у него не спрашиваются.
+  bool service = false;
+
   /// Сколько ядро ждёт ответа этого сервера (timeoutMs из конфига), если задано.
   final int? limitMs;
 
@@ -62,8 +66,8 @@ class DnsProbe {
 class DnsCheck {
   static const timeout = Duration(seconds: 5);
 
-  /// DNS-серверы из готового конфига ядра, без повторов.
-  static List<DnsProbe> servers(Map<String, dynamic> config) {
+  /// DNS-серверы из готового конфига ядра, без повторов. [service] — адреса служебных серверов.
+  static List<DnsProbe> servers(Map<String, dynamic> config, {Set<String> service = const {}}) {
     final probes = <String, DnsProbe>{};
     for (final s in ((config['dns'] as Map?)?['servers'] as List? ?? const [])) {
       final address = s is Map ? s['address'] : s;
@@ -73,7 +77,8 @@ class DnsCheck {
       final limit = s is Map && s['timeoutMs'] is int ? s['timeoutMs'] as int : null;
       final known = probes['$address:$port'];
       if (known == null) {
-        probes['$address:$port'] = DnsProbe(address: address, port: port, domains: domains, limitMs: limit);
+        probes['$address:$port'] = DnsProbe(address: address, port: port, domains: domains, limitMs: limit)
+          ..service = service.contains(address);
       } else {
         // Один и тот же сервер может стоять дважды — для разных списков сайтов.
         known.domains = known.domains == 0 || domains == 0 ? 0 : known.domains + domains;

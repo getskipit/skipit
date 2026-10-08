@@ -36,6 +36,17 @@ void main() {
 
   test('список серверов: без повторов, с пометкой «напрямую» и лимитом ожидания', () {
     final probes = DnsCheck.servers(config);
+    expect(probes.any((p) => p.service), isFalse);
+    // Служебные серверы, которые программа добавила сама, помечаются отдельно.
+    final withService = DnsCheck.servers({
+      'dns': {
+        'servers': [
+          '1.1.1.1',
+          {'address': 'tcp+local://1.1.1.1', 'domains': ['full:vpn.example'], 'skipFallback': true},
+        ],
+      },
+    }, service: {'tcp+local://1.1.1.1'});
+    expect(withService.map((p) => p.service), [false, true]);
     expect(probes.map((p) => p.label),
         ['77.88.8.8', 'https+local://doh.example/dns-query', 'https://cloudflare-dns.com/dns-query', '9.9.9.9:9953']);
     expect(probes[0].domains, 3);

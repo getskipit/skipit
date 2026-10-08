@@ -192,7 +192,7 @@ class AppState extends ChangeNotifier {
     final port = _dnsCheckPort, config = _dnsConfig;
     if (checkingDns || !isConnected || port == null || config == null) return;
     checkingDns = true;
-    dnsProbes = DnsCheck.servers(config);
+    dnsProbes = DnsCheck.servers(config, service: XrayConfig.bootstrapAddresses(_session ?? settings).toSet());
     notifyListeners();
     try {
       // Пока маршрут Windows ведёт в адаптер VPN, к серверам «напрямую» нужно идти через настоящую карту.

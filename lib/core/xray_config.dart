@@ -489,8 +489,12 @@ class XrayConfig {
   /// мимо правил, — поэтому отдельного правила «напрямую» не нужно, и запросы программ или провайдера
   /// к тому же адресу (например, к 1.1.1.1) идут своим обычным путём.
   static List<Map<String, dynamic>> _bootstrapEntries(AppSettings settings, List<String> names) => [
-        for (final a in bootstrapDns(settings)) {'address': 'tcp+local://$a', 'domains': names, 'skipFallback': true},
+        for (final a in bootstrapAddresses(settings)) {'address': a, 'domains': names, 'skipFallback': true},
       ];
+
+  /// Адреса этих служебных серверов в том виде, как они записаны в конфиге ядра.
+  static List<String> bootstrapAddresses(AppSettings settings) =>
+      [for (final a in bootstrapDns(settings)) 'tcp+local://$a'];
   static const _privateNets = [
     '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '127.0.0.0/8', '224.0.0.0/4',
     '255.255.255.255/32', 'fc00::/7', 'fe80::/10', 'ff00::/8',

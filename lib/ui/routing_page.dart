@@ -340,7 +340,9 @@ class _DnsCardState extends State<_DnsCard> {
               Text(p.label, style: const TextStyle(fontFamily: 'Consolas', fontSize: 12.5)),
               Text(
                 [
-                  p.domains == 0 ? 'общий' : 'для сайтов из списка (${p.domains})',
+                  p.service
+                      ? 'служебный: узнаёт адрес VPN-сервера'
+                      : (p.domains == 0 ? 'общий' : 'для сайтов из списка (${p.domains})'),
                   if (p.done) ...[p.path, p.result] else 'проверяется…',
                 ].join(' · '),
                 style: TextStyle(color: C.muted, fontSize: 12),
