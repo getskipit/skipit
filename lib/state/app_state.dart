@@ -1054,6 +1054,13 @@ class AppState extends ChangeNotifier {
     if (isConnected) unawaited(reconnect());
   }
 
+  /// Новый случайный пароль локальных портов; старый перестаёт действовать.
+  void resetPortPassword() {
+    settings.portPassword = randomSecret();
+    changed();
+    if (isConnected && settings.portAuth) unawaited(reconnect());
+  }
+
   /// «Мой DNS»: свои адреса DNS вместо DNS провайдера или профиля.
   void setOwnDns(bool on) {
     if (settings.ownDns == on) return;

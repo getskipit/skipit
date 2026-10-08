@@ -221,16 +221,18 @@ class SettingsPage extends StatelessWidget {
                   'передать не умеет',
               s.portAuth,
               (v) => state.setPortAuth(v)),
-          if (s.portAuth)
+          if (s.portAuth) ...[
             _Row(
-              title: 'Логин и пароль портов',
-              subtitle: 'Логин ${AppSettings.portUser}, пароль ${s.portPassword}',
+              title: 'Логин портов',
+              subtitle: AppSettings.portUser,
               trailing: IconButton(
-                tooltip: 'Скопировать пароль',
+                tooltip: 'Скопировать логин',
                 icon: const Icon(Icons.copy_rounded),
-                onPressed: () => Clipboard.setData(ClipboardData(text: s.portPassword)),
+                onPressed: () => Clipboard.setData(const ClipboardData(text: AppSettings.portUser)),
               ),
             ),
+            _PortPasswordRow(state: state),
+          ],
           number('Порт API статистики', 'Для счётчиков трафика', s.apiPort, (v) => s.apiPort = v),
           toggle('IPv6', 'Включить IPv6 в туннеле и DNS', s.ipv6, (v) => s.ipv6 = v),
           toggle('Сниффинг', 'Определять домен по TLS/HTTP/QUIC — нужен для маршрутизации по сайтам', s.sniffing,
@@ -464,6 +466,51 @@ class _UserAgentFieldState extends State<_UserAgentField> {
           widget.onChanged(v.trim());
         },
       );
+}
+
+/// Пароль локальных портов: скрыт точками, пока его не попросят показать; копируется и сменяется кнопками.
+class _PortPasswordRow extends StatefulWidget {
+  const _PortPasswordRow({required this.state});
+  final AppState state;
+
+  @override
+  State<_PortPasswordRow> createState() => _PortPasswordRowState();
+}
+
+class _PortPasswordRowState extends State<_PortPasswordRow> {
+  bool _shown = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final password = state.settings.portPassword;
+    return _Row(
+      title: 'Пароль портов',
+      subtitle: _shown ? password : '•' * 16,
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+          tooltip: _shown ? 'Скрыть пароль' : 'Показать пароль',
+          icon: Icon(_shown ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+          onPressed: () => setState(() => _shown = !_shown),
+        ),
+        IconButton(
+          tooltip: 'Скопировать пароль',
+          icon: const Icon(Icons.copy_rounded),
+          onPressed: () => Clipboard.setData(ClipboardData(text: password)),
+        ),
+        IconButton(
+          tooltip: 'Новый пароль',
+          icon: const Icon(Icons.refresh_rounded),
+          onPressed: () async {
+            final ok = await confirm(context, 'Сменить пароль портов?',
+                'Старый пароль перестанет действовать. Программам, в которые он вписан, понадобится новый.',
+                ok: 'Сменить');
+            if (ok) state.resetPortPassword();
+          },
+        ),
+      ]),
+    );
+  }
 }
 
 class _Row extends StatelessWidget {
