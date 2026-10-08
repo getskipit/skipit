@@ -1382,7 +1382,7 @@ class AppState extends ChangeNotifier {
       }
       // С Kill Switch имя VPN-сервера ядро узнаёт само: запрос Windows к DNS обычной сети был бы
       // заблокирован, и подключение «висело» бы секунд двенадцать.
-      if (usesTun && settings.killSwitch) XrayConfig.resolveServersInside(config, settings: session);
+      if (xrayTun || (usesTun && settings.killSwitch)) XrayConfig.resolveServersInside(config, settings: session);
       // Вход проверки DNS — последним: к этому месту все правила уже на месте.
       var dnsCheckPort = checkPort + 1;
       while (taken.contains(dnsCheckPort) || !await _portFree(dnsCheckPort)) {

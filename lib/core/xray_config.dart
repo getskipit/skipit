@@ -465,8 +465,32 @@ class XrayConfig {
   /// перехватывает правило, и отвечает встроенный DNS Xray.
   static const _tunDns = '172.19.0.2';
 
-  /// Адреса VPN-серверов резолвим напрямую, иначе Xray не сможет к ним подключиться.
-  static const _bootstrapDns = '77.88.8.8';
+  /// DNS, у которых ядро напрямую узнаёт адреса VPN-серверов (спросить их через VPN до подключения
+  /// невозможно) и DNS-серверов «+local», когда в конфиге нет запасного. По умолчанию — 1.1.1.1 и
+  /// 8.8.8.8; при включённом «Мой DNS» — его локальные серверы, заданные IPv4-адресом. Следующий
+  /// спрашивается, если предыдущий не ответил.
+  static List<String> bootstrapDns(AppSettings settings) {
+    if (settings.ownDns) {
+      final own = <String>[];
+      for (final a in RoutingProfile.splitDns(settings.ownDnsDomestic)) {
+        final server = dnsServer(a);
+        if (server == null) continue;
+        final entry = _dnsEntry(server);
+        final address = InternetAddress.tryParse('${entry['address']}');
+        if (address == null || address.type != InternetAddressType.IPv4) continue;
+        own.add(entry['port'] == null ? address.address : '${address.address}:${entry['port']}');
+      }
+      if (own.isNotEmpty) return own;
+    }
+    return const ['1.1.1.1', '8.8.8.8'];
+  }
+
+  /// Те же серверы записями для ядра. Запрос идёт по TCP с пометкой «+local»: ядро отправляет его само,
+  /// мимо правил, — поэтому отдельного правила «напрямую» не нужно, и запросы программ или провайдера
+  /// к тому же адресу (например, к 1.1.1.1) идут своим обычным путём.
+  static List<Map<String, dynamic>> _bootstrapEntries(AppSettings settings, List<String> names) => [
+        for (final a in bootstrapDns(settings)) {'address': 'tcp+local://$a', 'domains': names, 'skipFallback': true},
+      ];
   static const _privateNets = [
     '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '127.0.0.0/8', '224.0.0.0/4',
     '255.255.255.255/32', 'fc00::/7', 'fe80::/10', 'ff00::/8',
@@ -540,9 +564,7 @@ class XrayConfig {
     final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     final servers = [...(dns['servers'] as List? ?? const [])];
     if (servers.isEmpty) servers.add('1.1.1.1');
-    if (domains.isNotEmpty) {
-      servers.add({'address': _bootstrapDns, 'domains': [for (final d in domains) 'full:$d'], 'skipFallback': true});
-    }
+    if (domains.isNotEmpty) servers.addAll(_bootstrapEntries(settings, [for (final d in domains) 'full:$d']));
     dns['servers'] = servers;
     cfg['dns'] = dns;
 
@@ -558,7 +580,6 @@ class XrayConfig {
     ];
     final own = <Map<String, dynamic>>[
       {'inboundTag': inbound, 'port': '53', 'outboundTag': dnsOut},
-      {'ip': [_bootstrapDns], 'port': '53', 'outboundTag': direct},
       {'inboundTag': inbound, 'ip': _privateNets, 'outboundTag': direct},
       if (!settings.ipv6) {'inboundTag': inbound, 'ip': ['::/0'], 'outboundTag': block},
     ];
@@ -691,7 +712,7 @@ class XrayConfig {
   /// записи имя сервера спрашивалось бы у него самого: каждое новое соединение с ним ждало отказа по
   /// времени, а вместе с ним — все запросы, что стояли в очереди. Имя узнаётся у запасного DNS из того же
   /// конфига (общего и не «+local» — обычно он идёт через VPN), а если такого нет — напрямую у
-  /// [_bootstrapDns], как адреса VPN-серверов. Нужно везде, где на запросы программ отвечает DNS ядра.
+  /// [bootstrapDns], как адреса VPN-серверов. Нужно везде, где на запросы программ отвечает DNS ядра.
   static void resolveLocalDnsNames(Map<String, dynamic> cfg, {required AppSettings settings}) {
     final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>();
     final servers = [...(dns?['servers'] as List? ?? const [])];
@@ -709,18 +730,13 @@ class XrayConfig {
     }
     if (dns == null || localDns.isEmpty) return;
     final names = [for (final d in localDns) 'full:$d'];
-    servers.add({..._dnsEntry(spareDns ?? _bootstrapDns), 'domains': names, 'skipFallback': true});
+    if (spareDns != null) {
+      servers.add({..._dnsEntry(spareDns), 'domains': names, 'skipFallback': true});
+    } else {
+      servers.addAll(_bootstrapEntries(settings, names));
+    }
     dns['servers'] = servers;
     cfg['dns'] = dns;
-    if (spareDns != null) return;
-
-    _addOwnOutbounds(cfg, settings);
-    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
-    routing['rules'] = [
-      {'ip': [_bootstrapDns], 'port': '53', 'outboundTag': _direct},
-      ...(routing['rules'] as List? ?? const []),
-    ];
-    cfg['routing'] = routing;
   }
 
   static const dnsInTag = 'skipit-dns-port';
@@ -829,12 +845,12 @@ class XrayConfig {
   }
 
   /// Адреса VPN-серверов ядро узнаёт само — своим DNS и напрямую, а не через Windows.
-  /// Нужно при включённом Kill Switch: пока адаптер ещё не поднят, Windows может спросить имя сервера
-  /// только у DNS обычной сети, а этот запрос Kill Switch не выпускает. Ядро ждало бы ответа секунд
-  /// двенадцать (столько Windows перебирает попытки), и всё это время VPN «подключён», но не работает.
-  /// Запрос самого ядра к [_bootstrapDns] разрешён: ядру можно выходить в сеть мимо адаптера.
+  /// Windows в момент подключения может спросить имя сервера только у DNS обычной сети, а этот запрос
+  /// не выпускает защита от утечек DNS (и Kill Switch). Тогда ядро ждёт ответа секунд двенадцать
+  /// (столько Windows перебирает попытки), и всё это время VPN «подключён», но не работает — так
+  /// бывало не при каждом подключении. Запрос самого ядра к [bootstrapDns] разрешён: ядру можно
+  /// выходить в сеть мимо адаптера.
   static void resolveServersInside(Map<String, dynamic> cfg, {required AppSettings settings}) {
-    const direct = 'skipit-direct';
     final strategy = settings.ipv6 ? 'UseIP' : 'UseIPv4';
     final outbounds = [...(cfg['outbounds'] as List)];
     final domains = <String>{};
@@ -851,35 +867,21 @@ class XrayConfig {
       if (sockopt['domainStrategy'] == null || sockopt['domainStrategy'] == 'AsIs') sockopt['domainStrategy'] = strategy;
     }
     if (domains.isEmpty) return;
-
-    if (!outbounds.any((o) => o is Map && o['tag'] == direct)) {
-      outbounds.add({
-        'tag': direct,
-        'protocol': 'freedom',
-        'streamSettings': {
-          'sockopt': {'domainStrategy': strategy},
-        },
-      });
-    }
     cfg['outbounds'] = outbounds;
 
     final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     final servers = [...(dns['servers'] as List? ?? const [])];
     if (servers.isEmpty) servers.add('1.1.1.1');
     final wanted = [for (final d in domains) 'full:$d'];
-    // В режиме «TUN на ядре Xray» такая запись уже добавлена в [addTun].
+    final entries = _bootstrapEntries(settings, wanted);
+    // В режиме «TUN на ядре Xray» такие записи уже добавлены в [addTun].
     final known = servers.any((s) =>
-        s is Map && s['address'] == _bootstrapDns && wanted.every((s['domains'] as List? ?? const []).contains));
-    if (!known) servers.add({'address': _bootstrapDns, 'domains': wanted, 'skipFallback': true});
+        s is Map &&
+        s['address'] == entries.first['address'] &&
+        wanted.every((s['domains'] as List? ?? const []).contains));
+    if (!known) servers.addAll(entries);
     dns['servers'] = servers;
     cfg['dns'] = dns;
-
-    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
-    routing['rules'] = [
-      {'ip': [_bootstrapDns], 'port': '53', 'outboundTag': direct},
-      ...(routing['rules'] as List? ?? const []),
-    ];
-    cfg['routing'] = routing;
   }
 
   /// Конфиг для проверки задержки: на каждый сервер свой HTTP-inbound на своём порту.

@@ -263,7 +263,15 @@ void main() {
         })) as Map<String, dynamic>;
         XrayConfig.addTun(alone, settings: AppSettings(), apps: AppRules());
         expect((alone['dns'] as Map)['servers'], anyElement(equals(
-            {'address': '77.88.8.8', 'domains': ['full:dns.example'], 'skipFallback': true})));
+            {'address': 'tcp+local://1.1.1.1', 'domains': ['full:dns.example'], 'skipFallback': true})));
+        expect((alone['dns'] as Map)['servers'], anyElement(equals(
+            {'address': 'tcp+local://8.8.8.8', 'domains': ['full:dns.example'], 'skipFallback': true})));
+        // При включённом «Мой DNS» — его локальные серверы, заданные адресом (имена пропускаются).
+        final own = AppSettings()
+          ..ownDns = true
+          ..ownDnsDomestic = 'https://dns.example/dns-query, 9.9.9.9, 77.88.8.1:5353';
+        expect(XrayConfig.bootstrapDns(own), ['9.9.9.9', '77.88.8.1:5353']);
+        expect(XrayConfig.bootstrapDns(AppSettings()), ['1.1.1.1', '8.8.8.8']);
       }
       XrayConfig.addDirectInbound(c, port: 20901, hosts: ['sub.example'], settings: AppSettings());
       XrayConfig.addCheckInbound(c, port: 20902);

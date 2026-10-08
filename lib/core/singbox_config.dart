@@ -118,7 +118,8 @@ class SingboxConfig {
           else
             _dnsServer('remote', routing.remoteDnsAddress, detour: 'proxy'),
           _dnsServer('local', routing.domesticDnsAddress),
-          {'type': 'udp', 'tag': 'bootstrap', 'server': '77.88.8.8'},
+          // У sing-box такой сервер один — первый из списка (по умолчанию 1.1.1.1).
+          _dnsServer('bootstrap', XrayConfig.bootstrapDns(settings).first),
         ],
         'rules': dnsRules,
         'final': finalOutbound == 'proxy' ? 'remote' : 'local',
