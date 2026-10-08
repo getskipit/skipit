@@ -691,6 +691,36 @@ class XrayConfig {
     cfg['routing'] = routing;
   }
 
+  static const dnsCheckInTag = 'skipit-dnscheck-in';
+
+  /// Локальный вход для проверки DNS (см. DnsCheck): запрос к DNS-серверу, пришедший через него, идёт
+  /// тем же путём, каким к этому серверу ходит само ядро. Для этого правила, привязанные к запросам
+  /// встроенного DNS (inboundTag = тег dns), распространяются и на этот вход. Слушает только этот
+  /// компьютер. Вызывается последним — когда все правила уже на месте.
+  static void addDnsCheckInbound(Map<String, dynamic> cfg, {required int port}) {
+    cfg['inbounds'] = [
+      ...(cfg['inbounds'] as List? ?? const []),
+      {
+        'tag': dnsCheckInTag,
+        'protocol': 'socks',
+        'listen': '127.0.0.1',
+        'port': port,
+        'settings': {'auth': 'noauth', 'udp': true},
+      },
+    ];
+    final tag = (cfg['dns'] as Map?)?['tag'];
+    if (tag is! String) return;
+    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    routing['rules'] = [
+      for (final r in (routing['rules'] as List? ?? const []))
+        if (r is Map && _tags(r['inboundTag']).contains(tag))
+          {...r, 'inboundTag': [..._tags(r['inboundTag']), dnsCheckInTag]}
+        else
+          r,
+    ];
+    cfg['routing'] = routing;
+  }
+
   static const checkInTag = 'skipit-check-in';
 
   /// Адрес, по которому программа проверяет связь через VPN и узнаёт страну выхода.

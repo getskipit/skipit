@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../core/core_manager.dart';
+import '../core/dns_check.dart';
 import '../core/kill_switch.dart';
 import '../core/link_parser.dart';
 import '../core/net.dart';
@@ -92,6 +93,11 @@ class AppState extends ChangeNotifier {
     }
     final failedAt = _unknownSources.remove(c.source);
     if (failedAt != null && DateTime.now().difference(failedAt) < const Duration(seconds: 3)) c.unknownProcess = true;
+    // Запрос проверки DNS: запоминаем, каким путём ядро его отправило.
+    if (c.inbound == XrayConfig.dnsCheckInTag) {
+      _dnsCheckRoute = c.route;
+      return true;
+    }
     // Собственная проверка связи — не соединение программы.
     if (c.route != ConnRoute.dns && c.inbound != 'api' && c.inbound != XrayConfig.checkInTag) log.addConnection(c);
     return true;
@@ -168,6 +174,43 @@ class AppState extends ChangeNotifier {
 
   /// Порт входа проверки связи в ядре (см. [XrayConfig.addCheckInbound]).
   int? _checkPort;
+
+  // --- Проверка DNS-серверов подключения ---
+
+  /// Вход проверки DNS в ядре (см. [XrayConfig.addDnsCheckInbound]) и раздел dns его конфига.
+  int? _dnsCheckPort;
+  Map<String, dynamic>? _dnsConfig;
+  ConnRoute? _dnsCheckRoute;
+
+  /// Результаты последней проверки — для блока «DNS» на странице «Маршрутизация».
+  List<DnsProbe> dnsProbes = [];
+  bool checkingDns = false;
+
+  /// Спрашивает по очереди каждый DNS-сервер подключения: за сколько отвечает и каким путём идёт запрос.
+  Future<void> checkDns() async {
+    final port = _dnsCheckPort, config = _dnsConfig;
+    if (checkingDns || !isConnected || port == null || config == null) return;
+    checkingDns = true;
+    dnsProbes = DnsCheck.servers(config);
+    notifyListeners();
+    try {
+      // Пока маршрут Windows ведёт в адаптер VPN, к серверам «напрямую» нужно идти через настоящую карту.
+      final tunnel = WinSys.tunnelOnDefaultRoute();
+      final nic = tunnel == null ? null : await DnsCheck.physicalNic([tunnel, ...WinSys.tunNames]);
+      for (final probe in dnsProbes) {
+        _dnsCheckRoute = null;
+        await DnsCheck.run(probe, checkPort: port, nic: nic);
+        // Строка журнала ядра о том, куда ушёл запрос, приходит чуть позже ответа.
+        await Future.delayed(const Duration(milliseconds: 200));
+        probe.route = _dnsCheckRoute;
+        log.add('app', 'Проверка DNS: ${probe.label} — ${probe.path}, ${probe.result}');
+        notifyListeners();
+      }
+    } finally {
+      checkingDns = false;
+      notifyListeners();
+    }
+  }
   Timer? _linkTimer;
   var _linkFails = 0;
 
@@ -1275,6 +1318,16 @@ class AppState extends ChangeNotifier {
       // С Kill Switch имя VPN-сервера ядро узнаёт само: запрос Windows к DNS обычной сети был бы
       // заблокирован, и подключение «висело» бы секунд двенадцать.
       if (usesTun && settings.killSwitch) XrayConfig.resolveServersInside(config, settings: session);
+      // Вход проверки DNS — последним: к этому месту все правила уже на месте.
+      var dnsCheckPort = checkPort + 1;
+      while (taken.contains(dnsCheckPort) || !await _portFree(dnsCheckPort)) {
+        if (++dnsCheckPort > checkPort + 200) throw CoreException('Не нашлось свободного порта для проверки DNS');
+      }
+      taken.add(dnsCheckPort);
+      XrayConfig.addDnsCheckInbound(config, port: dnsCheckPort);
+      _dnsCheckPort = dnsCheckPort;
+      _dnsConfig = {'dns': config['dns']};
+      dnsProbes = [];
       _routes
         ..clear()
         ..addEntries([

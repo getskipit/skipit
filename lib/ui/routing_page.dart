@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/dns_check.dart';
 import '../core/xray_config.dart';
 import '../models/routing.dart';
 import '../state/app_scope.dart';
@@ -292,9 +293,57 @@ class _DnsCardState extends State<_DnsCard> {
             Text(skipped, style: const TextStyle(color: C.orange, fontSize: 12)),
           ],
         ],
+        const SizedBox(height: 14),
+        Row(children: [
+          GhostButton(
+            label: 'Проверить DNS',
+            icon: Icons.speed_rounded,
+            busy: state.checkingDns,
+            onPressed: state.isConnected ? state.checkDns : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              state.isConnected
+                  ? 'Спросим каждый DNS-сервер подключения: за сколько он отвечает и каким путём идёт запрос'
+                  : 'Проверка работает, пока VPN подключён',
+              style: TextStyle(color: C.muted, fontSize: 12),
+            ),
+          ),
+        ]),
+        for (final probe in state.dnsProbes) _probe(probe),
       ]),
     );
   }
+
+  Widget _probe(DnsProbe p) => Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: !p.done
+                ? const Spinner(size: 16)
+                : Icon(p.ok ? Icons.check_circle_rounded : Icons.error_rounded,
+                    size: 16, color: !p.ok ? C.red : (p.slow ? C.orange : C.green)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(p.label, style: const TextStyle(fontFamily: 'Consolas', fontSize: 12.5)),
+              Text(
+                [
+                  p.domains == 0 ? 'общий' : 'для сайтов из списка (${p.domains})',
+                  if (p.done) ...[p.path, p.result] else 'проверяется…',
+                ].join(' · '),
+                style: TextStyle(color: C.muted, fontSize: 12),
+              ),
+              if (p.done && p.slow)
+                Text('Дольше, чем ядро ждёт этот сервер (${p.limitMs} мс): оно успевает уйти к следующему DNS',
+                    style: const TextStyle(color: C.orange, fontSize: 12)),
+            ]),
+          ),
+        ]),
+      );
 }
 
 class _ProfileTile extends StatelessWidget {
