@@ -538,15 +538,18 @@ class XrayConfig {
         'name': AppPaths.appName,
         'desc': AppPaths.appName,
         'mtu': settings.mtu,
-        // IPv6-адрес и маршрут есть всегда: иначе IPv6-трафик шёл бы мимо туннеля (утечка IP).
-        // При выключенном IPv6 он блокируется правилом ниже.
-        'gateway': _tunGateway,
+        // IPv6 выключен — у адаптера нет ни IPv6-адреса, ни маршрута: программа сразу видит, что IPv6
+        // нет, и идёт по IPv4. С адресом и маршрутом Windows считала IPv6 рабочим, а пакеты пропадали в
+        // правиле «блокировать»: TCP «подключался» в никуда, UDP ждал ответа (так молчал голос в играх).
+        // Мимо адаптера IPv6 при этом не уходит: его закрывает фильтр Windows («misconfigtun» ниже).
+        'gateway': settings.ipv6 ? _tunGateway : const ['$tunV4/30'],
         'dns': [_tunDns],
-        'autoSystemRoutingTable': ['0.0.0.0/0', '::/0'],
+        'autoSystemRoutingTable': settings.ipv6 ? const ['0.0.0.0/0', '::/0'] : const ['0.0.0.0/0'],
         // Сам Xray ходит через настоящий сетевой адаптер — иначе получится петля.
         'autoOutboundsInterface': 'auto',
-        // DNS-запросы программ мимо адаптера блокируются фильтром Windows.
-        'autoSystemWfpBlockLeak': ['dns'],
+        // Фильтр Windows не выпускает мимо адаптера DNS-запросы программ («dns») и ту версию IP, для
+        // которой у адаптера нет маршрута («misconfigtun»), — то есть IPv6, когда он выключен.
+        'autoSystemWfpBlockLeak': const ['dns', 'misconfigtun'],
       },
       'sniffing': {
         'enabled': settings.sniffing,
@@ -712,9 +715,13 @@ class XrayConfig {
     },
   };
 
-  /// К DNS-серверу с пометкой «+local» ядро подключается само и его имя ищет своим же DNS. Без отдельной
-  /// записи имя сервера спрашивалось бы у него самого: каждое новое соединение с ним ждало отказа по
-  /// времени, а вместе с ним — все запросы, что стояли в очереди. Имя узнаётся у запасного DNS из того же
+  /// К DNS-серверу с пометкой «+local» ядро подключается само, и адрес по его имени спрашивает у Windows
+  /// (то есть у DNS обычной сети — роутера), а не своим DNS: записи ниже оно при этом не читает. Роутер
+  /// может ответить не сразу, отказом или адресом IPv6, которого у сети нет, — и новое соединение с
+  /// DNS-сервером (оно открывается заново после минуты простоя) не укладывается в срок ответа. Поэтому у
+  /// сервера, записанного именем, пометка снимается, а его запросы первым правилом идут в выход
+  /// «напрямую»: путь тот же, но адрес ищет DNS ядра, и IPv6 — только если он включён. Имя узнаётся у
+  /// запасного DNS из того же
   /// конфига (общего и не «+local» — обычно он идёт через VPN), а если такого нет — напрямую у
   /// [bootstrapDns], как адреса VPN-серверов. Нужно везде, где на запросы программ отвечает DNS ядра.
   static void resolveLocalDnsNames(Map<String, dynamic> cfg, {required AppSettings settings}) {
@@ -722,12 +729,16 @@ class XrayConfig {
     final servers = [...(dns?['servers'] as List? ?? const [])];
     final localDns = <String>{};
     Object? spareDns;
-    for (final s in servers) {
+    for (var i = 0; i < servers.length; i++) {
+      final s = servers[i];
       final address = s is Map ? s['address'] : s;
       if (address is! String || address == 'localhost' || address == 'fakedns') continue;
       if (address.contains('+local://')) {
         final host = Uri.tryParse(address)?.host ?? '';
-        if (host.isNotEmpty && InternetAddress.tryParse(host) == null) localDns.add(host);
+        if (host.isEmpty || InternetAddress.tryParse(host) != null) continue;
+        localDns.add(host);
+        final plain = address.replaceFirst('+local://', '://');
+        servers[i] = s is Map ? {...s, 'address': plain} : plain;
       } else if (s is! Map || (s['domains'] as List? ?? const []).isEmpty) {
         spareDns ??= s;
       }
@@ -740,7 +751,16 @@ class XrayConfig {
       servers.addAll(_bootstrapEntries(settings, names));
     }
     dns['servers'] = servers;
+    final tag = (dns['tag'] ??= _dnsTag) as String;
     cfg['dns'] = dns;
+
+    _addOwnOutbounds(cfg, settings);
+    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    routing['rules'] = [
+      {'inboundTag': [tag], 'domain': names, 'outboundTag': _direct},
+      ...(routing['rules'] as List? ?? const []),
+    ];
+    cfg['routing'] = routing;
   }
 
   static const dnsInTag = 'skipit-dns-port';

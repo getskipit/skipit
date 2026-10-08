@@ -248,10 +248,29 @@ void main() {
     final xray = File('core/skipit-xray.exe');
     for (final c in [cfg, own, viaDoh]) {
       XrayConfig.addTun(c, settings: AppSettings(), apps: AppRules());
+      // IPv6 выключен — у адаптера нет IPv6-адреса и маршрута, а мимо адаптера IPv6 закрыт фильтром Windows.
+      final tun = ((c['inbounds'] as List).firstWhere((i) => i['protocol'] == 'tun') as Map)['settings'] as Map;
+      expect(tun['gateway'], ['172.19.0.1/30']);
+      expect(tun['autoSystemRoutingTable'], ['0.0.0.0/0']);
+      expect(tun['autoSystemWfpBlockLeak'], ['dns', 'misconfigtun']);
       // Имя DNS-сервера «+local» ядро узнаёт не у него самого, а у запасного DNS из того же конфига.
       if (identical(c, viaDoh)) {
         expect((c['dns'] as Map)['servers'], anyElement(equals(
             {'address': 'https://cloudflare-dns.com/dns-query', 'domains': ['full:dns.example'], 'skipFallback': true})));
+        // Пометка с такого сервера снята, а его запросы идут в выход «напрямую» — правилом, которое стоит
+        // раньше остальных правил для запросов DNS: иначе адрес по имени ядро спрашивало бы у Windows.
+        expect(jsonEncode((c['dns'] as Map)['servers']), isNot(contains('+local://dns.example')));
+        expect((c['dns'] as Map)['servers'],
+            anyElement(equals({'address': 'https://dns.example/dns-query', 'domains': ['domain:ru']})));
+        final dnsTag = (c['dns'] as Map)['tag'];
+        final dnsRules = ((c['routing'] as Map)['rules'] as List).where((r) => (r['inboundTag'] as List?)?.contains(dnsTag) ?? false);
+        expect(dnsRules.first, {
+          'inboundTag': [dnsTag],
+          'domain': ['full:dns.example'],
+          'outboundTag': 'skipit-direct',
+        });
+        expect((c['outbounds'] as List).where((o) => o['tag'] == 'skipit-direct').single['streamSettings'],
+            {'sockopt': {'domainStrategy': 'UseIPv4'}});
         // Запасного нет — тогда напрямую, как адреса VPN-серверов.
         final alone = jsonDecode(jsonEncode({
           'dns': {
