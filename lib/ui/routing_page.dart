@@ -236,18 +236,26 @@ class _DnsCardState extends State<_DnsCard> {
     // Адрес применяется, когда его закончили вводить: по Enter или уходу из поля, а не на каждую букву —
     // подключённый VPN при смене DNS переподключается.
     Widget field(TextEditingController controller, String label, String hint) => Expanded(
-          child: Tooltip(
-            message: 'Виды адресов: 1.1.1.1 или udp://… — обычный DNS, tcp://… — по TCP, '
-                'https://… — DoH, tls://… — DoT',
-            waitDuration: const Duration(milliseconds: 500),
-            child: Focus(
-              onFocusChange: (focused) {
-                if (!focused) apply();
-              },
-              child: TextField(
-                controller: controller,
-                onSubmitted: (_) => apply(),
-                decoration: InputDecoration(labelText: label, hintText: hint),
+          child: Focus(
+            onFocusChange: (focused) {
+              if (!focused) apply();
+            },
+            child: TextField(
+              controller: controller,
+              onSubmitted: (_) => apply(),
+              decoration: InputDecoration(
+                labelText: label,
+                hintText: hint,
+                // Значок «i»: подсказка показывается и по наведению, и по клику.
+                suffixIcon: Tooltip(
+                  message: 'Какие адреса можно вводить:\n'
+                      '1.1.1.1 или udp://1.1.1.1 — обычный DNS\n'
+                      'tcp://1.1.1.1 — DNS по TCP\n'
+                      'https://dns.google/dns-query — DoH\n'
+                      'tls://1.1.1.1 — DoT',
+                  triggerMode: TooltipTriggerMode.tap,
+                  child: Icon(Icons.info_outline_rounded, size: 18, color: C.muted),
+                ),
               ),
             ),
           ),
