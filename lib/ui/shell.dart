@@ -62,7 +62,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
           // остаются только «Отмена» и главное действие, а не три кнопки в ряд.
           const SizedBox(height: 14),
           Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: C.border),
@@ -75,9 +75,12 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
                 ),
               ),
               const SizedBox(width: 6),
-              TextButton(
+              // Значок и лёгкая подложка: видно, что это кнопка, а не подсвеченный текст.
+              TextButton.icon(
                 onPressed: () => Navigator.pop(ctx, _ConflictChoice.proceed),
-                child: const Text('Подключиться рядом'),
+                style: TextButton.styleFrom(backgroundColor: C.orange.withValues(alpha: 0.12)),
+                icon: const Icon(Icons.call_split_rounded, size: 18),
+                label: const Text('Подключиться рядом'),
               ),
             ]),
           ),
