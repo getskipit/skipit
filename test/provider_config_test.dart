@@ -246,6 +246,8 @@ void main() {
     final xray = File('core/skipit-xray.exe');
     for (final c in [cfg, own, viaDoh]) {
       XrayConfig.addTun(c, settings: AppSettings(), apps: AppRules());
+      // Имя DNS-сервера «+local» ядро узнаёт у запасного DNS напрямую, а не у него самого.
+      if (identical(c, viaDoh)) expect(jsonEncode((c['dns'] as Map)['servers']), contains('full:dns.example'));
       XrayConfig.addDirectInbound(c, port: 20901, hosts: ['sub.example'], settings: AppSettings());
       XrayConfig.addCheckInbound(c, port: 20902);
       XrayConfig.resolveServersInside(c, settings: AppSettings());

@@ -512,6 +512,15 @@ class XrayConfig {
     final defaultTag = (first['tag'] ??= 'proxy') as String;
     final domains = <String>{...directDomains};
     _collectAddresses(outbounds, domains);
+    // К DNS-серверу с пометкой «+local» ядро подключается само и его имя ищет своим же DNS. Без отдельной
+    // записи имя сервера спрашивалось бы у него самого: каждое новое соединение с ним ждало отказа по
+    // времени, а вместе с ним — все запросы, что стояли в очереди.
+    for (final s in ((cfg['dns'] as Map?)?['servers'] as List? ?? const [])) {
+      final address = s is Map ? s['address'] : s;
+      if (address is! String || !address.contains('+local://')) continue;
+      final host = Uri.tryParse(address)?.host ?? '';
+      if (host.isNotEmpty && InternetAddress.tryParse(host) == null) domains.add(host);
+    }
     outbounds.add(_dnsOutbound);
     cfg['outbounds'] = outbounds;
 
