@@ -345,7 +345,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
         ToastKind.success => (Icons.check_rounded, C.green),
         ToastKind.error => (Icons.priority_high_rounded, C.red),
         ToastKind.update => (Icons.arrow_downward_rounded, C.isDark ? C.orangeLight : C.orange),
-        ToastKind.info => (Icons.info_outline_rounded, C.cyan),
+        ToastKind.info => (Icons.info_rounded, C.orange),
       };
 
   void dismiss() {

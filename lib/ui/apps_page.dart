@@ -160,11 +160,11 @@ class _AppsPageState extends State<AppsPage> {
                 padding: const EdgeInsets.only(bottom: 14),
                 child: Panel(
                   child: Row(children: [
-                    Icon(Icons.info_outline_rounded, color: C.cyan),
+                    const Icon(Icons.info_rounded, color: C.orange),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text('Правила по приложениям работают в режимах «Смешанный» и TUN.',
-                          style: TextStyle(color: C.cyan)),
+                          style: TextStyle(color: C.text)),
                     ),
                     TextButton(
                       onPressed: () => state.setMode(ConnectionMode.mixed),

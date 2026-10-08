@@ -254,7 +254,7 @@ class _DnsCardState extends State<_DnsCard> {
                       'https://dns.google/dns-query — DoH\n'
                       'tls://1.1.1.1 — DoT',
                   triggerMode: TooltipTriggerMode.tap,
-                  child: Icon(Icons.info_outline_rounded, size: 18, color: C.muted),
+                  child: const Icon(Icons.info_rounded, size: 18, color: C.orange),
                 ),
               ),
             ),
