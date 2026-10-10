@@ -254,6 +254,7 @@ class XrayConfig {
             for (final s in domesticDns) {..._dnsEntry(s), 'domains': directDomains, 'skipFallback': true},
         ],
         'queryStrategy': settings.ipv6 ? 'UseIP' : 'UseIPv4',
+        ..._ownDnsOptions,
       },
       'inbounds': [
         {
@@ -279,9 +280,7 @@ class XrayConfig {
           'tag': 'direct',
           'protocol': 'freedom',
           // В Xray 26 стратегия адресов переехала из settings в sockopt (старое место объявлено устаревшим).
-          'streamSettings': {
-            'sockopt': {'domainStrategy': settings.ipv6 ? 'UseIP' : 'UseIPv4'},
-          },
+          'streamSettings': {'sockopt': _directSockopt(settings)},
         },
         {'tag': 'block', 'protocol': 'blackhole'},
       ],
@@ -336,6 +335,21 @@ class XrayConfig {
 
   static const _direct = 'skipit-direct', _block = 'skipit-block';
 
+  /// Как свой выход «напрямую» находит адрес по имени и подключается (имя приходит от программ на
+  /// прокси-портах; из адаптера соединения идут уже адресом).
+  /// Стратегия «Use…» при неудаче встроенного DNS спрашивает DNS обычной сети: в режимах с адаптером
+  /// ответа оттуда ядро ждёт секундами, а само имя уходит к роутеру открытым текстом — поэтому там
+  /// «Force…»: не нашлось имя у DNS ядра — сразу отказ. Без адаптера запасной путь безвреден и остаётся.
+  /// happyEyeballs: адреса из ответа DNS перебираются (следующий — через 250 мс), иначе ядро берёт один
+  /// наугад, и если он не отвечает, соединение просто висит.
+  static Map<String, dynamic> _directSockopt(AppSettings s) {
+    final adapter = s.mode == ConnectionMode.tun || s.mode == ConnectionMode.mixed;
+    return {
+      'domainStrategy': '${adapter ? 'Force' : 'Use'}${s.ipv6 ? 'IP' : 'IPv4'}',
+      'happyEyeballs': {'tryDelayMs': 250},
+    };
+  }
+
   /// Свои выходы «напрямую» и «блокировать»: добавляются, если их в конфиге ещё нет.
   static void _addOwnOutbounds(Map<String, dynamic> cfg, AppSettings settings) {
     final outbounds = [...(cfg['outbounds'] as List)];
@@ -344,9 +358,7 @@ class XrayConfig {
       outbounds.add({
         'tag': _direct,
         'protocol': 'freedom',
-        'streamSettings': {
-          'sockopt': {'domainStrategy': settings.ipv6 ? 'UseIP' : 'UseIPv4'},
-        },
+        'streamSettings': {'sockopt': _directSockopt(settings)},
       });
     }
     if (!has(_block)) outbounds.add({'tag': _block, 'protocol': 'blackhole'});
@@ -407,6 +419,11 @@ class XrayConfig {
     cfg['routing'] = routing;
   }
 
+  /// Для своего списка DNS (серверы профиля и «Мой DNS»; DNS из конфига провайдера не трогаем):
+  /// серверы одной очереди спрашиваются разом, а не по одному после отказа предыдущего, и на имя,
+  /// чей срок в памяти ядра вышел, сразу отдаётся прежний адрес — свежий запрашивается в фоне.
+  static const _ownDnsOptions = {'enableParallelQuery': true, 'serveStale': true};
+
   /// Тег встроенного DNS, если провайдер не дал своего: по нему запросы DNS узнаются в правилах.
   static const _dnsTag = 'skipit-dns-in';
 
@@ -426,6 +443,7 @@ class XrayConfig {
         for (final d in domestic) {..._dnsEntry(d), 'domains': directDomains, 'skipFallback': true},
     ];
     if (profile.dnsHosts.isNotEmpty) dns['hosts'] = {...?(dns['hosts'] as Map?), ...profile.dnsHosts};
+    dns.addAll(_ownDnsOptions);
     final tag = (dns['tag'] ??= _dnsTag) as String;
     cfg['dns'] = dns;
 

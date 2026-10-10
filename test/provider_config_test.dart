@@ -274,7 +274,22 @@ void main() {
           'outboundTag': 'skipit-direct',
         });
         expect((c['outbounds'] as List).where((o) => o['tag'] == 'skipit-direct').single['streamSettings'],
-            {'sockopt': {'domainStrategy': 'UseIPv4'}});
+            {
+              // С адаптером имя ищет только DNS ядра (без похода к DNS обычной сети), адреса перебираются.
+              'sockopt': {'domainStrategy': 'ForceIPv4', 'happyEyeballs': {'tryDelayMs': 250}},
+            });
+        // Свой список DNS спрашивается разом и отдаёт прежний адрес, пока обновляет его в фоне.
+        expect((c['dns'] as Map)['enableParallelQuery'], isTrue);
+        expect((c['dns'] as Map)['serveStale'], isTrue);
+        // Без адаптера запасной путь к системному DNS остаётся.
+        final ports = XrayConfig.build(
+            server: server,
+            routing: doh,
+            settings: AppSettings()
+              ..ownDns = true
+              ..mode = ConnectionMode.proxyOnly);
+        expect((ports['outbounds'] as List).firstWhere((o) => o['tag'] == 'skipit-direct')['streamSettings'],
+            {'sockopt': {'domainStrategy': 'UseIPv4', 'happyEyeballs': {'tryDelayMs': 250}}});
         // Запасного нет — тогда напрямую, как адреса VPN-серверов.
         final alone = jsonDecode(jsonEncode({
           'dns': {
