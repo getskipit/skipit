@@ -26,7 +26,8 @@ Future<void> installAppUpdate(BuildContext context) async {
       'Программа скачает установщик, затем VPN отключится, программа закроется и откроется установщик новой версии.',
       ok: 'Скачать и установить');
   if (!ok) return;
-  state.toast('Скачиваю обновление ${release.version}…', kind: ToastKind.info);
+  state.toast('Скачиваю обновление ${release.version}',
+      kind: ToastKind.update, detail: 'Сколько скачано — в строке версии внизу слева');
   String? installer;
   try {
     installer = await state.downloadAppUpdate();
@@ -370,7 +371,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 if (dir == null) return;
                 try {
                   final path = await state.makeReport(dir);
-                  state.toast('Отчёт сохранён: ${path.split(r'\').last}');
+                  state.toast('Отчёт сохранён', kind: ToastKind.success, detail: path.split(r'\').last);
                   await Process.run(AppPaths.explorer, ['/select,$path']);
                 } catch (e) {
                   state.toast('Не удалось сохранить отчёт: ${describeNetError(e)}');

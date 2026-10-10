@@ -9,6 +9,7 @@ class DiagReport {
   static const logLimit = 3 * 1024 * 1024;
 
   static const _hidden = '<VPN-сервер>';
+  static const _hiddenDomain = '<адрес провайдера>';
 
   static String _count(Object? list, String what) => '(${list is List ? list.length : 1} $what)';
 
@@ -141,12 +142,41 @@ class DiagReport {
     return out..removeWhere((a) => a == '127.0.0.1' || a == 'localhost');
   }
 
+  /// Имена серверов из конфига Xray (без адресов цифрами и без имён из настроек TLS).
+  static Set<String> _serverNames(Map<String, dynamic> cfg) {
+    final out = <String>{};
+    void walk(Object? node) {
+      if (node is Map) {
+        final a = node['address'];
+        if (a is String && RegExp(r'[a-zA-Z]').hasMatch(a) && a.contains('.')) out.add(a);
+        node.values.forEach(walk);
+      } else if (node is List) {
+        node.forEach(walk);
+      }
+    }
+
+    for (final o in (cfg['outbounds'] as List? ?? const []).whereType<Map>()) {
+      if (!const ['freedom', 'blackhole', 'dns', 'loopback'].contains(o['protocol'])) walk(o['settings']);
+    }
+    return out;
+  }
+
+  /// Домен провайдера по имени его узла: `fi.vpn.example` → `vpn.example`. По нему скрываются и соседние
+  /// имена — сайт провайдера, адрес подписки, — на которые программа и браузер ходят через тот же VPN.
+  static String domainOf(String host) {
+    final labels = host.toLowerCase().split('.');
+    if (labels.length <= 2) return labels.join('.');
+    const generic = ['co', 'com', 'net', 'org', 'gov', 'edu', 'ac'];
+    return labels.sublist(labels.length - (generic.contains(labels[labels.length - 2]) ? 3 : 2)).join('.');
+  }
+
   static final _answer = RegExp(r'-> \[([0-9a-fA-F:. ,]+)\]');
   static final _userDir = RegExp(r'\\Users\\[^\\/:*?"<>|\r\n]+', caseSensitive: false);
 
   /// Убирает из текста адреса VPN-серверов [servers] — и адреса, в которые их имена превратил DNS
-  /// (в журнале это строки «got answer: имя. … -> [адреса]»), — и имя пользователя Windows в путях.
-  static String mask(String text, Set<String> servers) {
+  /// (в журнале это строки «got answer: имя. … -> [адреса]»), — любые имена на доменах [domains]
+  /// и имя пользователя Windows в путях.
+  static String mask(String text, Set<String> servers, {Set<String> domains = const {}}) {
     final secrets = {...servers};
     if (servers.isNotEmpty) {
       for (final line in const LineSplitter().convert(text)) {
@@ -159,15 +189,22 @@ class DiagReport {
     for (final s in secrets.toList()..sort((a, b) => b.length.compareTo(a.length))) {
       text = text.replaceAll(s, _hidden);
     }
+    for (final d in domains) {
+      // Только имя целиком и его поддомены: чужое имя, которое лишь оканчивается так же, не трогаем.
+      final name = RegExp('(?<![a-z0-9.-])(?:[a-z0-9-]+\\.)*${RegExp.escape(d)}(?![a-z0-9-])', caseSensitive: false);
+      text = text.replaceAll(name, _hiddenDomain);
+    }
     return text.replaceAll(_userDir, r'\Users\<пользователь>');
   }
 
   /// Собирает отчёт. [facts] — строки «что: значение» о программе и подключении, [log] — журнал
-  /// подключения как есть; конфиги — те, с которыми ядра запускались в последний раз (или null).
+  /// подключения как есть; конфиги — те, с которыми ядра запускались в последний раз (или null);
+  /// [providerHosts] — имена из адресов подписок: их домены скрываются так же, как домены серверов.
   static String build({
     required Map<String, Object?> facts,
     Map<String, dynamic>? xray,
     Map<String, dynamic>? singbox,
+    Set<String> providerHosts = const {},
     required String log,
   }) {
     const json = JsonEncoder.withIndent('  ');
@@ -190,6 +227,10 @@ class DiagReport {
       ..writeln()
       ..writeln('=== Журнал подключения${cut ? ' (конец, последние ${logLimit ~/ (1024 * 1024)} МБ)' : ''} ===')
       ..writeln(cut ? log.substring(log.length - logLimit) : log);
-    return mask(b.toString(), servers);
+    final domains = {
+      for (final h in {...providerHosts, if (xray != null) ..._serverNames(xray)})
+        if (h.contains('.') && RegExp(r'[a-zA-Z]').hasMatch(h)) domainOf(h),
+    };
+    return mask(b.toString(), servers, domains: domains);
   }
 }

@@ -113,6 +113,31 @@ void main() {
     expect(report, contains('=== Конфиг sing-box (устройство) ===\nядро в этом запуске не запускалось'));
   });
 
+  test('отчёт: скрыты и соседние имена на домене провайдера — его сайт и адрес подписки', () {
+    expect(DiagReport.domainOf('fi.host.example'), 'host.example');
+    expect(DiagReport.domainOf('host.example'), 'host.example');
+    expect(DiagReport.domainOf('a.b.host.co.uk'), 'host.co.uk');
+    final cfg = <String, dynamic>{
+      'outbounds': [
+        {
+          'tag': 'proxy',
+          'protocol': 'vless',
+          'settings': {'address': 'fi.host.example', 'port': 443, 'id': uuid},
+        },
+      ],
+    };
+    const log = 'xray\tproxy/http: request to Method [CONNECT] Host [panel.host.example:443]\n'
+        'xray\ttunneling request to tcp:panel.host.example:443 via fi.host.example:443\n'
+        'xray\ttunneling request to tcp:pay.billing.example:443 via fi.host.example:443\n'
+        'xray\ttunneling request to tcp:site.example:443 via fi.host.example:443';
+    final report = DiagReport.build(facts: const {}, xray: cfg, providerHosts: {'sub.billing.example'}, log: log);
+    expect(report, isNot(contains('host.example')));
+    expect(report, isNot(contains('billing.example')));
+    expect(report, contains('Host [<адрес провайдера>:443]'));
+    expect(report, contains('tcp:<адрес провайдера>:443 via <VPN-сервер>:443'));
+    expect(report, contains('tcp:site.example:443 via <VPN-сервер>:443'));
+  });
+
   test('отчёт: журнал длиннее предела попадает в отчёт концом', () {
     final log = '${'начало\n' * 10}${'x' * DiagReport.logLimit}';
     final report = DiagReport.build(facts: const {}, log: log);

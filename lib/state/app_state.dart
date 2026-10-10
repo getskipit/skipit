@@ -568,6 +568,10 @@ class AppState extends ChangeNotifier {
     if (text.isEmpty) text.writeAll(log.lines.map((l) => '${l.source}\t${l.text}'), '\n');
     final server = selectedServer;
     final proxy = await WinSys.readProxy();
+    // Пока VPN подключён, в отчёт идут настройки, с которыми он подключался: выбор в окне мог уже
+    // смениться (режим и ядро применяются со следующего подключения).
+    final settings = (isConnected ? _session : null) ?? this.settings;
+    final tun = settings.mode == ConnectionMode.tun || settings.mode == ConnectionMode.mixed;
     final report = DiagReport.build(
       facts: {
         'Собран': now.toIso8601String(),
@@ -575,8 +579,8 @@ class AppState extends ChangeNotifier {
         'Windows': Platform.operatingSystemVersion,
         'Состояние': '${status.name}${linkDown ? ', связи через сервер нет' : ''}',
         'Режим': settings.mode.label,
-        'Ядро TUN': usesTun ? settings.tunCore.name : null,
-        'Kill Switch': usesTun ? (settings.killSwitch ? 'включён' : 'выключен') : null,
+        'Ядро TUN': tun ? settings.tunCore.name : null,
+        'Kill Switch': tun ? (settings.killSwitch ? 'включён' : 'выключен') : null,
         'Сервер': server == null
             ? 'не выбран'
             : XrayConfig.providerConfig(server) != null
@@ -599,6 +603,12 @@ class AppState extends ChangeNotifier {
       },
       xray: _reportXray,
       singbox: _reportSingbox,
+      // Сайт и адрес подписки провайдера — на том же домене, что и его серверы, или на своём.
+      providerHosts: {
+        for (final s in subscriptions)
+          for (final url in [s.url, s.supportUrl, s.webPageUrl])
+            if (Uri.tryParse(url ?? '')?.host case final String host when host.isNotEmpty) host,
+      },
       log: text.toString(),
     );
     await File(path).writeAsString(report, flush: true);
