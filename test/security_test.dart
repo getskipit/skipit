@@ -56,6 +56,14 @@ void main() {
     expect((tun['address'] as List).any((a) => '$a'.contains(':')), isTrue);
     final rules = (cfg['route'] as Map)['rules'] as List;
     expect(rules.any((r) => r['ip_version'] == 6 && r['action'] == 'reject'), isTrue);
+    // Пакет на собственные адреса адаптера отклоняется, а не уходит «напрямую» и обратно в адаптер по кругу;
+    // запросы DNS перехвачены раньше. И этот отказ, и запрет IPv6 стоят до правила «частные адреса — напрямую».
+    int at(bool Function(Map r) test) => rules.indexWhere((r) => test(r as Map));
+    final own = at((r) => '${r['ip_cidr']}'.contains('172.19.0.0/30') && r['action'] == 'reject');
+    final private = at((r) => r['ip_is_private'] == true);
+    expect(own, greaterThan(at((r) => r['action'] == 'hijack-dns')));
+    expect(own, lessThan(private));
+    expect(at((r) => r['ip_version'] == 6), lessThan(private));
 
     settings.ipv6 = true;
     final on = SingboxConfig.build(

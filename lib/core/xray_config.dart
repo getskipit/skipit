@@ -479,6 +479,9 @@ class XrayConfig {
   static const tunV4 = '172.19.0.1', tunV6 = 'fdfe:dcba:9876::1';
   static const _tunGateway = ['$tunV4/30', '$tunV6/126'];
 
+  /// Сети адаптера целиком: его адрес и адрес-сосед, на котором отвечает DNS.
+  static const tunNets = ['172.19.0.0/30', 'fdfe:dcba:9876::/126'];
+
   /// DNS адаптера — сосед шлюза в подсети TUN: запросы к нему попадают в адаптер, там их
   /// перехватывает правило, и отвечает встроенный DNS Xray.
   static const _tunDns = '172.19.0.2';
