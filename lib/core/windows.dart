@@ -100,10 +100,15 @@ class WinSys {
     );
   }
 
-  static Future<void> setProxy(String server) async {
+  /// Адреса, которые идут мимо системного прокси, если человек не задал свой список: этот компьютер
+  /// и локальная сеть.
+  static const defaultProxyBypass =
+      'localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.2*;172.30.*;172.31.*;192.168.*;<local>';
+
+  /// [bypass] — свой список исключений (пусто — стандартный).
+  static Future<void> setProxy(String server, {String bypass = ''}) async {
     await _regSet(_internetSettingsKey, 'ProxyServer', 'REG_SZ', server);
-    await _regSet(_internetSettingsKey, 'ProxyOverride', 'REG_SZ',
-        'localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.2*;172.30.*;172.31.*;192.168.*;<local>');
+    await _regSet(_internetSettingsKey, 'ProxyOverride', 'REG_SZ', bypass.isEmpty ? defaultProxyBypass : bypass);
     await _regSet(_internetSettingsKey, 'ProxyEnable', 'REG_DWORD', '1');
     _refreshInternetSettings();
   }

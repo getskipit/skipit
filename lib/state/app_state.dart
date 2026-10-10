@@ -12,6 +12,7 @@ import '../core/link_parser.dart';
 import '../core/net.dart';
 import '../core/paths.dart';
 import '../core/ping.dart';
+import '../core/report.dart';
 import '../core/singbox_config.dart';
 import '../core/tray.dart';
 import '../core/updates.dart';
@@ -542,6 +543,66 @@ class AppState extends ChangeNotifier {
       ..remove('lastSingboxPid');
     await File(path).writeAsString(const JsonEncoder.withIndent('  ').convert({'skipitExport': 1, ...data}), flush: true);
     log.add('app', 'Настройки сохранены в файл экспорта');
+    return path;
+  }
+
+  /// Конфиги, с которыми ядра запускались в последний раз, — только в памяти, для отчёта.
+  Map<String, dynamic>? _reportXray, _reportSingbox;
+
+  /// Собирает отчёт для разбора (см. [DiagReport]) в файл в папке [dir] и возвращает путь к нему.
+  /// В отчёте журнал текущего подключения, а без него — последнего из сохранённых.
+  Future<String> makeReport(String dir) async {
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final path = '$dir\\${AppPaths.appName} — отчёт ${now.year}-${two(now.month)}-${two(now.day)} '
+        '${two(now.hour)}-${two(now.minute)}.txt';
+    var session = log.current;
+    if (session?.connection != true) session = log.sessions.where((s) => s.connection).lastOrNull ?? session;
+    final text = StringBuffer();
+    for (final f in session?.files ?? const <File>[]) {
+      try {
+        text.write(await f.readAsString());
+      } catch (_) {}
+    }
+    // Журнал без папки на диске (так работают тесты) живёт только в памяти.
+    if (text.isEmpty) text.writeAll(log.lines.map((l) => '${l.source}\t${l.text}'), '\n');
+    final server = selectedServer;
+    final proxy = await WinSys.readProxy();
+    final report = DiagReport.build(
+      facts: {
+        'Собран': now.toIso8601String(),
+        'Версия': '$appVersion${AppPaths.isDev ? ' (тестовая копия)' : ''}',
+        'Windows': Platform.operatingSystemVersion,
+        'Состояние': '${status.name}${linkDown ? ', связи через сервер нет' : ''}',
+        'Режим': settings.mode.label,
+        'Ядро TUN': usesTun ? settings.tunCore.name : null,
+        'Kill Switch': usesTun ? (settings.killSwitch ? 'включён' : 'выключен') : null,
+        'Сервер': server == null
+            ? 'не выбран'
+            : XrayConfig.providerConfig(server) != null
+                ? 'конфиг провайдера'
+                : server.protocolLabel,
+        'Страна выхода': exitCountry,
+        'Свои правила': XrayConfig.hasOwnRules(selectedRouting) ? 'есть' : 'нет',
+        'Мой DNS': settings.ownDns ? 'включён' : 'выключен',
+        'Правила по программам': '${appRules.mode.name}, в списке ${appRules.enabledMatches.length}',
+        'IPv6': settings.ipv6 ? 'включён' : 'выключен',
+        'Сниффинг': settings.sniffing ? 'включён' : 'выключен',
+        'MTU': settings.mtu,
+        'Пароль на порты': settings.portAuth ? 'включён' : 'выключен',
+        'Уровень логов': settings.logLevel,
+        'Подписок': subscriptions.length,
+        'Системный прокси Windows': proxy.enabled ? 'включён, ${proxy.server}' : 'выключен',
+        'Исключения прокси': proxy.override.isEmpty ? null : proxy.override,
+        'Маршрут по умолчанию через адаптер': WinSys.tunnelOnDefaultRoute(),
+        'Журнал': session == null ? 'нет' : '${session.id}, ${session.detail}',
+      },
+      xray: _reportXray,
+      singbox: _reportSingbox,
+      log: text.toString(),
+    );
+    await File(path).writeAsString(report, flush: true);
+    log.add('app', 'Отчёт для разбора сохранён в файл');
     return path;
   }
 
@@ -1415,6 +1476,8 @@ class AppState extends ChangeNotifier {
       // Конфиг с адресами и ключами серверов ядро получает напрямую, а не из файла на диске.
       final configText = const JsonEncoder.withIndent('  ').convert(config);
       await _debugCopy(AppPaths.configFile, configText);
+      _reportXray = config;
+      _reportSingbox = null;
       _checkCancel();
       // Kill Switch ставится до запуска ядер: с этой минуты мимо VPN ничего не выходит.
       if (usesTun && settings.killSwitch) {
@@ -1471,6 +1534,7 @@ class AppState extends ChangeNotifier {
             xrayDnsPort: dnsPort);
         final tunText = const JsonEncoder.withIndent('  ').convert(tun);
         await _debugCopy(AppPaths.tunConfigFile, tunText);
+        _reportSingbox = tun;
         final logStart = log.lines.length;
         _checkCancel();
         await _singbox.start(AppPaths.singboxExe, ['run', '-c', 'stdin'], input: tunText);
@@ -1494,7 +1558,7 @@ class AppState extends ChangeNotifier {
       _checkCancel();
       if (settings.mode == ConnectionMode.systemProxy || settings.mode == ConnectionMode.mixed) {
         if (!settings.systemProxyActive) settings.previousProxy = await WinSys.readProxy();
-        await WinSys.setProxy('127.0.0.1:${session.httpPort}');
+        await WinSys.setProxy('127.0.0.1:${session.httpPort}', bypass: settings.proxyBypass);
         settings.systemProxyActive = true;
       }
       await saveNow();

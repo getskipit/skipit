@@ -83,6 +83,9 @@ class AppSettings {
   /// User-Agent по умолчанию несёт версию программы: провайдер видит, каким SkipIt пользуется клиент.
   static const defaultUserAgent = 'SkipIt/$appVersion';
   String userAgent = defaultUserAgent;
+
+  /// Свой список исключений системного прокси (ProxyOverride в Windows). Пусто — стандартный список.
+  String proxyBypass = '';
   bool sendHwid = true;
   String hwid = newId();
   bool updateSubsOnStart = true;
@@ -147,6 +150,7 @@ class AppSettings {
         'pingType': pingType.name,
         'logLevel': logLevel,
         'userAgent': userAgent,
+        'proxyBypass': proxyBypass,
         'sendHwid': sendHwid,
         'hwid': hwid,
         'updateSubsOnStart': updateSubsOnStart,
@@ -201,6 +205,7 @@ class AppSettings {
     s.logLevel = j['logLevel'] as String? ?? s.logLevel;
     // Сохранённое значение вида «SkipIt/<версия>» — это прежнее значение по умолчанию, а не выбор
     // пользователя: после обновления программы версия в нём должна обновиться сама.
+    s.proxyBypass = (j['proxyBypass'] as String? ?? '').trim();
     final ua = (j['userAgent'] as String? ?? '').trim();
     s.userAgent = ua.isEmpty || RegExp(r'^SkipIt/[\w.]+$').hasMatch(ua) ? defaultUserAgent : ua;
     s.sendHwid = parseBool(j['sendHwid'], s.sendHwid);

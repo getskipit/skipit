@@ -265,6 +265,13 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           text('Адрес для проверки', 'Должен отвечать быстро (204)', s.testUrl, (v) => s.testUrl = v),
+          text(
+              'Исключения системного прокси',
+              'Адреса через «;», которые идут мимо прокси в режимах «Смешанный» и «Прокси». '
+                  'Пустое поле — стандартный список',
+              s.proxyBypass.isEmpty ? WinSys.defaultProxyBypass : s.proxyBypass,
+              // Стандартный список не сохраняем: если он изменится в новой версии, человек получит новый.
+              (v) => s.proxyBypass = v == WinSys.defaultProxyBypass ? '' : v),
           _Row(
             title: 'User-Agent',
             subtitle: 'Некоторые панели отдают разный формат по User-Agent',
@@ -342,6 +349,34 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
             ]),
+          ),
+          _Row(
+            title: 'Отчёт для разбора',
+            subtitle: 'Если что-то не работает: версия, настройки и журнал последнего подключения одним файлом — '
+                'без ключей, ссылок подписок и адресов VPN-серверов',
+            trailing: GhostButton(
+              label: 'Собрать',
+              icon: Icons.summarize_rounded,
+              onPressed: () async {
+                final ok = await confirm(
+                    context,
+                    'Собрать отчёт?',
+                    'В журнале есть адреса сайтов, которые открывались при этом подключении '
+                        '(на уровнях логов info и debug — все). Ключи, ссылки подписок и адреса VPN-серверов '
+                        'в отчёт не попадают. Отправляйте файл только тому, кому доверяете.',
+                    ok: 'Собрать');
+                if (!ok) return;
+                final dir = await WinSys.pickFolder();
+                if (dir == null) return;
+                try {
+                  final path = await state.makeReport(dir);
+                  state.toast('Отчёт сохранён: ${path.split(r'\').last}');
+                  await Process.run(AppPaths.explorer, ['/select,$path']);
+                } catch (e) {
+                  state.toast('Не удалось сохранить отчёт: ${describeNetError(e)}');
+                }
+              },
+            ),
           ),
           _Row(
             title: 'Версия SkipIt',
@@ -502,11 +537,13 @@ const _keywords = <String, String>{
   'MTU TUN-адаптера': 'mtu пакет адаптер',
   'Уровень логов': 'журнал логи отладка debug info warning подробность',
   'Адрес для проверки': 'пинг задержка url ссылка тест',
+  'Исключения системного прокси': 'proxy bypass обход мимо исключить localhost локальные адреса',
   'User-Agent': 'ua юзер агент заголовок подписка',
   'Отправлять HWID': 'устройство идентификатор лимит',
   'HWID устройства': 'идентификатор устройство скопировать',
   'Папка данных': 'файлы логи журнал открыть',
   'Перенос настроек': 'экспорт импорт резервная копия бэкап backup сохранить перенести',
+  'Отчёт для разбора': 'диагностика поддержка проблема не работает журнал логи отправить report',
   'Версия SkipIt': 'обновление обновить update новая версия',
   'Канал обновлений': 'бета beta стабильный обновление',
   'Ядра': 'xray sing-box версия ядро',
