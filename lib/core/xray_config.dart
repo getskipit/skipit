@@ -476,15 +476,16 @@ class XrayConfig {
 
   /// Адреса TUN-адаптера (одни и те же с обоими ядрами). По ним же Kill Switch узнаёт соединения,
   /// идущие через адаптер.
-  static const tunV4 = '172.19.0.1', tunV6 = 'fdfe:dcba:9876::1';
+  static const _tunNet4 = '172.19.0', _tunNet6 = 'fdfe:dcba:9876:';
+  static const tunV4 = '$_tunNet4.1', tunV6 = '$_tunNet6:1';
   static const _tunGateway = ['$tunV4/30', '$tunV6/126'];
 
   /// Сети адаптера целиком: его адрес и адрес-сосед, на котором отвечает DNS.
-  static const tunNets = ['172.19.0.0/30', 'fdfe:dcba:9876::/126'];
+  static const tunNets = ['$_tunNet4.0/30', '$_tunNet6:/126'];
 
   /// DNS адаптера — сосед шлюза в подсети TUN: запросы к нему попадают в адаптер, там их
   /// перехватывает правило, и отвечает встроенный DNS Xray.
-  static const _tunDns = '172.19.0.2';
+  static const _tunDns = '$_tunNet4.2';
 
   /// DNS, у которых ядро напрямую узнаёт адреса VPN-серверов (спросить их через VPN до подключения
   /// невозможно) и DNS-серверов «+local», когда в конфиге нет запасного. По умолчанию — 1.1.1.1 и

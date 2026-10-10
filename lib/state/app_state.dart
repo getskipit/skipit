@@ -546,8 +546,21 @@ class AppState extends ChangeNotifier {
     return path;
   }
 
-  /// Конфиги, с которыми ядра запускались в последний раз, — только в памяти, для отчёта.
+  /// Конфиги, с которыми ядра запускались в последний раз, и сведения о том подключении — только в
+  /// памяти, для отчёта.
   Map<String, dynamic>? _reportXray, _reportSingbox;
+  Map<String, Object?>? _reportConn;
+
+  /// Что в отчёте сказано о сервере и правилах: при подключённом VPN — те, с которыми он подключался.
+  Map<String, Object?> _connFacts(ServerProfile? server, RoutingProfile routing) => {
+        'Сервер': server == null
+            ? 'не выбран'
+            : XrayConfig.providerConfig(server) != null
+                ? 'конфиг провайдера'
+                : server.protocolLabel,
+        'Свои правила': XrayConfig.hasOwnRules(routing) ? 'есть' : 'нет',
+        'Правила по программам': '${appRules.mode.name}, в списке ${appRules.enabledMatches.length}',
+      };
 
   /// Собирает отчёт для разбора (см. [DiagReport]) в файл в папке [dir] и возвращает путь к нему.
   /// В отчёте журнал текущего подключения, а без него — последнего из сохранённых.
@@ -558,30 +571,32 @@ class AppState extends ChangeNotifier {
         '${two(now.hour)}-${two(now.minute)}.txt';
     var session = log.current;
     if (session?.connection != true) session = log.sessions.where((s) => s.connection).lastOrNull ?? session;
-    final text = StringBuffer();
-    for (final f in session?.files ?? const <File>[]) {
-      try {
-        text.write(await f.readAsString());
-      } catch (_) {}
-    }
+    var journal = await DiagReport.readLog(session?.files ?? const []);
     // Журнал без папки на диске (так работают тесты) живёт только в памяти.
-    if (text.isEmpty) text.writeAll(log.lines.map((l) => '${l.source}\t${l.text}'), '\n');
-    final server = selectedServer;
+    if (journal.tail.isEmpty) {
+      journal = (head: '', tail: log.lines.map((l) => '${l.source}\t${l.text}').join('\n'), cut: false);
+    }
     final proxy = await WinSys.readProxy();
     // Пока VPN подключён, в отчёт идут настройки, с которыми он подключался: выбор в окне мог уже
-    // смениться (режим и ядро применяются со следующего подключения).
-    final settings = (isConnected ? _session : null) ?? this.settings;
+    // смениться (режим, ядро, профиль правил применяются со следующего подключения).
+    final connected = isConnected;
+    final settings = (connected ? _session : null) ?? this.settings;
     final tun = settings.mode == ConnectionMode.tun || settings.mode == ConnectionMode.mixed;
+    // На уровне warning ответов DNS в журнале нет, а в ошибках подключения адрес сервера бывает —
+    // узнаём, во что имена серверов превращаются сейчас. Только пока весь трафик идёт через свой
+    // адаптер: тогда вопрос уходит DNS ядра, а не DNS обычной сети, которому имя сервера знать незачем.
     final serverIps = <String>{};
-    await Future.wait([
-      for (final name in _reportXray == null ? const <String>{} : DiagReport.serverNames(_reportXray!))
-        () async {
-          try {
-            final found = await InternetAddress.lookup(name).timeout(const Duration(seconds: 2));
-            serverIps.addAll(found.map((a) => a.address));
-          } catch (_) {}
-        }(),
-    ]);
+    if (connected && _reportXray != null && WinSys.ownTunActive()) {
+      await Future.wait([
+        for (final name in DiagReport.serverNames(_reportXray!))
+          () async {
+            try {
+              final found = await InternetAddress.lookup(name).timeout(const Duration(seconds: 2));
+              serverIps.addAll(found.map((a) => a.address));
+            } catch (_) {}
+          }(),
+      ]);
+    }
     final report = DiagReport.build(
       facts: {
         'Собран': now.toIso8601String(),
@@ -591,15 +606,9 @@ class AppState extends ChangeNotifier {
         'Режим': settings.mode.label,
         'Ядро TUN': tun ? settings.tunCore.name : null,
         'Kill Switch': tun ? (settings.killSwitch ? 'включён' : 'выключен') : null,
-        'Сервер': server == null
-            ? 'не выбран'
-            : XrayConfig.providerConfig(server) != null
-                ? 'конфиг провайдера'
-                : server.protocolLabel,
+        ...(connected ? _reportConn : null) ?? _connFacts(selectedServer, selectedRouting),
         'Страна выхода': exitCountry,
-        'Свои правила': XrayConfig.hasOwnRules(selectedRouting) ? 'есть' : 'нет',
         'Мой DNS': settings.ownDns ? 'включён' : 'выключен',
-        'Правила по программам': '${appRules.mode.name}, в списке ${appRules.enabledMatches.length}',
         'IPv6': settings.ipv6 ? 'включён' : 'выключен',
         'Сниффинг': settings.sniffing ? 'включён' : 'выключен',
         'MTU': settings.mtu,
@@ -614,13 +623,15 @@ class AppState extends ChangeNotifier {
       xray: _reportXray,
       singbox: _reportSingbox,
       serverIps: serverIps,
-      // Сайт и адрес подписки провайдера — на том же домене, что и его серверы, или на своём.
+      // Адрес подписки провайдера — на том же домене, что и его серверы, или на своём. Ссылки на
+      // поддержку и сайт сюда не идут: они часто ведут в мессенджер, и скрылся бы весь его домен.
       providerHosts: {
         for (final s in subscriptions)
-          for (final url in [s.url, s.supportUrl, s.webPageUrl])
-            if (Uri.tryParse(url ?? '')?.host case final String host when host.isNotEmpty) host,
+          if (Uri.tryParse(s.url)?.host case final String host when host.isNotEmpty) host,
       },
-      log: text.toString(),
+      log: journal.tail,
+      logStart: journal.head,
+      logCut: journal.cut,
     );
     await File(path).writeAsString(report, flush: true);
     log.add('app', 'Отчёт для разбора сохранён в файл');
@@ -1499,6 +1510,7 @@ class AppState extends ChangeNotifier {
       await _debugCopy(AppPaths.configFile, configText);
       _reportXray = config;
       _reportSingbox = null;
+      _reportConn = _connFacts(server, routing);
       _checkCancel();
       // Kill Switch ставится до запуска ядер: с этой минуты мимо VPN ничего не выходит.
       if (usesTun && settings.killSwitch) {
