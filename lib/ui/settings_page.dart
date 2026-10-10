@@ -372,7 +372,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 try {
                   final path = await state.makeReport(dir);
                   state.toast('Отчёт сохранён', kind: ToastKind.success, detail: path.split(r'\').last);
-                  await Process.run(AppPaths.explorer, ['/select,$path']);
                 } catch (e) {
                   state.toast('Не удалось сохранить отчёт: ${describeNetError(e)}');
                 }
