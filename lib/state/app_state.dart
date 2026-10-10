@@ -572,6 +572,16 @@ class AppState extends ChangeNotifier {
     // смениться (режим и ядро применяются со следующего подключения).
     final settings = (isConnected ? _session : null) ?? this.settings;
     final tun = settings.mode == ConnectionMode.tun || settings.mode == ConnectionMode.mixed;
+    final serverIps = <String>{};
+    await Future.wait([
+      for (final name in _reportXray == null ? const <String>{} : DiagReport.serverNames(_reportXray!))
+        () async {
+          try {
+            final found = await InternetAddress.lookup(name).timeout(const Duration(seconds: 2));
+            serverIps.addAll(found.map((a) => a.address));
+          } catch (_) {}
+        }(),
+    ]);
     final report = DiagReport.build(
       facts: {
         'Собран': now.toIso8601String(),
@@ -603,6 +613,7 @@ class AppState extends ChangeNotifier {
       },
       xray: _reportXray,
       singbox: _reportSingbox,
+      serverIps: serverIps,
       // Сайт и адрес подписки провайдера — на том же домене, что и его серверы, или на своём.
       providerHosts: {
         for (final s in subscriptions)

@@ -136,6 +136,12 @@ void main() {
     expect(report, contains('Host [<адрес провайдера>:443]'));
     expect(report, contains('tcp:<адрес провайдера>:443 via <VPN-сервер>:443'));
     expect(report, contains('tcp:site.example:443 via <VPN-сервер>:443'));
+
+    // На уровне warning ответов DNS в журнале нет — адрес сервера из ошибки скрывается по готовому списку.
+    final quiet = DiagReport.build(
+        facts: const {}, xray: cfg, serverIps: {'203.0.113.40'}, log: 'xray\tfailed to dial > dial tcp 203.0.113.40:443: i/o timeout');
+    expect(quiet, isNot(contains('203.0.113.40')));
+    expect(quiet, contains('dial tcp <VPN-сервер>:443'));
   });
 
   test('отчёт: журнал длиннее предела попадает в отчёт концом', () {

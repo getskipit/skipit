@@ -143,7 +143,7 @@ class DiagReport {
   }
 
   /// Имена серверов из конфига Xray (без адресов цифрами и без имён из настроек TLS).
-  static Set<String> _serverNames(Map<String, dynamic> cfg) {
+  static Set<String> serverNames(Map<String, dynamic> cfg) {
     final out = <String>{};
     void walk(Object? node) {
       if (node is Map) {
@@ -199,16 +199,19 @@ class DiagReport {
 
   /// Собирает отчёт. [facts] — строки «что: значение» о программе и подключении, [log] — журнал
   /// подключения как есть; конфиги — те, с которыми ядра запускались в последний раз (или null);
-  /// [providerHosts] — имена из адресов подписок: их домены скрываются так же, как домены серверов.
+  /// [providerHosts] — имена из адресов подписок: их домены скрываются так же, как домены серверов;
+  /// [serverIps] — адреса, в которые имена серверов превращаются сейчас (в журнале уровня warning нет
+  /// строк с ответами DNS, по которым их находит [mask], а в ошибках подключения адрес сервера бывает).
   static String build({
     required Map<String, Object?> facts,
     Map<String, dynamic>? xray,
     Map<String, dynamic>? singbox,
     Set<String> providerHosts = const {},
+    Set<String> serverIps = const {},
     required String log,
   }) {
     const json = JsonEncoder.withIndent('  ');
-    final servers = xray == null ? <String>{} : serverAddresses(xray);
+    final servers = {if (xray != null) ...serverAddresses(xray), ...serverIps};
     final cut = log.length > logLimit;
     final b = StringBuffer()
       ..writeln('Отчёт SkipIt для разбора')
@@ -228,7 +231,7 @@ class DiagReport {
       ..writeln('=== Журнал подключения${cut ? ' (конец, последние ${logLimit ~/ (1024 * 1024)} МБ)' : ''} ===')
       ..writeln(cut ? log.substring(log.length - logLimit) : log);
     final domains = {
-      for (final h in {...providerHosts, if (xray != null) ..._serverNames(xray)})
+      for (final h in {...providerHosts, if (xray != null) ...serverNames(xray)})
         if (h.contains('.') && RegExp(r'[a-zA-Z]').hasMatch(h)) domainOf(h),
     };
     return mask(b.toString(), servers, domains: domains);
