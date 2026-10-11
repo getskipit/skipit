@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/dns_check.dart';
+import '../core/log_store.dart';
 import '../core/site_check.dart';
 import '../core/xray_config.dart';
 import '../models/routing.dart';
@@ -393,11 +394,21 @@ class _SiteCardState extends State<_SiteCard> {
     if (host != null) widget.state.checkSite(host);
   }
 
-  Widget _row(String name, String value) => Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 200, child: Text(name, style: TextStyle(color: C.muted, fontSize: 12.5))),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 12.5))),
+  /// Плитка с одним замером: подпись, значение и, если есть, адрес под ним.
+  Widget _metric(String name, String value, {String? address, Color? color}) => Container(
+        constraints: const BoxConstraints(minWidth: 128),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: C.surface2,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: C.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(name, style: TextStyle(color: C.muted, fontSize: 11)),
+          const SizedBox(height: 2),
+          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+          if (address != null)
+            Text(address, style: TextStyle(color: C.muted, fontSize: 11, fontFamily: 'Consolas')),
         ]),
       );
 
@@ -408,15 +419,18 @@ class _SiteCardState extends State<_SiteCard> {
       SiteNoteKind.warn => (Icons.error_rounded, C.orange),
       SiteNoteKind.bad => (Icons.error_rounded, C.red),
     };
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
+    // Вывод — плашкой своего цвета: зелёная «всё в порядке», оранжевая «причина», красная «не открылся».
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: note.kind == SiteNoteKind.info ? 0.06 : 0.10),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 16, color: color)),
         const SizedBox(width: 10),
-        Expanded(
-          child: Text(note.text,
-              style: TextStyle(fontSize: 12.5, color: note.kind == SiteNoteKind.info ? C.muted : null)),
-        ),
+        Expanded(child: Text(note.text, style: const TextStyle(fontSize: 12.5))),
       ]),
     );
   }
@@ -459,24 +473,48 @@ class _SiteCardState extends State<_SiteCard> {
         ]),
         if (_wrong || !state.isConnected) ...[
           const SizedBox(height: 8),
-          Text(_wrong ? 'Впишите адрес сайта, например example.com' : 'Проверка работает, пока VPN подключён',
+          Text(_wrong ? 'Впишите адрес сайта, например example.com' : 'Чтобы проверить сайт, сначала подключитесь к VPN',
               style: TextStyle(color: _wrong ? C.orange : C.muted, fontSize: 12)),
         ],
         if (r != null) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           Row(children: [
-            Expanded(child: Text(r.host, style: const TextStyle(fontFamily: 'Consolas', fontSize: 12.5))),
-            if (!r.done) const Spinner(size: 16),
+            Flexible(
+              child: Text(r.host,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(width: 10),
+            if (r.done)
+              Tag(r.path,
+                  color: switch (r.route) {
+                    ConnRoute.proxy => C.orange,
+                    ConnRoute.direct => C.green,
+                    ConnRoute.block => C.red,
+                    _ => null,
+                  })
+            else ...[
+              const Spinner(size: 14),
+              const SizedBox(width: 8),
+              Text('проверяется…', style: TextStyle(color: C.muted, fontSize: 12)),
+            ],
           ]),
           if (r.done) ...[
-            _row('Путь', r.path),
-            _row('Соединение этим путём',
-                r.firstMs == null ? 'не открылось' : '${ms(r.firstMs)}, повторное ${ms(r.warmMs)}'),
-            if (r.firstMs != null) _row('Ответ сайта', ms(r.replyMs)),
-            if (r.vpnBaseMs != null) _row('Проверочный адрес через VPN', ms(r.vpnBaseMs)),
-            if (r.address != null) _row('Адрес от DNS ядра', '${r.address} — мимо VPN ${ms(r.addressMs)}'),
-            if (r.otherAddress != null)
-              _row('Адрес от независимого DNS', '${r.otherAddress} — мимо VPN ${ms(r.otherMs)}'),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              if (r.firstMs == null)
+                _metric('Соединение', 'не открылось', color: C.red)
+              else ...[
+                _metric('Первое соединение', ms(r.firstMs)),
+                _metric('Повторное', ms(r.warmMs)),
+                _metric('Ответ сайта', ms(r.replyMs)),
+              ],
+              if (r.vpnBaseMs != null) _metric('Проверочный адрес через VPN', ms(r.vpnBaseMs)),
+              if (r.address != null) _metric('Адрес от DNS ядра, мимо VPN', ms(r.addressMs), address: r.address),
+              if (r.otherAddress != null)
+                _metric('Адрес от независимого DNS, мимо VPN', ms(r.otherMs), address: r.otherAddress),
+            ]),
             for (final note in r.notes) _note(note),
           ],
         ],
