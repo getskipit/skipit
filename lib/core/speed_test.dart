@@ -8,14 +8,14 @@ import 'site_check.dart';
 typedef SpeedResult = ({double? mbit, String? error});
 typedef SpeedProgress = void Function(double mbit, double done);
 
-/// Замер скорости скачивания: один и тот же файл через VPN и мимо него.
+/// Замер скорости скачивания: один и тот же файл через VPN и напрямую.
 class SpeedReport {
   bool done = false;
 
   /// Что идёт сейчас — для подписи у кнопки.
   String stage = '';
 
-  /// Какой путь меряется сейчас: 0 — через VPN, 1 — мимо VPN; null — замер не идёт.
+  /// Какой путь меряется сейчас: 0 — через VPN, 1 — напрямую; null — замер не идёт.
   int? running;
 
   /// Какая часть времени замера этого пути прошла, от 0 до 1.
@@ -36,26 +36,26 @@ class SpeedReport {
     if (vpn == null) {
       add(SiteNoteKind.bad, 'Через VPN замер не удался${vpnError == null ? '' : ': $vpnError'}');
     } else if (direct == null) {
-      add(SiteNoteKind.info, 'Через VPN — ${show(vpn)}. Мимо VPN не измерялось${directError == null ? '' : ': $directError'}');
+      add(SiteNoteKind.info, 'Через VPN — ${show(vpn)}. Напрямую не измерялось${directError == null ? '' : ': $directError'}');
     } else if (vpn * 2 < direct) {
       add(SiteNoteKind.warn,
-          'Через VPN скорость меньше половины той, что мимо него (${show(vpn)} против ${show(direct)}): '
+          'Через VPN скорость меньше половины той, что напрямую (${show(vpn)} против ${show(direct)}): '
           'её ограничивает VPN-сервер или путь до него');
     } else {
-      add(SiteNoteKind.ok, 'VPN скорость заметно не режет: ${show(vpn)} против ${show(direct)} мимо него');
+      add(SiteNoteKind.ok, 'VPN скорость заметно не режет: ${show(vpn)} против ${show(direct)} напрямую');
     }
     return found;
   }
 
   String get copyText => [
         'Скорость скачивания — через VPN: ${vpnMbit == null ? (vpnError ?? '—') : show(vpnMbit)}; '
-            'мимо VPN: ${directMbit == null ? (directError ?? '—') : show(directMbit)}',
+            'напрямую: ${directMbit == null ? (directError ?? '—') : show(directMbit)}',
         for (final n in notes) '  • ${n.text}',
       ].join('\n');
 }
 
 /// Замер скорости: несколько секунд качается проверочный файл, скачанное никуда не сохраняется.
-/// Через VPN — через вход проверки связи ядра (он всегда ведёт через VPN-сервер), мимо VPN — через
+/// Через VPN — через вход проверки связи ядра (он всегда ведёт через VPN-сервер), напрямую — через
 /// настоящую сетевую карту. Файл и сервер одни и те же, так что разница — это сам VPN.
 class SpeedTest {
   /// Открытый сервер замера скорости и файл на нём.
@@ -85,9 +85,19 @@ class SpeedTest {
     var total = 0;
     int? atWarmup;
     String? status;
+    // Сколько байт придёт всего (заголовки и файл) и когда пришли последние: файл может кончиться
+    // раньше срока замера, и время после него в счёт идти не должно.
+    int? fileEnd;
+    Duration? lastDataAt;
     var seenBytes = 0, seenAt = Duration.zero;
     final ticker = Timer.periodic(tick, (_) {
+      if (done.isCompleted) return;
       final now = watch.elapsed, ms = (now - seenAt).inMilliseconds;
+      // Секунду ничего не приходит, хотя файл уже шёл, — он кончился или соединение встало.
+      if (lastDataAt != null && total > 1024 * 1024 && now - lastDataAt! >= const Duration(seconds: 1)) {
+        done.complete();
+        return;
+      }
       if (ms > 0) {
         onProgress?.call((total - seenBytes) * 8 / 1000 / ms, (now.inMilliseconds / duration.inMilliseconds).clamp(0, 1).toDouble());
       }
@@ -99,11 +109,19 @@ class SpeedTest {
     tls.listen((event) {
       if (event == RawSocketEvent.read) {
         for (var chunk = tls.read(); chunk != null && chunk.isNotEmpty; chunk = tls.read()) {
-          status ??= latin1.decode(chunk.sublist(0, chunk.length < 60 ? chunk.length : 60)).split('\r\n').first;
+          if (status == null) {
+            final head = latin1.decode(chunk.sublist(0, chunk.length < 2048 ? chunk.length : 2048));
+            status = head.split('\r\n').first;
+            final end = head.indexOf('\r\n\r\n');
+            final length = RegExp(r'content-length:\s*(\d+)', caseSensitive: false).firstMatch(head)?.group(1);
+            if (end >= 0 && length != null) fileEnd = end + 4 + int.parse(length);
+          }
           total += chunk.length;
         }
+        lastDataAt = watch.elapsed;
         if (atWarmup == null && watch.elapsed >= warmup) atWarmup = total;
-        if (watch.elapsed >= duration && !done.isCompleted) done.complete();
+        final whole = fileEnd != null && total >= fileEnd!;
+        if ((whole || watch.elapsed >= duration) && !done.isCompleted) done.complete();
       } else if (event == RawSocketEvent.closed || event == RawSocketEvent.readClosed) {
         if (!done.isCompleted) done.complete();
       }
@@ -114,7 +132,7 @@ class SpeedTest {
         'Connection: close\r\n\r\n'));
     await done.future.timeout(duration + _timeout, onTimeout: () {});
     ticker.cancel();
-    final elapsed = watch.elapsed;
+    final elapsed = lastDataAt ?? watch.elapsed;
     if (status == null) return (mbit: null, error: 'сервер замера не ответил');
     if (!status!.contains(' 200')) return (mbit: null, error: 'сервер замера ответил «$status»');
     if (total < 200 * 1024) return (mbit: null, error: 'сервер замера не отдал файл');
@@ -156,7 +174,7 @@ class SpeedTest {
     }
   }
 
-  /// Мимо VPN: соединение с адресом [address] сервера замера через сетевую карту с адресом [source]
+  /// Напрямую: соединение с адресом [address] сервера замера через сетевую карту с адресом [source]
   /// (null — обычным маршрутом: так в режимах без адаптера).
   static Future<SpeedResult> direct(InternetAddress address, InternetAddress? source,
       {SpeedProgress? onProgress}) async {

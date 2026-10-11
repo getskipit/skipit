@@ -262,7 +262,7 @@ class AppState extends ChangeNotifier {
       if (!viaVpn) report.vpnSkipped = 'в этом режиме нет адаптера VPN — такие пакеты через VPN не идут';
       // При Kill Switch всё, что идёт мимо VPN, закрыто — такой замер показал бы только потери.
       final pastVpn = viaVpn && source != null && !killSwitchOn;
-      if (viaVpn && killSwitchOn) report.directSkipped = 'включён Kill Switch — мимо VPN пакеты не выпускаются';
+      if (viaVpn && killSwitchOn) report.directSkipped = 'включён Kill Switch — напрямую пакеты не выпускаются';
       if (viaVpn && source == null) report.directSkipped = 'не нашлось сетевой карты, кроме адаптера VPN';
       final server = (await InternetAddress.lookup(LineCheck.host, type: InternetAddressType.IPv4)
               .timeout(const Duration(seconds: 4)))
@@ -316,12 +316,12 @@ class AppState extends ChangeNotifier {
       report
         ..vpnMbit = vpn.mbit
         ..vpnError = vpn.error
-        ..stage = 'мимо VPN…'
+        ..stage = 'напрямую…'
         ..running = 1
         ..progress = 0;
       notifyListeners();
       if (killSwitchOn) {
-        report.directError = 'включён Kill Switch — мимо VPN программа ничего не отправляет';
+        report.directError = 'включён Kill Switch — напрямую программа ничего не отправляет';
       } else {
         final tunnel = WinSys.tunnelOnDefaultRoute();
         final source = (await _pastVpnSources()).where((a) => a.type == InternetAddressType.IPv4).firstOrNull;
@@ -375,13 +375,13 @@ class AppState extends ChangeNotifier {
         await Future.delayed(const Duration(milliseconds: 200));
         probe.route = _dnsCheckRoute;
         log.add('app', 'Проверка DNS: ${probe.label} — ${probe.path}, ${probe.result}'
-            '${probe.reachMs == null ? '' : ', до названных адресов мимо VPN ${probe.reachMs} мс'}');
+            '${probe.reachMs == null ? '' : ', до названных адресов напрямую ${probe.reachMs} мс'}');
         notifyListeners();
       }
       DnsCheck.compare(dnsProbes);
       for (final probe in dnsProbes.where((p) => p.far)) {
         log.add('app', 'Проверка DNS: адреса от ${probe.label} заметно дальше, чем от ${probe.nearerLabel} — '
-            '${probe.reachMs} мс против ${probe.nearerMs} мс мимо VPN');
+            '${probe.reachMs} мс против ${probe.nearerMs} мс напрямую');
       }
     } finally {
       checkingDns = false;

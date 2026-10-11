@@ -27,7 +27,7 @@ void main() {
       ..otherMs = 52;
     expect(kinds(fine), [SiteNoteKind.ok]);
     expect(fine.summary, 'напрямую, соединение 180 мс, повторное 120 мс, ответ сайта 90 мс, '
-        'адрес от DNS ядра мимо VPN 55 мс, адрес от независимого DNS 52 мс');
+        'адрес от DNS ядра напрямую 55 мс, адрес от независимого DNS 52 мс');
 
     final far = report(ConnRoute.direct)
       ..firstMs = 700

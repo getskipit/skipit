@@ -43,7 +43,7 @@ class LinePath {
   String lossText() => lost == 0 ? '0 %' : '${lossPercent < 10 ? lossPercent.toStringAsFixed(1) : lossPercent.round()} %';
 }
 
-/// Стабильность связи: один и тот же поток пробных пакетов через VPN и мимо него.
+/// Стабильность связи: один и тот же поток пробных пакетов через VPN и напрямую.
 class LineReport {
   bool done = false;
 
@@ -68,36 +68,36 @@ class LineReport {
           'О ровности пути через VPN этот замер ничего не говорит');
     }
     if (direct.silent) {
-      add(SiteNoteKind.info, 'Мимо VPN ответы на пробные пакеты не пришли — этот путь остался неизмеренным');
+      add(SiteNoteKind.info, 'Напрямую ответы на пробные пакеты не пришли — этот путь остался неизмеренным');
     }
     // Почему путь не измерялся, говорим словами: в плитке причина целиком не помещается.
-    if (directSkipped != null) add(SiteNoteKind.info, 'Мимо VPN не измерялось: $directSkipped');
+    if (directSkipped != null) add(SiteNoteKind.info, 'Напрямую не измерялось: $directSkipped');
     if (vpnSkipped != null) add(SiteNoteKind.info, 'Через VPN не измерялось: $vpnSkipped');
     final vpnOk = vpn.measured && !vpn.silent, directOk = direct.measured && !direct.silent;
     if (directOk && direct.rough) {
       add(SiteNoteKind.warn,
-          'Связь неровная уже мимо VPN (${detail(direct)}): дело в вашей линии или интернет-провайдере, а не в VPN');
+          'Связь неровная и напрямую, без VPN (${detail(direct)}): дело в вашей линии или интернет-провайдере, а не в VPN');
     }
     if (vpnOk && vpn.rough) {
       if (directOk && !direct.rough) {
         add(SiteNoteKind.warn,
-            'Мимо VPN связь ровная, а через VPN — ${detail(vpn)}: неровность даёт путь до VPN-сервера или сам сервер');
+            'Напрямую связь ровная, а через VPN — ${detail(vpn)}: неровность даёт путь до VPN-сервера или сам сервер');
       } else if (!directOk) {
-        add(SiteNoteKind.warn, 'Через VPN — ${detail(vpn)}. Без замера мимо VPN не видно, чья это неровность');
+        add(SiteNoteKind.warn, 'Через VPN — ${detail(vpn)}. Без замера напрямую не видно, чья это неровность');
       }
     }
     if (!found.any((n) => n.kind == SiteNoteKind.warn) && (vpnOk || directOk)) {
       add(
           SiteNoteKind.ok,
           vpnOk && directOk
-              ? 'Связь ровная и через VPN, и мимо него'
-              : 'Связь ровная ${vpnOk ? 'через VPN' : 'мимо VPN'}; другой путь не измерялся');
+              ? 'Связь ровная и через VPN, и напрямую'
+              : 'Связь ровная ${vpnOk ? 'через VPN' : 'напрямую'}; другой путь не измерялся');
     }
     return found;
   }
 
   String get copyText => [
-        'Стабильность связи — через VPN: ${vpnSkipped ?? vpn.summary}; мимо VPN: ${directSkipped ?? direct.summary}',
+        'Стабильность связи — через VPN: ${vpnSkipped ?? vpn.summary}; напрямую: ${directSkipped ?? direct.summary}',
         for (final n in notes) '  • ${n.text}',
       ].join('\n');
 }
@@ -142,7 +142,7 @@ class LineCheck {
   }
 
   /// Замер. [server] — адрес проверочного сервера. [viaVpn] — слать ли обычным маршрутом (он ведёт в
-  /// адаптер VPN); [source] — адрес настоящей сетевой карты для пути мимо VPN, null — этот путь не
+  /// адаптер VPN); [source] — адрес настоящей сетевой карты для пути напрямую, null — этот путь не
   /// меряется. [onStart] получает порт, с которого идут пакеты через VPN, — по нему соединение находится
   /// в журнале ядра; [onTick] вызывается раз в секунду.
   static Future<void> run(

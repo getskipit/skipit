@@ -48,7 +48,7 @@ void main() {
     final fine = LineReport()
       ..vpn = even
       ..direct = even;
-    expect(fine.notes.single.text, 'Связь ровная и через VPN, и мимо него');
+    expect(fine.notes.single.text, 'Связь ровная и через VPN, и напрямую');
 
     final vpnRough = LineReport()
       ..vpn = spiky
@@ -61,18 +61,18 @@ void main() {
       ..direct = lossy;
     expect(lineRough.notes.single.text, contains('дело в вашей линии или интернет-провайдере, а не в VPN'));
 
-    // Мимо VPN не меряли (Kill Switch): неровность видна, но чья она — сказать нельзя.
+    // Напрямую не меряли (Kill Switch): неровность видна, но чья она — сказать нельзя.
     final unknown = LineReport()
       ..vpn = spiky
-      ..directSkipped = 'включён Kill Switch — мимо VPN пакеты не выпускаются';
+      ..directSkipped = 'включён Kill Switch — напрямую пакеты не выпускаются';
     expect([for (final n in unknown.notes) n.kind], [SiteNoteKind.info, SiteNoteKind.warn]);
-    expect(unknown.notes.first.text, 'Мимо VPN не измерялось: включён Kill Switch — мимо VPN пакеты не выпускаются');
+    expect(unknown.notes.first.text, 'Напрямую не измерялось: включён Kill Switch — напрямую пакеты не выпускаются');
     expect(unknown.notes.last.text, contains('не видно, чья это неровность'));
-    expect(unknown.copyText, contains('мимо VPN: включён Kill Switch'));
+    expect(unknown.copyText, contains('напрямую: включён Kill Switch'));
     // Ровная связь через VPN при Kill Switch: причина пропуска и зелёный итог.
     final guarded = LineReport()
       ..vpn = even
-      ..directSkipped = 'включён Kill Switch — мимо VPN пакеты не выпускаются';
+      ..directSkipped = 'включён Kill Switch — напрямую пакеты не выпускаются';
     expect([for (final n in guarded.notes) n.kind], [SiteNoteKind.info, SiteNoteKind.ok]);
 
     // Сервер не пропускает пробные пакеты: это не «всё потеряно», а «не измерено».
@@ -80,7 +80,7 @@ void main() {
       ..vpn = LineCheck.path(List<int?>.filled(100, null))
       ..direct = even;
     expect([for (final n in silent.notes) n.kind], [SiteNoteKind.info, SiteNoteKind.ok]);
-    expect(silent.notes.last.text, 'Связь ровная мимо VPN; другой путь не измерялся');
+    expect(silent.notes.last.text, 'Связь ровная напрямую; другой путь не измерялся');
   });
 
   test('скорость: счёт без разгона и вывод — режет ли VPN', () {
@@ -104,7 +104,7 @@ void main() {
     final onlyVpn = SpeedReport()
       ..vpnMbit = 20
       ..directError = 'включён Kill Switch';
-    expect(onlyVpn.notes.single.text, 'Через VPN — 20 Мбит/с. Мимо VPN не измерялось: включён Kill Switch');
+    expect(onlyVpn.notes.single.text, 'Через VPN — 20 Мбит/с. Напрямую не измерялось: включён Kill Switch');
     final failed = SpeedReport()..vpnError = 'нет ответа за 8 с';
     expect(failed.notes.single.kind, SiteNoteKind.bad);
   });

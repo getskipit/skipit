@@ -269,7 +269,7 @@ class _SiteCardState extends State<_SiteCard> {
           _copy(state, () => [for (final r in reports) r.copyText].join('\n')),
         const SizedBox(height: 10),
         Text(
-          'Правила по приложениям на проверку не действуют. Мимо VPN программа обращается только к сайту, '
+          'Правила по приложениям на проверку не действуют. В обход VPN программа обращается только к сайту, '
           'который и так идёт напрямую: открывает соединение с его адресом и спрашивает адрес у Google.',
           style: TextStyle(color: C.muted, fontSize: 12),
         ),
@@ -278,7 +278,7 @@ class _SiteCardState extends State<_SiteCard> {
   }
 }
 
-/// Стабильность связи: потери и всплески задержки через VPN и мимо него.
+/// Стабильность связи: потери и всплески задержки через VPN и напрямую.
 class _LineCard extends StatelessWidget {
   const _LineCard({required this.state});
   final AppState state;
@@ -302,7 +302,7 @@ class _LineCard extends StatelessWidget {
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _cardTitle(Icons.show_chart_rounded, 'Стабильность связи',
-            '${LineCheck.seconds} секунд шлём маленькие пробные пакеты через VPN и мимо него: видно, ровная ли связь и где она портится'),
+            '${LineCheck.seconds} секунд шлём маленькие пробные пакеты через VPN и напрямую: видно, ровная ли связь и где она портится'),
         const SizedBox(height: 14),
         Row(children: [
           GhostButton(
@@ -319,8 +319,8 @@ class _LineCard extends StatelessWidget {
                   : state.checkingLine
                       ? 'Идёт замер, осталось ${r?.left ?? LineCheck.seconds} с'
                       : state.killSwitchOn
-                          ? 'Включён Kill Switch: замер пойдёт только через VPN — мимо него программа ничего не отправляет'
-                          : 'Пакеты идут к ${LineCheck.host} — через VPN и мимо него',
+                          ? 'Включён Kill Switch: замер пойдёт только через VPN — напрямую программа ничего не отправляет'
+                          : 'Пакеты идут к ${LineCheck.host} — через VPN и напрямую',
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ),
@@ -330,7 +330,7 @@ class _LineCard extends StatelessWidget {
             const SizedBox(height: 12),
             Wrap(spacing: 8, runSpacing: 8, children: [
               ..._path('Через VPN', r.vpn, r.vpnSkipped),
-              ..._path('Мимо VPN', r.direct, r.directSkipped),
+              ..._path('Напрямую', r.direct, r.directSkipped),
             ]),
           ],
           for (final note in r.notes) _note(note),
@@ -341,7 +341,7 @@ class _LineCard extends StatelessWidget {
   }
 }
 
-/// Замер скорости скачивания через VPN и мимо него.
+/// Замер скорости скачивания через VPN и напрямую.
 class _SpeedCard extends StatelessWidget {
   const _SpeedCard({required this.state});
   final AppState state;
@@ -379,7 +379,10 @@ class _SpeedCard extends StatelessWidget {
         SizedBox(
           height: 34,
           width: double.infinity,
-          child: CustomPaint(painter: _SpeedBars(samples, active ? C.orange : C.orange.withValues(alpha: 0.45))),
+          // Файл может скачаться раньше срока: тогда столбики готового замера растягиваются на всю ширину.
+          child: CustomPaint(
+              painter: _SpeedBars(samples, active ? C.orange : C.orange.withValues(alpha: 0.45),
+                  active || samples.isEmpty ? SpeedTest.ticks : samples.length)),
         ),
         const SizedBox(height: 8),
         ClipRRect(
@@ -411,7 +414,7 @@ class _SpeedCard extends StatelessWidget {
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _cardTitle(Icons.downloading_rounded, 'Скорость',
-            'Несколько секунд качаем проверочный файл через VPN и мимо него — видно, режет ли VPN скорость'),
+            'Несколько секунд качаем проверочный файл через VPN и напрямую — видно, режет ли VPN скорость'),
         const SizedBox(height: 14),
         Row(children: [
           GhostButton(
@@ -437,7 +440,7 @@ class _SpeedCard extends StatelessWidget {
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
             _gauge('Через VPN', r, 0, r.vpnMbit, r.vpnSamples, r.vpnError),
-            _gauge('Мимо VPN', r, 1, r.directMbit, r.directSamples, r.directError),
+            _gauge('Напрямую', r, 1, r.directMbit, r.directSamples, r.directError),
           ]),
           if (r.done) ...[
             for (final note in r.notes) _note(note),
@@ -451,13 +454,15 @@ class _SpeedCard extends StatelessWidget {
 
 /// Столбики скорости по ходу замера: по одному на каждое сообщение замера, высота — от наибольшего.
 class _SpeedBars extends CustomPainter {
-  _SpeedBars(this.samples, this.color);
+  _SpeedBars(this.samples, this.color, this.slots);
   final List<double> samples;
   final Color color;
 
+  /// На сколько столбиков делится ширина.
+  final int slots;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final slots = SpeedTest.ticks;
     final step = size.width / slots, width = step - 2;
     final peak = samples.fold(1.0, (a, b) => a > b ? a : b);
     final paint = Paint()..color = color.withValues(alpha: 0.85);
@@ -490,7 +495,7 @@ class _DnsCheckCard extends StatelessWidget {
 
   static String _text(DnsProbe p) => [
         '${p.label} — ${_kind(p)}, ${p.path}, ${p.result}'
-            '${p.reachMs == null ? '' : ', до названных адресов мимо VPN ${p.reachMs} мс'}',
+            '${p.reachMs == null ? '' : ', до названных адресов напрямую ${p.reachMs} мс'}',
         if (p.far) '  • адреса заметно дальше, чем у ${p.nearerLabel} (${p.nearerMs} мс)',
         if (p.slow) '  • дольше, чем ядро ждёт этот сервер (${p.limitMs} мс)',
       ].join('\n');
@@ -517,12 +522,12 @@ class _DnsCheckCard extends StatelessWidget {
                 style: TextStyle(color: C.muted, fontSize: 12),
               ),
               if (p.done && p.reachMs != null)
-                Text('До адресов, которые он называет, мимо VPN — ${p.reachMs} мс',
+                Text('До адресов, которые он называет, напрямую — ${p.reachMs} мс',
                     style: TextStyle(color: C.muted, fontSize: 12)),
               if (p.done && p.far)
                 Text(
                     'Это заметно дальше, чем у ${p.nearerLabel} (${p.nearerMs} мс): сайтам и программам, '
-                    'которые идут мимо VPN, с такими адресами дольше ждать ответа',
+                    'которые идут напрямую, с такими адресами дольше ждать ответа',
                     style: const TextStyle(color: C.orange, fontSize: 12)),
               if (p.done && p.slow)
                 Text('Дольше, чем ядро ждёт этот сервер (${p.limitMs} мс): оно успевает уйти к следующему DNS',

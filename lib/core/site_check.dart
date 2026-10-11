@@ -37,11 +37,11 @@ class SiteReport {
   int? vpnSiteMs, vpnBaseMs;
 
   /// Адрес, который называет DNS ядра (только когда трафик идёт через свой адаптер), и за сколько с ним
-  /// открывается соединение мимо VPN. Меряется только у сайта, идущего напрямую.
+  /// открывается соединение напрямую. Меряется только у сайта, идущего напрямую.
   String? address;
   int? addressMs;
 
-  /// Адрес того же сайта от независимого DNS, спрошенного мимо VPN, и время до него.
+  /// Адрес того же сайта от независимого DNS, спрошенного напрямую, и время до него.
   String? otherAddress;
   int? otherMs;
 
@@ -68,7 +68,7 @@ class SiteReport {
     final warm = firstMs == null || warmMs == null ? (warmMs ?? firstMs) : (firstMs! < warmMs! ? firstMs : warmMs);
     if (warm == null) {
       add(SiteNoteKind.bad, 'Этим путём сайт не открылся${error == null ? '' : ': $error'}');
-      if (addressMs != null) add(SiteNoteKind.info, 'Сам адрес сайта при этом отвечает мимо VPN за $addressMs мс');
+      if (addressMs != null) add(SiteNoteKind.info, 'Сам адрес сайта при этом отвечает напрямую за $addressMs мс');
       return found;
     }
     // Поиск адреса — разовая задержка: дальше ядро берёт адрес из памяти, и повторная проверка её не
@@ -117,7 +117,7 @@ class SiteReport {
         path,
         if (firstMs != null) 'соединение $firstMs мс${warmMs == null ? '' : ', повторное $warmMs мс'}',
         if (replyMs != null) 'ответ сайта $replyMs мс',
-        if (addressMs != null) 'адрес от DNS ядра мимо VPN $addressMs мс',
+        if (addressMs != null) 'адрес от DNS ядра напрямую $addressMs мс',
         if (otherMs != null) 'адрес от независимого DNS $otherMs мс',
         if (vpnBaseMs != null) 'тем же путём через VPN: сайт $vpnSiteMs мс, проверочный адрес $vpnBaseMs мс',
         if (error != null) error!,
@@ -233,7 +233,7 @@ class SiteCheck {
     }
   }
 
-  /// Адрес [host] от независимого DNS (Google, по HTTPS), спрошенного мимо VPN. [sources] — адреса
+  /// Адрес [host] от независимого DNS (Google, по HTTPS), спрошенного напрямую. [sources] — адреса
   /// настоящих сетевых карт, см. [DnsCheck.reach]. Обычный запрос на порт 53 мимо адаптера закрыт
   /// защитой от утечек, поэтому вопрос идёт по HTTPS.
   static Future<InternetAddress?> askPastVpn(String host, List<InternetAddress> sources) async {
@@ -322,7 +322,7 @@ class SiteCheck {
           }
         }
       }
-      // Мимо VPN идём только к сайту, который и так идёт напрямую: адрес сайта, идущего через VPN,
+      // Напрямую идём только к сайту, который и так идёт напрямую: адрес сайта, идущего через VPN,
       // интернет-провайдеру показывать незачем.
       if (report.route == ConnRoute.direct && ownTun) {
         try {
