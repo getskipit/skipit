@@ -319,7 +319,7 @@ class _DnsCardState extends State<_DnsCard> {
               state.isConnected
                   ? 'Спросим каждый DNS-сервер подключения: за сколько он отвечает, каким путём идёт запрос '
                       'и далеко ли адреса, которые он называет'
-                  : 'Проверка работает, пока VPN подключён',
+                  : 'Чтобы проверить DNS, сначала подключитесь к VPN',
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ),
