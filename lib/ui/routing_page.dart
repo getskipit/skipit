@@ -313,7 +313,8 @@ class _DnsCardState extends State<_DnsCard> {
           Expanded(
             child: Text(
               state.isConnected
-                  ? 'Спросим каждый DNS-сервер подключения: за сколько он отвечает и каким путём идёт запрос'
+                  ? 'Спросим каждый DNS-сервер подключения: за сколько он отвечает, каким путём идёт запрос '
+                      'и далеко ли адреса, которые он называет'
                   : 'Проверка работает, пока VPN подключён',
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
@@ -332,7 +333,7 @@ class _DnsCardState extends State<_DnsCard> {
             child: !p.done
                 ? const Spinner(size: 16)
                 : Icon(p.ok ? Icons.check_circle_rounded : Icons.error_rounded,
-                    size: 16, color: !p.ok ? C.red : (p.slow ? C.orange : C.green)),
+                    size: 16, color: !p.ok ? C.red : (p.slow || p.far ? C.orange : C.green)),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -347,6 +348,14 @@ class _DnsCardState extends State<_DnsCard> {
                 ].join(' · '),
                 style: TextStyle(color: C.muted, fontSize: 12),
               ),
+              if (p.done && p.reachMs != null)
+                Text('До адресов, которые он называет, мимо VPN — ${p.reachMs} мс',
+                    style: TextStyle(color: C.muted, fontSize: 12)),
+              if (p.done && p.far)
+                Text(
+                    'Это заметно дальше, чем у ${p.nearerLabel} (${p.nearerMs} мс): сайтам и программам, '
+                    'которые идут мимо VPN, с такими адресами дольше ждать ответа',
+                    style: const TextStyle(color: C.orange, fontSize: 12)),
               if (p.done && p.slow)
                 Text('Дольше, чем ядро ждёт этот сервер (${p.limitMs} мс): оно успевает уйти к следующему DNS',
                     style: const TextStyle(color: C.orange, fontSize: 12)),

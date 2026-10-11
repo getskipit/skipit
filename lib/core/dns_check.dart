@@ -35,6 +35,17 @@ class DnsProbe {
   /// Время ответа на первый запрос (с установкой соединения) и на следующий; null — ответа не было.
   int? firstMs, nextMs;
 
+  /// За сколько миллисекунд мимо VPN открывается соединение с адресами, которые сервер назвал в
+  /// ответ на пробные запросы (худший из них); null — не мерили или адреса не ответили. Сервер может
+  /// отвечать быстро, но называть далёкие узлы сайтов — тогда всё, что идёт мимо VPN, ждёт дольше.
+  int? reachMs;
+
+  /// Сервер из той же проверки, чьи адреса заметно ближе, и его время (см. [DnsCheck.compare]).
+  String? nearerLabel;
+  int? nearerMs;
+
+  bool get far => nearerMs != null;
+
   /// Каким путём запрос ушёл из основного ядра; у серверов «+local» не заполняется.
   ConnRoute? route;
   String? error;
@@ -166,8 +177,78 @@ class DnsCheck {
         0, 0, 1, 0, 1,
       ]);
 
+  /// Адреса IPv4 из ответа DNS.
+  static List<InternetAddress> addresses(Uint8List data) {
+    final found = <InternetAddress>[];
+    if (data.length < 12) return found;
+    // Имя в записи — цепочка меток или двухбайтовая ссылка на имя, которое уже встречалось.
+    int skipName(int at) {
+      while (at < data.length) {
+        final len = data[at];
+        if (len == 0) return at + 1;
+        if (len & 0xc0 == 0xc0) return at + 2;
+        at += len + 1;
+      }
+      return at;
+    }
+
+    var at = 12;
+    for (var q = data[4] << 8 | data[5]; q > 0; q--) {
+      at = skipName(at) + 4;
+    }
+    for (var a = data[6] << 8 | data[7]; a > 0; a--) {
+      at = skipName(at);
+      if (at + 10 > data.length) break;
+      final type = data[at] << 8 | data[at + 1], size = data[at + 8] << 8 | data[at + 9];
+      at += 10;
+      if (at + size > data.length) break;
+      if (type == 1 && size == 4) found.add(InternetAddress.fromRawAddress(data.sublist(at, at + 4)));
+      at += size;
+    }
+    return found;
+  }
+
+  /// За сколько миллисекунд открывается соединение с [ip] (порт 443), лучшее из двух раз; null — не
+  /// открылось. [sources] — адреса настоящих сетевых карт (Pinger.physicalSources): пока маршрут Windows
+  /// ведёт в адаптер VPN, без привязки к карте на соединение ответил бы сам адаптер.
+  static Future<int?> reach(InternetAddress ip, List<InternetAddress> sources) async {
+    int? best;
+    // Второй раз — только если первый удался: адрес, который не отвечает, ждать дважды незачем.
+    for (var i = 0; i < 2 && (i == 0 || best != null); i++) {
+      for (final source in sources.isEmpty ? const <InternetAddress?>[null] : sources) {
+        if (source != null && source.type != ip.type) continue;
+        final watch = Stopwatch()..start();
+        try {
+          final socket =
+              await Socket.connect(ip, 443, sourceAddress: source, timeout: const Duration(seconds: 3));
+          socket.destroy();
+          final ms = watch.elapsedMilliseconds;
+          if (best == null || ms < best) best = ms;
+          break;
+        } catch (_) {
+          // Через эту карту не вышло — пробуем следующую.
+        }
+      }
+    }
+    return best;
+  }
+
+  /// Отмечает серверы, чьи адреса заметно дальше, чем у лучшего в этой проверке: больше чем в полтора
+  /// раза и не меньше чем на 60 мс.
+  static void compare(List<DnsProbe> probes) {
+    final measured = probes.where((p) => p.reachMs != null).toList();
+    if (measured.length < 2) return;
+    final best = measured.reduce((a, b) => a.reachMs! <= b.reachMs! ? a : b);
+    for (final p in measured) {
+      final far = p.reachMs! - best.reachMs! >= 60 && p.reachMs! * 2 > best.reachMs! * 3;
+      p.nearerLabel = far ? best.label : null;
+      p.nearerMs = far ? best.reachMs : null;
+    }
+  }
+
   /// Сколько миллисекунд сервер на [port] отвечал на запрос адреса [name]; null — ответа с адресом нет.
-  static Future<int?> ask(int port, String name, int id) async {
+  /// В [into] складываются адреса из ответа.
+  static Future<int?> ask(int port, String name, int id, {List<InternetAddress>? into}) async {
     final socket = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
     final done = Completer<int?>();
     final watch = Stopwatch()..start();
@@ -176,7 +257,9 @@ class DnsCheck {
       final data = socket.receive()?.data;
       if (data == null || data.length < 12 || data[0] != id >> 8 || data[1] != id & 0xff || done.isCompleted) return;
       // Ответ без ошибки (код 0) и хотя бы с одной записью.
-      done.complete(data[3] & 0x0f == 0 && (data[6] << 8 | data[7]) > 0 ? watch.elapsedMilliseconds : null);
+      final ok = data[3] & 0x0f == 0 && (data[6] << 8 | data[7]) > 0;
+      if (ok) into?.addAll(addresses(data));
+      done.complete(ok ? watch.elapsedMilliseconds : null);
     }, onError: (_) {
       if (!done.isCompleted) done.complete(null);
     });
@@ -186,8 +269,12 @@ class DnsCheck {
     return ms;
   }
 
-  /// Проверяет один сервер и записывает результат в [probe].
-  static Future<void> run(DnsProbe probe, {required int checkPort, required String password, String? nic}) async {
+  /// Проверяет один сервер и записывает результат в [probe]. [sources] — см. [reach].
+  static Future<void> run(DnsProbe probe,
+      {required int checkPort,
+      required String password,
+      String? nic,
+      List<InternetAddress> sources = const []}) async {
     Process? core;
     try {
       // Свободный порт для входа временного ядра.
@@ -216,7 +303,17 @@ class DnsCheck {
         return;
       }
       probe.firstMs = await ask(port, 'www.google.com', 0x5101);
-      probe.nextMs = await ask(port, 'www.wikipedia.org', 0x5102);
+      final wiki = <InternetAddress>[], akamai = <InternetAddress>[];
+      probe.nextMs = await ask(port, 'www.wikipedia.org', 0x5102, into: wiki);
+      // Далеко ли адреса, которые сервер называет: по двум именам, чьи узлы стоят в разных странах.
+      // Служебный сервер адресов сайтов не выдаёт — его не меряем.
+      if (probe.ok && !probe.service) {
+        await ask(port, 'www.microsoft.com', 0x5103, into: akamai);
+        for (final ip in [wiki.firstOrNull, akamai.firstOrNull].nonNulls) {
+          final ms = await reach(ip, sources);
+          if (ms != null && ms > (probe.reachMs ?? -1)) probe.reachMs = ms;
+        }
+      }
     } catch (e) {
       probe.error = 'не удалось запустить проверку: $e';
     } finally {

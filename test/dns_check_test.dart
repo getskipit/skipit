@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/dns_check.dart';
@@ -65,6 +66,30 @@ void main() {
     expect(probes[2].result, 'не ответил за 5 с');
   });
 
+  test('адреса из ответа DNS и сравнение, далеко ли они у разных серверов', () {
+    // Ответ на запрос www.example: запись CNAME (её пропускаем) и две записи A; имена — ссылками.
+    final answer = Uint8List.fromList([
+      0x51, 0x02, 0x81, 0x80, 0, 1, 0, 3, 0, 0, 0, 0,
+      3, ...ascii.encode('www'), 7, ...ascii.encode('example'), 0, 0, 1, 0, 1,
+      0xc0, 0x0c, 0, 5, 0, 1, 0, 0, 0, 60, 0, 2, 0xc0, 0x10,
+      0xc0, 0x10, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 203, 0, 113, 7,
+      0xc0, 0x10, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 203, 0, 113, 8,
+    ]);
+    expect(DnsCheck.addresses(answer).map((a) => a.address), ['203.0.113.7', '203.0.113.8']);
+    // Обрезанный ответ не роняет разбор.
+    expect(DnsCheck.addresses(answer.sublist(0, 40)), isEmpty);
+
+    DnsProbe probe(String address, int? reach) => DnsProbe(address: address, domains: 0)..reachMs = reach;
+    final near = probe('1.1.1.1', 100), far = probe('https://doh.example/dns-query', 174);
+    final close = probe('8.8.8.8', 140), unknown = probe('9.9.9.9', null);
+    DnsCheck.compare([far, near, close, unknown]);
+    expect(far.far, isTrue);
+    expect(far.nearerLabel, '1.1.1.1');
+    expect(far.nearerMs, 100);
+    // Разница меньше 60 мс или меньше чем в полтора раза — не повод для пометки.
+    expect([near.far, close.far, unknown.far], [false, false, false]);
+  });
+
   test('вход проверки DNS: правила для запросов DNS действуют и на него', () {
     final cfg = jsonDecode(jsonEncode(config)) as Map<String, dynamic>;
     XrayConfig.addDnsCheckInbound(cfg, port: 20961, password: 'p');
@@ -125,7 +150,8 @@ void main() {
     expect(probe.error, isNull);
     expect(probe.firstMs, isNotNull, reason: 'временное ядро не получило ответ от DNS-сервера');
     expect(probe.nextMs, isNotNull);
-    expect(asked, 2);
+    // Третий запрос — за адресом, до которого меряется расстояние.
+    expect(asked, 3);
 
     // Сервер, которого нет, — «не ответил».
     final dead = DnsProbe(address: '127.0.0.1', port: 9, domains: 0);

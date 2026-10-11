@@ -199,14 +199,22 @@ class AppState extends ChangeNotifier {
       // Пока маршрут Windows ведёт в адаптер VPN, к серверам «напрямую» нужно идти через настоящую карту.
       final tunnel = WinSys.tunnelOnDefaultRoute();
       final nic = tunnel == null ? null : await DnsCheck.physicalNic([tunnel, ...WinSys.tunNames]);
+      final sources =
+          tunnel == null ? const <InternetAddress>[] : await Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
       for (final probe in dnsProbes) {
         _dnsCheckRoute = null;
-        await DnsCheck.run(probe, checkPort: port, password: _dnsCheckPassword, nic: nic);
+        await DnsCheck.run(probe, checkPort: port, password: _dnsCheckPassword, nic: nic, sources: sources);
         // Строка журнала ядра о том, куда ушёл запрос, приходит чуть позже ответа.
         await Future.delayed(const Duration(milliseconds: 200));
         probe.route = _dnsCheckRoute;
-        log.add('app', 'Проверка DNS: ${probe.label} — ${probe.path}, ${probe.result}');
+        log.add('app', 'Проверка DNS: ${probe.label} — ${probe.path}, ${probe.result}'
+            '${probe.reachMs == null ? '' : ', до названных адресов мимо VPN ${probe.reachMs} мс'}');
         notifyListeners();
+      }
+      DnsCheck.compare(dnsProbes);
+      for (final probe in dnsProbes.where((p) => p.far)) {
+        log.add('app', 'Проверка DNS: адреса от ${probe.label} заметно дальше, чем от ${probe.nearerLabel} — '
+            '${probe.reachMs} мс против ${probe.nearerMs} мс мимо VPN');
       }
     } finally {
       checkingDns = false;
@@ -336,7 +344,7 @@ class AppState extends ChangeNotifier {
       unawaited(_pollStats?.call().then((_) => notifyListeners()));
     }
   }
-  Timer? _subsTimer;
+  Timer? _subsTimer, _updateTimer;
   Timer? _saveTimer;
   final _crashTimes = <DateTime>[];
 
@@ -388,8 +396,12 @@ class AppState extends ChangeNotifier {
     await step('ссылки skipit://', WinSys.registerUrlScheme);
     await step('автозапуск', () async => autostart = await WinSys.isAutostartEnabled());
     unawaited(step('версии ядер', detectCoreVersions));
-    // Тихая проверка обновлений через несколько секунд после запуска.
+    // Тихая проверка обновлений через несколько секунд после запуска и потом раз в шесть часов:
+    // программу держат открытой сутками, и без повтора о новой версии узнавали бы только после перезапуска.
     Timer(const Duration(seconds: 8), () => step('обновления', () => checkUpdates(silent: true)));
+    _updateTimer = Timer.periodic(const Duration(hours: 6), (_) {
+      if (!downloadingAppUpdate) checkUpdates(silent: true);
+    });
     notifyListeners();
 
     // Раз в минуту смотрим, не пора ли обновить подписки (проверка дешёвая — сравнение времени).
@@ -1820,7 +1832,8 @@ class AppState extends ChangeNotifier {
 
   int? get _updateProxy => isConnected ? (_session ?? settings).httpPort : null;
 
-  /// [silent] — фоновая проверка при запуске: сообщает только о найденном обновлении.
+  /// [silent] — фоновая проверка (при запуске и раз в шесть часов): сообщает только о найденном
+  /// обновлении, а уже найденное держит на месте, пока не придёт новый ответ.
   Future<void> checkUpdates({bool silent = false}) async {
     if (checkingUpdates) return;
     // Тестовая сборка не обновляется из релизов: установщик заменил бы установленную программу.
@@ -1829,15 +1842,15 @@ class AppState extends ChangeNotifier {
       return;
     }
     checkingUpdates = true;
-    appUpdate = null;
+    if (!silent) appUpdate = null;
     notifyListeners();
     try {
       final r = await Updates.latest(appRepo,
           proxyPort: _updateProxy, prerelease: settings.updateChannel == UpdateChannel.beta);
       // Релиз без установщика — значит, GitHub его ещё собирает: не предлагаем, пока не будет готов.
-      if (Updates.compare(r.version, appVersion) > 0 && await Updates.hasInstaller(r, proxyPort: _updateProxy)) {
-        appUpdate = r;
-      }
+      final newer =
+          Updates.compare(r.version, appVersion) > 0 && await Updates.hasInstaller(r, proxyPort: _updateProxy);
+      appUpdate = newer ? r : null;
       lastUpdateCheck = DateTime.now();
       if (appUpdate != null) {
         // Фоновая проверка сообщает о каждой версии один раз: дальше о ней напоминает плашка
@@ -1927,6 +1940,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _subsTimer?.cancel();
+    _updateTimer?.cancel();
     _statsTimer?.cancel();
     _messages.close();
     super.dispose();
