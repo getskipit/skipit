@@ -851,9 +851,12 @@ class XrayConfig {
   /// Адрес, по которому программа проверяет связь через VPN и узнаёт страну выхода.
   static const checkHost = 'www.cloudflare.com';
 
+  /// Сервер замера скорости (см. SpeedTest): через тот же вход, чтобы замер наверняка шёл через VPN.
+  static const speedHost = 'speedtest.selectel.ru';
+
   /// Локальный вход для проверки связи: запрос программы к [checkHost] всегда идёт через VPN-сервер,
   /// какими бы ни были правила маршрутизации (обычный запрос мог бы уйти напрямую и ничего не сказал бы
-  /// о сервере). Всё, кроме этого адреса, вход блокирует.
+  /// о сервере). Так же идёт замер скорости — к [speedHost]. Всё, кроме этих двух адресов, вход блокирует.
   static void addCheckInbound(Map<String, dynamic> cfg, {required int port}) {
     const block = 'skipit-block';
     cfg['inbounds'] = [
@@ -878,7 +881,7 @@ class XrayConfig {
     routing['rules'] = [
       {
         'inboundTag': inbound,
-        'domain': ['full:$checkHost'],
+        'domain': ['full:$checkHost', 'full:$speedHost'],
         ...vpn,
       },
       {'inboundTag': inbound, 'outboundTag': block},

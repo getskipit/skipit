@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/dns_check.dart';
+import '../core/line_check.dart';
 import '../core/log_store.dart';
 import '../core/site_check.dart';
+import '../core/speed_test.dart';
 import '../core/util.dart';
 import '../core/windows.dart';
 import '../state/app_scope.dart';
@@ -10,8 +13,8 @@ import '../state/app_state.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// Раздел «Проверка»: всё, чем разбираются, когда что-то работает не так, — почему тормозит сайт, как
-/// отвечают DNS-серверы подключения и отчёт для разбора одним файлом.
+/// Раздел «Проверка»: всё, чем разбираются, когда что-то работает не так, — почему тормозит сайт,
+/// ровная ли связь, какая скорость, как отвечают DNS-серверы подключения и отчёт для разбора одним файлом.
 class CheckPage extends StatelessWidget {
   const CheckPage({super.key});
 
@@ -26,6 +29,10 @@ class CheckPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
           children: [
             _SiteCard(state: state),
+            const SizedBox(height: 14),
+            _LineCard(state: state),
+            const SizedBox(height: 14),
+            _SpeedCard(state: state),
             const SizedBox(height: 14),
             _DnsCheckCard(state: state),
             const SizedBox(height: 14),
@@ -50,7 +57,83 @@ Widget _cardTitle(IconData icon, String title, String subtitle) => Row(children:
       ),
     ]);
 
-/// «Почему тормозит сайт?»: проверка одного сайта — каким путём он идёт и на что уходит время.
+String _ms(int? value) => value == null ? '—' : '$value мс';
+
+/// Значок и цвет вывода: зелёный «всё в порядке», оранжевый «причина» или «к сведению», красный «не вышло».
+(IconData, Color) _look(SiteNoteKind kind) => switch (kind) {
+      SiteNoteKind.ok => (Icons.check_circle_rounded, C.green),
+      SiteNoteKind.info => (Icons.info_rounded, C.orange),
+      SiteNoteKind.warn => (Icons.error_rounded, C.orange),
+      SiteNoteKind.bad => (Icons.error_rounded, C.red),
+    };
+
+/// Вывод проверки — плашкой своего цвета.
+Widget _note(SiteNote note) {
+  final (icon, color) = _look(note.kind);
+  return Container(
+    margin: const EdgeInsets.only(top: 8),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: note.kind == SiteNoteKind.info ? 0.06 : 0.10),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 16, color: color)),
+      const SizedBox(width: 10),
+      Expanded(child: Text(note.text, style: const TextStyle(fontSize: 12.5))),
+    ]),
+  );
+}
+
+/// Плитка с одним замером: подпись, значение и пояснение под ним ([mono] — это адрес). Плитки одного
+/// размера: три строки в каждой.
+Widget _metric(String name, String value, String note, {bool mono = false, Color? color}) => Container(
+      width: 172,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: C.surface2,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: C.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 11)),
+        const SizedBox(height: 2),
+        Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+        Text(note,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: C.muted, fontSize: 11, fontFamily: mono ? 'Consolas' : null)),
+      ]),
+    );
+
+/// Кнопка «Скопировать результат»: текст проверки — в буфер, чтобы отправить тому, кто помогает.
+Widget _copy(AppState state, String Function() text) => Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: GhostButton(
+          label: 'Скопировать результат',
+          icon: Icons.copy_rounded,
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: text()));
+            state.toast('Результат скопирован', kind: ToastKind.success);
+          },
+        ),
+      ),
+    );
+
+Color? _pathColor(ConnRoute? route) => switch (route) {
+      ConnRoute.proxy => C.orange,
+      ConnRoute.direct => C.green,
+      ConnRoute.block => C.red,
+      _ => null,
+    };
+
+/// «Почему тормозит сайт?»: проверка сайта — каким путём он идёт и на что уходит время. Один сайт —
+/// подробно, несколько — по строке на каждый.
 class _SiteCard extends StatefulWidget {
   const _SiteCard({required this.state});
   final AppState state;
@@ -70,51 +153,75 @@ class _SiteCardState extends State<_SiteCard> {
   }
 
   void _check() {
-    final host = SiteCheck.hostOf(_site.text);
-    setState(() => _wrong = host == null);
-    if (host != null) widget.state.checkSite(host);
+    final hosts = SiteCheck.hostsOf(_site.text);
+    setState(() => _wrong = hosts == null);
+    if (hosts != null) widget.state.checkSites(hosts);
   }
 
-  /// Плитка с одним замером: подпись, значение и пояснение под ним ([mono] — это адрес). Плитки одного
-  /// размера: три строки в каждой.
-  Widget _metric(String name, String value, String note, {bool mono = false, Color? color}) => Container(
-        width: 172,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: C.surface2,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: C.border),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 11)),
-          const SizedBox(height: 2),
-          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
-          Text(note,
+  Widget _name(SiteReport r, double size) => Row(children: [
+        Flexible(
+          child: Text(r.host,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: C.muted, fontSize: 11, fontFamily: mono ? 'Consolas' : null)),
-        ]),
-      );
-
-  Widget _note(SiteNote note) {
-    final (icon, color) = switch (note.kind) {
-      SiteNoteKind.ok => (Icons.check_circle_rounded, C.green),
-      SiteNoteKind.info => (Icons.info_rounded, C.orange),
-      SiteNoteKind.warn => (Icons.error_rounded, C.orange),
-      SiteNoteKind.bad => (Icons.error_rounded, C.red),
-    };
-    // Вывод — плашкой своего цвета: зелёная «всё в порядке», оранжевая «причина», красная «не открылся».
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: note.kind == SiteNoteKind.info ? 0.06 : 0.10),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 16, color: color)),
+              style: TextStyle(fontFamily: 'Consolas', fontSize: size, fontWeight: FontWeight.w700)),
+        ),
         const SizedBox(width: 10),
-        Expanded(child: Text(note.text, style: const TextStyle(fontSize: 12.5))),
+        if (r.done)
+          Tag(r.path, color: _pathColor(r.route))
+        else ...[
+          const Spinner(size: 14),
+          const SizedBox(width: 8),
+          Text('проверяется…', style: TextStyle(color: C.muted, fontSize: 12)),
+        ],
+      ]);
+
+  /// Один сайт — подробно: плитки замеров и все строки вывода.
+  List<Widget> _full(SiteReport r) => [
+        const SizedBox(height: 14),
+        _name(r, 13.5),
+        if (r.done) ...[
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            if (r.firstMs == null)
+              _metric('Соединение', 'не открылось', 'этим путём', color: C.red)
+            else ...[
+              _metric('Первое соединение', _ms(r.firstMs), 'вместе с поиском адреса'),
+              _metric('Повторное', _ms(r.warmMs), 'лучшее из трёх'),
+              _metric('Ответ сайта', _ms(r.replyMs), 'после соединения'),
+            ],
+            if (r.vpnBaseMs != null) _metric('Проверочный адрес', _ms(r.vpnBaseMs), 'тем же путём через VPN'),
+            if (r.address != null) _metric('Адрес от DNS ядра', _ms(r.addressMs), r.address!, mono: true),
+            if (r.otherAddress != null)
+              _metric('Адрес от независимого DNS', _ms(r.otherMs), r.otherAddress!, mono: true),
+          ]),
+          for (final note in r.notes) _note(note),
+        ],
+      ];
+
+  /// Строка одного сайта, когда их несколько: путь, времена и главный вывод.
+  Widget _compact(SiteReport r) {
+    final note = r.done ? r.mainNote : null;
+    final (icon, color) = note == null ? (Icons.circle, C.muted) : _look(note.kind);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (note != null) ...[
+          Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 16, color: color)),
+          const SizedBox(width: 10),
+        ],
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _name(r, 12.5),
+            if (r.done && r.firstMs != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                  'первое соединение ${_ms(r.firstMs)} · повторное ${_ms(r.warmMs)} · ответ сайта ${_ms(r.replyMs)}',
+                  style: TextStyle(color: C.muted, fontSize: 12)),
+            ],
+            if (note != null && (note.kind != SiteNoteKind.ok || r.firstMs == null))
+              Text(note.text, style: TextStyle(color: color, fontSize: 12)),
+          ]),
+        ),
       ]),
     );
   }
@@ -122,29 +229,19 @@ class _SiteCardState extends State<_SiteCard> {
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
-    final r = state.siteReport;
-    String ms(int? value) => value == null ? '—' : '$value мс';
+    final reports = state.siteReports;
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(Icons.troubleshoot_rounded, color: C.muted),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Почему тормозит сайт?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-              const SizedBox(height: 2),
-              Text('Проверим сайт так, как к нему ходит браузер: каким путём он идёт и на что уходит время',
-                  style: TextStyle(color: C.muted, fontSize: 12)),
-            ]),
-          ),
-        ]),
+        _cardTitle(Icons.troubleshoot_rounded, 'Почему тормозит сайт?',
+            'Проверим сайт так, как к нему ходит браузер: каким путём он идёт и на что уходит время'),
         const SizedBox(height: 14),
         Row(children: [
           Expanded(
             child: TextField(
               controller: _site,
               onSubmitted: (_) => _check(),
-              decoration: const InputDecoration(labelText: 'Адрес сайта', hintText: 'example.com'),
+              decoration: const InputDecoration(
+                  labelText: 'Адрес сайта', hintText: 'example.com — или несколько через запятую'),
             ),
           ),
           const SizedBox(width: 12),
@@ -157,51 +254,19 @@ class _SiteCardState extends State<_SiteCard> {
         ]),
         if (_wrong || !state.isConnected) ...[
           const SizedBox(height: 8),
-          Text(_wrong ? 'Впишите адрес сайта, например example.com' : 'Чтобы проверить сайт, сначала подключитесь к VPN',
+          Text(
+              _wrong
+                  ? 'Впишите адрес сайта, например example.com; несколько — через запятую, не больше ${SiteCheck.maxHosts}'
+                  : 'Чтобы проверить сайт, сначала подключитесь к VPN',
               style: TextStyle(color: _wrong ? C.orange : C.muted, fontSize: 12)),
         ],
-        if (r != null) ...[
-          const SizedBox(height: 14),
-          Row(children: [
-            Flexible(
-              child: Text(r.host,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 13.5, fontWeight: FontWeight.w700)),
-            ),
-            const SizedBox(width: 10),
-            if (r.done)
-              Tag(r.path,
-                  color: switch (r.route) {
-                    ConnRoute.proxy => C.orange,
-                    ConnRoute.direct => C.green,
-                    ConnRoute.block => C.red,
-                    _ => null,
-                  })
-            else ...[
-              const Spinner(size: 14),
-              const SizedBox(width: 8),
-              Text('проверяется…', style: TextStyle(color: C.muted, fontSize: 12)),
-            ],
-          ]),
-          if (r.done) ...[
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              if (r.firstMs == null)
-                _metric('Соединение', 'не открылось', 'этим путём', color: C.red)
-              else ...[
-                _metric('Первое соединение', ms(r.firstMs), 'вместе с поиском адреса'),
-                _metric('Повторное', ms(r.warmMs), 'лучшее из трёх'),
-                _metric('Ответ сайта', ms(r.replyMs), 'после соединения'),
-              ],
-              if (r.vpnBaseMs != null) _metric('Проверочный адрес', ms(r.vpnBaseMs), 'тем же путём через VPN'),
-              if (r.address != null) _metric('Адрес от DNS ядра', ms(r.addressMs), r.address!, mono: true),
-              if (r.otherAddress != null)
-                _metric('Адрес от независимого DNS', ms(r.otherMs), r.otherAddress!, mono: true),
-            ]),
-            for (final note in r.notes) _note(note),
-          ],
+        if (reports.length == 1) ..._full(reports.single),
+        if (reports.length > 1) ...[
+          const SizedBox(height: 2),
+          for (final r in reports) _compact(r),
         ],
+        if (reports.isNotEmpty && reports.every((r) => r.done))
+          _copy(state, () => [for (final r in reports) r.copyText].join('\n')),
         const SizedBox(height: 10),
         Text(
           'Правила по приложениям на проверку не действуют. Мимо VPN программа обращается только к сайту, '
@@ -213,11 +278,131 @@ class _SiteCardState extends State<_SiteCard> {
   }
 }
 
+/// Стабильность связи: потери и всплески задержки через VPN и мимо него.
+class _LineCard extends StatelessWidget {
+  const _LineCard({required this.state});
+  final AppState state;
+
+  List<Widget> _path(String name, LinePath p, String? skipped) => [
+        if (skipped != null || !p.measured)
+          _metric(name, 'не измерялось', skipped ?? '—')
+        else if (p.silent)
+          _metric(name, 'ответов нет', 'из ${p.sent} пакетов', color: C.orange)
+        else ...[
+          _metric('$name: потери', p.lossText(), '${p.lost} из ${p.sent} пакетов', color: p.lossPercent >= 1 ? C.orange : null),
+          _metric('$name: ответ', _ms(p.usual), 'худший ${_ms(p.worst)}'),
+          _metric('$name: всплески', '${p.spikes}', 'дольше обычного на ${LineCheck.spikeOver} мс',
+              color: p.rough && p.lossPercent < 1 ? C.orange : null),
+        ],
+      ];
+
+  @override
+  Widget build(BuildContext context) {
+    final r = state.lineReport;
+    return Panel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _cardTitle(Icons.show_chart_rounded, 'Стабильность связи',
+            '${LineCheck.seconds} секунд шлём маленькие пробные пакеты через VPN и мимо него: видно, ровная ли связь и где она портится'),
+        const SizedBox(height: 14),
+        Row(children: [
+          GhostButton(
+            label: 'Замерить',
+            icon: Icons.speed_rounded,
+            busy: state.checkingLine,
+            onPressed: state.isConnected ? state.checkLine : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              !state.isConnected
+                  ? 'Чтобы замерить связь, сначала подключитесь к VPN'
+                  : state.checkingLine
+                      ? 'Идёт замер, осталось ${r?.left ?? LineCheck.seconds} с'
+                      : 'Пакеты идут к ${LineCheck.host}. При включённом Kill Switch меряется только путь через VPN',
+              style: TextStyle(color: C.muted, fontSize: 12),
+            ),
+          ),
+        ]),
+        if (r != null && r.done) ...[
+          if (r.error == null) ...[
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              ..._path('Через VPN', r.vpn, r.vpnSkipped),
+              ..._path('Мимо VPN', r.direct, r.directSkipped),
+            ]),
+          ],
+          for (final note in r.notes) _note(note),
+          _copy(state, () => r.copyText),
+        ],
+      ]),
+    );
+  }
+}
+
+/// Замер скорости скачивания через VPN и мимо него.
+class _SpeedCard extends StatelessWidget {
+  const _SpeedCard({required this.state});
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = state.speedReport;
+    return Panel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _cardTitle(Icons.downloading_rounded, 'Скорость',
+            'Несколько секунд качаем проверочный файл через VPN и мимо него — видно, режет ли VPN скорость'),
+        const SizedBox(height: 14),
+        Row(children: [
+          GhostButton(
+            label: 'Замерить',
+            icon: Icons.speed_rounded,
+            busy: state.checkingSpeed,
+            onPressed: state.isConnected ? state.checkSpeed : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              !state.isConnected
+                  ? 'Чтобы замерить скорость, сначала подключитесь к VPN'
+                  : state.checkingSpeed
+                      ? 'Идёт замер ${r?.stage ?? ''}'
+                      : 'Замер тратит трафик подписки: до 100 МБ за раз. Файл берётся с ${SpeedTest.host} и не сохраняется',
+              style: TextStyle(color: C.muted, fontSize: 12),
+            ),
+          ),
+        ]),
+        if (r != null && r.done) ...[
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            _metric('Через VPN', SpeedReport.show(r.vpnMbit), r.vpnMbit == null ? (r.vpnError ?? '—') : 'скачивание',
+                color: r.vpnMbit == null ? C.red : null),
+            _metric('Мимо VPN', r.directMbit == null ? 'не измерялось' : SpeedReport.show(r.directMbit),
+                r.directMbit == null ? (r.directError ?? '—') : 'скачивание'),
+          ]),
+          for (final note in r.notes) _note(note),
+          _copy(state, () => r.copyText),
+        ],
+      ]),
+    );
+  }
+}
+
 /// Проверка DNS-серверов подключения: за сколько отвечает каждый, каким путём идёт запрос и далеко ли
 /// адреса, которые он называет. Сами серверы выбираются на странице «Маршрутизация».
 class _DnsCheckCard extends StatelessWidget {
   const _DnsCheckCard({required this.state});
   final AppState state;
+
+  static String _kind(DnsProbe p) => p.service
+      ? 'служебный: узнаёт адреса VPN- и DNS-серверов'
+      : (p.domains == 0 ? 'общий' : 'для сайтов из списка (${p.domains})');
+
+  static String _text(DnsProbe p) => [
+        '${p.label} — ${_kind(p)}, ${p.path}, ${p.result}'
+            '${p.reachMs == null ? '' : ', до названных адресов мимо VPN ${p.reachMs} мс'}',
+        if (p.far) '  • адреса заметно дальше, чем у ${p.nearerLabel} (${p.nearerMs} мс)',
+        if (p.slow) '  • дольше, чем ядро ждёт этот сервер (${p.limitMs} мс)',
+      ].join('\n');
 
   Widget _probe(DnsProbe p) => Padding(
         padding: const EdgeInsets.only(top: 10),
@@ -235,9 +420,7 @@ class _DnsCheckCard extends StatelessWidget {
               Text(p.label, style: const TextStyle(fontFamily: 'Consolas', fontSize: 12.5)),
               Text(
                 [
-                  p.service
-                      ? 'служебный: узнаёт адреса VPN- и DNS-серверов'
-                      : (p.domains == 0 ? 'общий' : 'для сайтов из списка (${p.domains})'),
+                  _kind(p),
                   if (p.done) ...[p.path, p.result] else 'проверяется…',
                 ].join(' · '),
                 style: TextStyle(color: C.muted, fontSize: 12),
@@ -282,6 +465,8 @@ class _DnsCheckCard extends StatelessWidget {
             ),
           ]),
           for (final probe in state.dnsProbes) _probe(probe),
+          if (state.dnsProbes.isNotEmpty && !state.checkingDns)
+            _copy(state, () => [for (final p in state.dnsProbes) _text(p)].join('\n')),
         ]),
       );
 }

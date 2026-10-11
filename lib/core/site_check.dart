@@ -106,6 +106,12 @@ class SiteReport {
     return found;
   }
 
+  /// Результат текстом — чтобы скопировать и отправить.
+  String get copyText => ['$host — $summary', for (final n in notes) '  • ${n.text}'].join('\n');
+
+  /// Главная строка вывода: первая, которая не «к сведению».
+  SiteNote get mainNote => notes.firstWhere((n) => n.kind != SiteNoteKind.info, orElse: () => notes.first);
+
   /// Одной строкой для журнала.
   String get summary => [
         path,
@@ -131,6 +137,21 @@ class SiteCheck {
     if (!text.contains('://')) text = 'https://$text';
     final host = Uri.tryParse(text)?.host ?? '';
     return RegExp(r'^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$').hasMatch(host) ? host : null;
+  }
+
+  /// Сколько сайтов проверяется за один раз.
+  static const maxHosts = 8;
+
+  /// Несколько сайтов через запятую, пробел или с новой строки — без повторов. null — что-то из
+  /// вписанного не имя сайта, или сайтов больше [maxHosts].
+  static List<String>? hostsOf(String input) {
+    final hosts = <String>{};
+    for (final part in input.split(RegExp(r'[\s,;]+')).where((p) => p.isNotEmpty)) {
+      final host = hostOf(part);
+      if (host == null) return null;
+      hosts.add(host);
+    }
+    return hosts.isEmpty || hosts.length > maxHosts ? null : hosts.toList();
   }
 
   /// Соединение с [host] (порт 443) через локальный HTTP-порт ядра [port]: за сколько оно готово

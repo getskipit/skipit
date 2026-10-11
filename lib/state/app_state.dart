@@ -8,12 +8,14 @@ import 'package:flutter/foundation.dart';
 import '../core/core_manager.dart';
 import '../core/dns_check.dart';
 import '../core/kill_switch.dart';
+import '../core/line_check.dart';
 import '../core/link_parser.dart';
 import '../core/net.dart';
 import '../core/paths.dart';
 import '../core/ping.dart';
 import '../core/report.dart';
 import '../core/site_check.dart';
+import '../core/speed_test.dart';
 import '../core/singbox_config.dart';
 import '../core/tray.dart';
 import '../core/updates.dart';
@@ -96,7 +98,7 @@ class AppState extends ChangeNotifier {
     final failedAt = _unknownSources.remove(c.source);
     if (failedAt != null && DateTime.now().difference(failedAt) < const Duration(seconds: 3)) c.unknownProcess = true;
     // Идёт проверка сайта: запоминаем соединения по порту программы — среди них её собственные.
-    if (_siteCheckHost != null) {
+    if (_watchConns) {
       final localPort = int.tryParse(c.source.split(':').last);
       if (localPort != null) _siteCheckConns[localPort] = c;
     }
@@ -191,39 +193,148 @@ class AppState extends ChangeNotifier {
   Map<String, dynamic>? _dnsConfig;
   ConnRoute? _dnsCheckRoute;
 
-  /// Проверка одного сайта («Почему тормозит?») — для страницы «Маршрутизация».
-  SiteReport? siteReport;
+  /// Проверка сайтов («Почему тормозит сайт?») — для раздела «Проверка».
+  List<SiteReport> siteReports = [];
   bool checkingSite = false;
 
-  /// Сайт, который сейчас проверяется, и соединения, прошедшие через ядро за время проверки, — по
-  /// порту, с которого они шли: так проверка узнаёт путь и выход каждого своего соединения.
-  String? _siteCheckHost;
+  /// Пока идёт проверка, соединения, прошедшие через ядро, запоминаются по порту, с которого они шли:
+  /// так проверка узнаёт путь и выход каждого своего соединения.
+  bool _watchConns = false;
   final _siteCheckConns = <int, ConnEntry>{};
 
-  /// Проверяет сайт [host] так, как к нему ходит браузер, — через локальный HTTP-порт ядра.
-  Future<void> checkSite(String host) async {
-    if (checkingSite || !isConnected) return;
-    final report = siteReport = SiteReport(host);
+  /// Адреса настоящих сетевых карт — для замеров мимо VPN; пусто, если маршрут Windows в адаптер не ведёт.
+  Future<List<InternetAddress>> _pastVpnSources() async {
+    final tunnel = WinSys.tunnelOnDefaultRoute();
+    return tunnel == null ? const [] : Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
+  }
+
+  /// Проверяет сайты [hosts] по очереди так, как к ним ходит браузер, — через локальный HTTP-порт ядра.
+  Future<void> checkSites(List<String> hosts) async {
+    if (checkingSite || !isConnected || hosts.isEmpty) return;
+    siteReports = [for (final host in hosts) SiteReport(host)];
     checkingSite = true;
-    _siteCheckHost = host;
-    _siteCheckConns.clear();
+    _watchConns = true;
     notifyListeners();
     try {
-      final tunnel = WinSys.tunnelOnDefaultRoute();
-      final sources =
-          tunnel == null ? const <InternetAddress>[] : await Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
-      await SiteCheck.run(report,
-          port: (_session ?? settings).httpPort,
-          auth: Net.proxyAuth,
-          checkPort: _checkPort,
-          checkHost: XrayConfig.checkHost,
-          ownTun: WinSys.ownTunActive(),
-          sources: sources,
-          connOf: (localPort) => _siteCheckConns[localPort]);
-      log.add('app', 'Проверка сайта ${report.host}: ${report.summary}');
+      final sources = await _pastVpnSources();
+      for (final report in siteReports) {
+        if (!isConnected) {
+          report
+            ..error = 'VPN отключился'
+            ..done = true;
+          continue;
+        }
+        _siteCheckConns.clear();
+        await SiteCheck.run(report,
+            port: (_session ?? settings).httpPort,
+            auth: Net.proxyAuth,
+            checkPort: _checkPort,
+            checkHost: XrayConfig.checkHost,
+            ownTun: WinSys.ownTunActive(),
+            sources: sources,
+            connOf: (localPort) => _siteCheckConns[localPort]);
+        log.add('app', 'Проверка сайта ${report.host}: ${report.summary}');
+        notifyListeners();
+      }
     } finally {
-      _siteCheckHost = null;
+      _watchConns = false;
       checkingSite = false;
+      notifyListeners();
+    }
+  }
+
+  /// Стабильность связи — для раздела «Проверка».
+  LineReport? lineReport;
+  bool checkingLine = false;
+
+  /// Шлёт поток пробных пакетов через VPN и мимо него и смотрит на потери и разброс времени ответа.
+  Future<void> checkLine() async {
+    if (checkingLine || !isConnected) return;
+    final report = lineReport = LineReport();
+    checkingLine = true;
+    _watchConns = true;
+    _siteCheckConns.clear();
+    notifyListeners();
+    int? vpnPort;
+    try {
+      final viaVpn = WinSys.ownTunActive();
+      final source = (await _pastVpnSources()).where((a) => a.type == InternetAddressType.IPv4).firstOrNull;
+      if (!viaVpn) report.vpnSkipped = 'в этом режиме нет адаптера VPN — такие пакеты через VPN не идут';
+      // При Kill Switch всё, что идёт мимо VPN, закрыто — такой замер показал бы только потери.
+      final pastVpn = viaVpn && source != null && !killSwitchOn;
+      if (viaVpn && killSwitchOn) report.directSkipped = 'включён Kill Switch — мимо VPN пакеты не выпускаются';
+      if (viaVpn && source == null) report.directSkipped = 'не нашлось сетевой карты, кроме адаптера VPN';
+      final server = (await InternetAddress.lookup(LineCheck.host, type: InternetAddressType.IPv4)
+              .timeout(const Duration(seconds: 4)))
+          .first;
+      await LineCheck.run(report,
+          server: server,
+          viaVpn: viaVpn,
+          // Без адаптера обычный маршрут и есть путь мимо VPN.
+          source: viaVpn ? (pastVpn ? source : null) : InternetAddress.anyIPv4,
+          onStart: (port) => vpnPort = port,
+          onTick: notifyListeners);
+      // Проверочный адрес по правилам мог уйти напрямую — тогда «через VPN» измерено не было.
+      if (vpnPort != null && _siteCheckConns[vpnPort]?.route == ConnRoute.direct) {
+        report
+          ..vpn = LinePath()
+          ..vpnSkipped = 'по правилам маршрутизации проверочный адрес идёт напрямую';
+      }
+      log.add('app', report.copyText.split('\n').first);
+    } catch (e) {
+      report
+        ..error = 'Не удалось начать замер: ${describeNetError(e)}'
+        ..done = true;
+    } finally {
+      _watchConns = false;
+      checkingLine = false;
+      notifyListeners();
+    }
+  }
+
+  /// Замер скорости — для раздела «Проверка».
+  SpeedReport? speedReport;
+  bool checkingSpeed = false;
+
+  /// Качает проверочный файл через VPN и мимо него и сравнивает скорость.
+  Future<void> checkSpeed() async {
+    final port = _checkPort;
+    if (checkingSpeed || !isConnected || port == null) return;
+    final report = speedReport = SpeedReport()..stage = 'через VPN…';
+    checkingSpeed = true;
+    notifyListeners();
+    try {
+      final vpn = await SpeedTest.viaVpn(port: port);
+      report
+        ..vpnMbit = vpn.mbit
+        ..vpnError = vpn.error
+        ..stage = 'мимо VPN…';
+      notifyListeners();
+      if (killSwitchOn) {
+        report.directError = 'включён Kill Switch';
+      } else {
+        final tunnel = WinSys.tunnelOnDefaultRoute();
+        final source = (await _pastVpnSources()).where((a) => a.type == InternetAddressType.IPv4).firstOrNull;
+        if (tunnel != null && source == null) {
+          report.directError = 'не нашлось сетевой карты, кроме адаптера VPN';
+        } else {
+          try {
+            final address = (await InternetAddress.lookup(SpeedTest.host, type: InternetAddressType.IPv4)
+                    .timeout(const Duration(seconds: 4)))
+                .first;
+            final direct = await SpeedTest.direct(address, source);
+            report
+              ..directMbit = direct.mbit
+              ..directError = direct.error;
+          } catch (e) {
+            report.directError = describeNetError(e);
+          }
+        }
+      }
+      log.add('app', report.copyText.split('\n').first);
+    } finally {
+      report.done = true;
+      checkingSpeed = false;
       notifyListeners();
     }
   }
