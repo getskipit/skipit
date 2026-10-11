@@ -341,7 +341,7 @@ class _DnsCardState extends State<_DnsCard> {
               Text(
                 [
                   p.service
-                      ? 'служебный: узнаёт адрес VPN-сервера'
+                      ? 'служебный: узнаёт адреса VPN- и DNS-серверов'
                       : (p.domains == 0 ? 'общий' : 'для сайтов из списка (${p.domains})'),
                   if (p.done) ...[p.path, p.result] else 'проверяется…',
                 ].join(' · '),

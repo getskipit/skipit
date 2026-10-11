@@ -257,10 +257,16 @@ void main() {
       for (final i in (c['inbounds'] as List).where((i) => i['sniffing'] != null)) {
         expect((i['sniffing'] as Map)['routeOnly'], isTrue, reason: '${i['tag']}');
       }
-      // Имя DNS-сервера «+local» ядро узнаёт не у него самого, а у запасного DNS из того же конфига.
+      // Имя DNS-сервера «+local» ядро узнаёт напрямую, как адреса VPN-серверов, — не у него самого и не
+      // у запасного DNS из того же конфига: тот идёт через VPN и называет узел, далёкий от этой сети.
       if (identical(c, viaDoh)) {
         expect((c['dns'] as Map)['servers'], anyElement(equals(
-            {'address': 'https://cloudflare-dns.com/dns-query', 'domains': ['full:dns.example'], 'skipFallback': true})));
+            {'address': 'tcp+local://1.1.1.1', 'domains': ['full:dns.example'], 'skipFallback': true})));
+        expect(
+            ((c['dns'] as Map)['servers'] as List)
+                .where((s) => s is Map && (s['domains'] as List? ?? const []).contains('full:dns.example'))
+                .map((s) => s['address']),
+            ['tcp+local://1.1.1.1', 'tcp+local://8.8.8.8']);
         // Пометка с такого сервера снята, а его запросы идут в выход «напрямую» — правилом, которое стоит
         // раньше остальных правил для запросов DNS: иначе адрес по имени ядро спрашивало бы у Windows.
         expect(jsonEncode((c['dns'] as Map)['servers']), isNot(contains('+local://dns.example')));
@@ -290,7 +296,7 @@ void main() {
               ..mode = ConnectionMode.proxyOnly);
         expect((ports['outbounds'] as List).firstWhere((o) => o['tag'] == 'skipit-direct')['streamSettings'],
             {'sockopt': {'domainStrategy': 'UseIPv4', 'happyEyeballs': {'tryDelayMs': 250}}});
-        // Запасного нет — тогда напрямую, как адреса VPN-серверов.
+        // Запасного в конфиге нет — то же самое.
         final alone = jsonDecode(jsonEncode({
           'dns': {
             'servers': ['https+local://dns.example/dns-query'],

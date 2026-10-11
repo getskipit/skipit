@@ -488,7 +488,7 @@ class XrayConfig {
   static const _tunDns = '$_tunNet4.2';
 
   /// DNS, у которых ядро напрямую узнаёт адреса VPN-серверов (спросить их через VPN до подключения
-  /// невозможно) и DNS-серверов «+local», когда в конфиге нет запасного. По умолчанию — 1.1.1.1 и
+  /// невозможно) и DNS-серверов «+local», записанных именем. По умолчанию — 1.1.1.1 и
   /// 8.8.8.8; при включённом «Мой DNS» — его локальные серверы, заданные IPv4-адресом. Следующий
   /// спрашивается, если предыдущий не ответил.
   static List<String> bootstrapDns(AppSettings settings) {
@@ -745,15 +745,15 @@ class XrayConfig {
   /// может ответить не сразу, отказом или адресом IPv6, которого у сети нет, — и новое соединение с
   /// DNS-сервером (оно открывается заново после минуты простоя) не укладывается в срок ответа. Поэтому у
   /// сервера, записанного именем, пометка снимается, а его запросы первым правилом идут в выход
-  /// «напрямую»: путь тот же, но адрес ищет DNS ядра, и IPv6 — только если он включён. Имя узнаётся у
-  /// запасного DNS из того же
-  /// конфига (общего и не «+local» — обычно он идёт через VPN), а если такого нет — напрямую у
-  /// [bootstrapDns], как адреса VPN-серверов. Нужно везде, где на запросы программ отвечает DNS ядра.
+  /// «напрямую»: путь тот же, но адрес ищет DNS ядра, и IPv6 — только если он включён. Имя узнаётся
+  /// напрямую у [bootstrapDns], как адреса VPN-серверов, — тем же путём, каким ядро потом пойдёт к самому
+  /// DNS-серверу. Спрашивать запасной DNS из конфига нельзя: он обычно идёт через VPN, и служба с узлами
+  /// в разных странах называет узел, ближний к VPN-серверу; отсюда он далёкий и сайтам выдаёт далёкие
+  /// адреса. Нужно везде, где на запросы программ отвечает DNS ядра.
   static void resolveLocalDnsNames(Map<String, dynamic> cfg, {required AppSettings settings}) {
     final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>();
     final servers = [...(dns?['servers'] as List? ?? const [])];
     final localDns = <String>{};
-    Object? spareDns;
     for (var i = 0; i < servers.length; i++) {
       final s = servers[i];
       final address = s is Map ? s['address'] : s;
@@ -764,17 +764,11 @@ class XrayConfig {
         localDns.add(host);
         final plain = address.replaceFirst('+local://', '://');
         servers[i] = s is Map ? {...s, 'address': plain} : plain;
-      } else if (s is! Map || (s['domains'] as List? ?? const []).isEmpty) {
-        spareDns ??= s;
       }
     }
     if (dns == null || localDns.isEmpty) return;
     final names = [for (final d in localDns) 'full:$d'];
-    if (spareDns != null) {
-      servers.add({..._dnsEntry(spareDns), 'domains': names, 'skipFallback': true});
-    } else {
-      servers.addAll(_bootstrapEntries(settings, names));
-    }
+    servers.addAll(_bootstrapEntries(settings, names));
     dns['servers'] = servers;
     final tag = (dns['tag'] ??= _dnsTag) as String;
     cfg['dns'] = dns;
