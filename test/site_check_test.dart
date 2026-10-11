@@ -72,8 +72,10 @@ void main() {
       ..warmMs = 190
       ..replyMs = 150
       ..vpnBaseMs = 170;
-    expect(kinds(usual), [SiteNoteKind.info, SiteNoteKind.ok]);
-    expect(usual.notes.first.text, contains('столько занимает сам путь через VPN-сервер'));
+    expect(usual.notes.single.text,
+        'Задержек по дороге не видно: соединение 190 мс — обычное время пути через VPN-сервер, ответ сайта 150 мс');
+    // Проверочный адрес ответил дольше сайта — это всплеск на дороге, а не повод для вывода.
+    expect(kinds(usual..vpnBaseMs = 420), [SiteNoteKind.ok]);
 
     final distant = report(ConnRoute.proxy)
       ..firstMs = 700

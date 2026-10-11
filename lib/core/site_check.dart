@@ -81,14 +81,10 @@ class SiteReport {
           'DNS назвал далёкий адрес: до него $addressMs мс, а до адреса от независимого DNS — $otherMs мс. '
           'Посмотрите серверы в блоке «DNS» выше');
     }
-    if (route == ConnRoute.proxy && vpnBaseMs != null) {
-      if (warm - vpnBaseMs! >= 150 && warm * 2 > vpnBaseMs! * 3) {
-        add(SiteNoteKind.warn,
-            'Сайт далеко от VPN-сервера: соединение с ним $warm мс, а с проверочным адресом через тот же '
-            'сервер — $vpnBaseMs мс');
-      } else {
-        add(SiteNoteKind.info, 'Соединение — $warm мс: столько занимает сам путь через VPN-сервер ($vpnBaseMs мс)');
-      }
+    if (route == ConnRoute.proxy && vpnBaseMs != null && warm - vpnBaseMs! >= 150 && warm * 2 > vpnBaseMs! * 3) {
+      add(SiteNoteKind.warn,
+          'Сайт далеко от VPN-сервера: соединение с ним $warm мс, а с проверочным адресом через тот же '
+          'сервер — $vpnBaseMs мс');
     }
     if (replyMs == null) {
       add(SiteNoteKind.warn, 'Соединение открылось, но на запрос сайт не ответил за ${SiteCheck.timeout.inSeconds} с');
@@ -97,7 +93,11 @@ class SiteReport {
           'Сайт сам долго отвечает: $replyMs мс после того, как соединение уже установлено. VPN и DNS тут ни при чём');
     }
     if (!found.any((n) => n.kind == SiteNoteKind.warn)) {
-      add(SiteNoteKind.ok, 'Задержек по дороге не видно: соединение $warm мс, ответ сайта ${replyMs ?? '—'} мс');
+      add(
+          SiteNoteKind.ok,
+          'Задержек по дороге не видно: соединение $warm мс'
+          '${route == ConnRoute.proxy ? ' — обычное время пути через VPN-сервер' : ''}, '
+          'ответ сайта ${replyMs ?? '—'} мс');
     }
     return found;
   }
@@ -219,6 +219,8 @@ class SiteCheck {
     return null;
   }
 
+  static int? _best(int? a, int? b) => a == null || b == null ? (a ?? b) : (a < b ? a : b);
+
   static final _answerA = RegExp(r'"type"\s*:\s*1\s*,[^}]*"data"\s*:\s*"(\d+\.\d+\.\d+\.\d+)"');
 
   /// Замеры для [report]. [port] и [auth] — локальный HTTP-порт ядра, [checkPort] — вход проверки связи
@@ -240,21 +242,24 @@ class SiteCheck {
         ..firstMs = first.readyMs
         ..replyMs = first.replyMs
         ..error = first.error;
-      if (first.readyMs != null) {
+      // Повторных соединений два, в счёт идёт лучшее: дорога через VPN-сервер то и дело даёт всплески,
+      // и по одному замеру выводы от проверки к проверке получались разные.
+      for (var i = 0; i < 2 && first.readyMs != null; i++) {
         final again = await viaProxy(report.host, port: port, auth: auth);
-        report.warmMs = again.readyMs;
-        if (again.replyMs != null && (report.replyMs == null || again.replyMs! < report.replyMs!)) {
-          report.replyMs = again.replyMs;
-        }
+        report
+          ..warmMs = _best(report.warmMs, again.readyMs)
+          ..replyMs = _best(report.replyMs, again.replyMs);
       }
       // Строка журнала ядра о том, куда ушло соединение, приходит чуть позже него самого.
       await Future.delayed(const Duration(milliseconds: 200));
       report.route = routeOf();
 
       if (report.route == ConnRoute.proxy && checkPort != null && report.firstMs != null) {
-        // Первый раз — с поиском адреса, второй — сама дорога.
+        // Первый раз — с поиском адреса; из остальных берётся лучший, как и у самого сайта.
         await viaProxy(checkHost, port: checkPort);
-        report.vpnBaseMs = (await viaProxy(checkHost, port: checkPort)).readyMs;
+        for (var i = 0; i < 2; i++) {
+          report.vpnBaseMs = _best(report.vpnBaseMs, (await viaProxy(checkHost, port: checkPort)).readyMs);
+        }
       }
       // Мимо VPN идём только к сайту, который и так идёт напрямую: адрес сайта, идущего через VPN,
       // интернет-провайдеру показывать незачем.
