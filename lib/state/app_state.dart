@@ -597,16 +597,23 @@ class AppState extends ChangeNotifier {
     // На уровне warning ответов DNS в журнале нет, а в ошибках подключения адрес сервера бывает —
     // узнаём, во что имена серверов превращаются сейчас. Только пока весь трафик идёт через свой
     // адаптер: тогда вопрос уходит DNS ядра, а не DNS обычной сети, которому имя сервера знать незачем.
+    // Тем же способом — к каким адресам ведут DNS-серверы, записанные именем: у службы с узлами в
+    // разных странах от узла зависит, близкие ли адреса сайтов она называет.
     final serverIps = <String>{};
+    final dnsNodes = <String, List<String>>{};
     if (connected && _reportXray != null && WinSys.ownTunActive()) {
+      Future<List<String>> ask(String name) async {
+        try {
+          final found = await InternetAddress.lookup(name).timeout(const Duration(seconds: 2));
+          return [for (final a in found) a.address];
+        } catch (_) {
+          return const [];
+        }
+      }
+
       await Future.wait([
-        for (final name in DiagReport.serverNames(_reportXray!))
-          () async {
-            try {
-              final found = await InternetAddress.lookup(name).timeout(const Duration(seconds: 2));
-              serverIps.addAll(found.map((a) => a.address));
-            } catch (_) {}
-          }(),
+        for (final name in DiagReport.serverNames(_reportXray!)) ask(name).then(serverIps.addAll),
+        for (final name in DiagReport.dnsNames(_reportXray!)) ask(name).then((found) => dnsNodes[name] = found),
       ]);
     }
     final report = DiagReport.build(
@@ -635,6 +642,7 @@ class AppState extends ChangeNotifier {
       xray: _reportXray,
       singbox: _reportSingbox,
       serverIps: serverIps,
+      dnsNodes: dnsNodes,
       // Адрес подписки провайдера — на том же домене, что и его серверы, или на своём. Ссылки на
       // поддержку и сайт сюда не идут: они часто ведут в мессенджер, и скрылся бы весь его домен.
       providerHosts: {

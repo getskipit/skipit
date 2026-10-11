@@ -159,6 +159,15 @@ class DiagReport {
   static Set<String> serverNames(Map<String, dynamic> cfg) =>
       _serverFields(cfg, const ['address', 'endpoint'], stream: false).where(_isName).toSet();
 
+  /// Имена DNS-серверов из конфига Xray, записанных именем (`https://dns.example/dns-query`).
+  static Set<String> dnsNames(Map<String, dynamic> cfg) => {
+        for (final s in ((cfg['dns'] as Map?)?['servers'] as List? ?? const []))
+          if ((s is Map ? s['address'] : s) case final String address)
+            if (Uri.tryParse(address.contains('://') ? address : '//$address')?.host case final String host
+                when _isName(host))
+              host,
+      };
+
   /// Домен провайдера по имени его узла: `fi.vpn.example` → `vpn.example`. По нему скрываются и соседние
   /// имена — сайт провайдера, адрес подписки, — на которые программа и браузер ходят через тот же VPN.
   static String domainOf(String host) {
@@ -250,13 +259,17 @@ class DiagReport {
   /// подключения (или его конец, тогда [logCut]) и [logStart] — его начало, по которому только ищутся
   /// адреса серверов; конфиги — те, с которыми ядра запускались в последний раз (или null);
   /// [providerHosts] — имена из адресов подписок: их домены скрываются так же, как домены серверов;
-  /// [serverIps] — адреса серверов, известные помимо журнала.
+  /// [serverIps] — адреса серверов, известные помимо журнала; [dnsNodes] — адреса, которые DNS ядра
+  /// называет для DNS-серверов, записанных именем: по ним видно, к ближнему ли узлу службы ходит
+  /// программа. Сервер на домене провайдера сюда не попадает — его адрес может оказаться адресом
+  /// VPN-сервера.
   static String build({
     required Map<String, Object?> facts,
     Map<String, dynamic>? xray,
     Map<String, dynamic>? singbox,
     Set<String> providerHosts = const {},
     Set<String> serverIps = const {},
+    Map<String, List<String>> dnsNodes = const {},
     required String log,
     String logStart = '',
     bool logCut = false,
@@ -276,6 +289,17 @@ class DiagReport {
       ..writeln();
     for (final e in facts.entries) {
       b.writeln('${e.key}: ${e.value ?? '—'}');
+    }
+    final nodes = [
+      for (final e in dnsNodes.entries)
+        if (e.value.isNotEmpty && !domains.contains(domainOf(e.key))) '${e.key} → ${e.value.join(', ')}',
+    ];
+    if (nodes.isNotEmpty) {
+      b
+        ..writeln()
+        ..writeln('=== Адреса DNS-серверов, записанных именем (как их называет DNS ядра) ===')
+        ..writeAll(nodes, '\n')
+        ..writeln();
     }
     b
       ..writeln()

@@ -166,6 +166,39 @@ void main() {
     expect(quiet, contains('dial tcp <VPN-сервер>:443'));
   });
 
+  test('отчёт: адреса DNS-серверов, записанных именем, — кроме серверов на домене провайдера', () {
+    final cfg = <String, dynamic>{
+      'dns': {
+        'servers': [
+          '1.1.1.1',
+          'localhost',
+          {'address': 'https://doh.example/dns-query'},
+          'https+local://dns.host.example/dns-query',
+          {'address': 'tcp+local://8.8.8.8', 'domains': ['full:doh.example']},
+        ],
+      },
+      'outbounds': [
+        {
+          'tag': 'proxy',
+          'protocol': 'vless',
+          'settings': {'address': 'fi.host.example', 'port': 443, 'id': uuid},
+        },
+      ],
+    };
+    expect(DiagReport.dnsNames(cfg), {'doh.example', 'dns.host.example'});
+    final report = DiagReport.build(facts: const {}, xray: cfg, log: '', dnsNodes: {
+      'doh.example': ['203.0.113.51', '203.0.113.52'],
+      'dns.host.example': ['203.0.113.9'],
+      'silent.example': [],
+    });
+    expect(report, contains('doh.example → 203.0.113.51, 203.0.113.52'));
+    // Сервер на домене провайдера: его адрес может быть адресом VPN-сервера — в отчёт не идёт.
+    expect(report, isNot(contains('203.0.113.9')));
+    expect(report, isNot(contains('silent.example')));
+    // Без таких серверов раздела нет.
+    expect(DiagReport.build(facts: const {}, xray: cfg, log: ''), isNot(contains('Адреса DNS-серверов')));
+  });
+
   test('отчёт: длинный журнал читается концом, а адрес сервера находится по его началу', () async {
     final dir = await Directory.systemTemp.createTemp('skipit_report_test');
     addTearDown(() => dir.delete(recursive: true));
