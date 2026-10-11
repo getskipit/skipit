@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'site_check.dart';
 
 typedef SpeedResult = ({double? mbit, String? error});
+typedef SpeedProgress = void Function(double mbit, double done);
 
 /// Замер скорости скачивания: один и тот же файл через VPN и мимо него.
 class SpeedReport {
@@ -13,6 +14,15 @@ class SpeedReport {
 
   /// Что идёт сейчас — для подписи у кнопки.
   String stage = '';
+
+  /// Какой путь меряется сейчас: 0 — через VPN, 1 — мимо VPN; null — замер не идёт.
+  int? running;
+
+  /// Какая часть времени замера этого пути прошла, от 0 до 1.
+  double progress = 0;
+
+  /// Скорость по ходу замера, четыре раза в секунду: по ней окно рисует столбики.
+  final vpnSamples = <double>[], directSamples = <double>[];
   double? vpnMbit, directMbit;
   String? vpnError, directError;
 
@@ -55,6 +65,10 @@ class SpeedTest {
   static const duration = Duration(seconds: 6), warmup = Duration(seconds: 1);
   static const _timeout = Duration(seconds: 8);
 
+  /// Как часто замер сообщает скорость по ходу дела и сколько таких сообщений выходит за замер.
+  static const tick = Duration(milliseconds: 250);
+  static int get ticks => duration.inMilliseconds ~/ tick.inMilliseconds;
+
   /// Скорость по счётчику байт: [atWarmup] — сколько было скачано к концу разгона (null — до него не
   /// дошло), [total] — всего, [elapsed] — сколько шёл замер.
   static double mbit({required int total, int? atWarmup, required Duration elapsed}) {
@@ -63,13 +77,25 @@ class SpeedTest {
     return time.inMilliseconds <= 0 ? 0 : counted * 8 / 1000 / time.inMilliseconds;
   }
 
-  /// Качает файл по готовому защищённому соединению и считает скорость.
-  static Future<SpeedResult> _download(RawSecureSocket tls) async {
+  /// Качает файл по готовому защищённому соединению и считает скорость. [onProgress] раз в [tick]
+  /// получает скорость за последний отрезок и долю прошедшего времени.
+  static Future<SpeedResult> _download(RawSecureSocket tls, SpeedProgress? onProgress) async {
     final done = Completer<void>();
     final watch = Stopwatch()..start();
     var total = 0;
     int? atWarmup;
     String? status;
+    var seenBytes = 0, seenAt = Duration.zero;
+    final ticker = Timer.periodic(tick, (_) {
+      final now = watch.elapsed, ms = (now - seenAt).inMilliseconds;
+      if (ms > 0) {
+        onProgress?.call((total - seenBytes) * 8 / 1000 / ms, (now.inMilliseconds / duration.inMilliseconds).clamp(0, 1).toDouble());
+      }
+      seenBytes = total;
+      seenAt = now;
+      // Данные могли перестать идти — тогда замер заканчивает не чтение, а время.
+      if (now >= duration && !done.isCompleted) done.complete();
+    });
     tls.listen((event) {
       if (event == RawSocketEvent.read) {
         for (var chunk = tls.read(); chunk != null && chunk.isNotEmpty; chunk = tls.read()) {
@@ -87,6 +113,7 @@ class SpeedTest {
     tls.write(ascii.encode('GET $path HTTP/1.1\r\nHost: $host\r\nUser-Agent: SkipIt\r\nAccept: */*\r\n'
         'Connection: close\r\n\r\n'));
     await done.future.timeout(duration + _timeout, onTimeout: () {});
+    ticker.cancel();
     final elapsed = watch.elapsed;
     if (status == null) return (mbit: null, error: 'сервер замера не ответил');
     if (!status!.contains(' 200')) return (mbit: null, error: 'сервер замера ответил «$status»');
@@ -95,7 +122,7 @@ class SpeedTest {
   }
 
   /// Через VPN: соединение с сервером замера через вход проверки связи ядра на порту [port].
-  static Future<SpeedResult> viaVpn({required int port}) async {
+  static Future<SpeedResult> viaVpn({required int port, SpeedProgress? onProgress}) async {
     RawSocket? raw;
     RawSecureSocket? tls;
     try {
@@ -118,7 +145,7 @@ class SpeedTest {
       final status = (await answer.future.timeout(_timeout, onTimeout: () => '')).split('\r\n').first;
       if (!status.contains(' 200')) return (mbit: null, error: 'ядро не открыло соединение');
       tls = await RawSecureSocket.secure(socket, subscription: listening, host: host).timeout(_timeout);
-      return await _download(tls);
+      return await _download(tls, onProgress);
     } on TimeoutException {
       return (mbit: null, error: 'нет ответа за ${_timeout.inSeconds} с');
     } catch (_) {
@@ -131,13 +158,14 @@ class SpeedTest {
 
   /// Мимо VPN: соединение с адресом [address] сервера замера через сетевую карту с адресом [source]
   /// (null — обычным маршрутом: так в режимах без адаптера).
-  static Future<SpeedResult> direct(InternetAddress address, InternetAddress? source) async {
+  static Future<SpeedResult> direct(InternetAddress address, InternetAddress? source,
+      {SpeedProgress? onProgress}) async {
     RawSocket? raw;
     RawSecureSocket? tls;
     try {
       raw = await RawSocket.connect(address, 443, sourceAddress: source, timeout: _timeout);
       tls = await RawSecureSocket.secure(raw, host: host).timeout(_timeout);
-      return await _download(tls);
+      return await _download(tls, onProgress);
     } on TimeoutException {
       return (mbit: null, error: 'нет ответа за ${_timeout.inSeconds} с');
     } catch (_) {

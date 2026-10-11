@@ -346,6 +346,65 @@ class _SpeedCard extends StatelessWidget {
   const _SpeedCard({required this.state});
   final AppState state;
 
+  /// Плитка одного пути: пока он меряется — живая скорость, столбики и полоска времени; после —
+  /// итог над теми же столбиками. [index] — номер пути в замере (см. SpeedReport.running).
+  Widget _gauge(String name, SpeedReport r, int index, double? result, List<double> samples, String? error) {
+    final active = r.running == index;
+    final waiting = !r.done && !active && result == null && error == null && samples.isEmpty;
+    final failed = !active && !waiting && result == null;
+    final value = active
+        ? SpeedReport.show(samples.lastOrNull)
+        : waiting
+            ? '—'
+            : (result != null ? SpeedReport.show(result) : (index == 0 ? 'не удалось' : 'не измерялось'));
+    return Container(
+      width: 266,
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+      decoration: BoxDecoration(
+        color: C.surface2,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: active ? C.orange.withValues(alpha: 0.6) : C.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text(name, style: TextStyle(color: C.muted, fontSize: 11)),
+        const SizedBox(height: 2),
+        Text(value,
+            maxLines: 1,
+            style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: failed && index == 0 ? C.red : (waiting ? C.muted : null),
+                fontFeatures: const [FontFeature.tabularFigures()])),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 34,
+          width: double.infinity,
+          child: CustomPaint(painter: _SpeedBars(samples, active ? C.orange : C.orange.withValues(alpha: 0.45))),
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(end: active ? r.progress : (samples.isEmpty ? 0 : 1)),
+            duration: SpeedTest.tick,
+            builder: (context, shown, _) => LinearProgressIndicator(
+                value: shown, minHeight: 3, backgroundColor: C.border, color: active ? C.orange : C.muted),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+            active
+                ? 'идёт замер…'
+                : waiting
+                    ? 'ждёт очереди'
+                    : (result != null ? 'скачивание' : (error ?? '—')),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: C.muted, fontSize: 11)),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = state.speedReport;
@@ -374,20 +433,49 @@ class _SpeedCard extends StatelessWidget {
             ),
           ),
         ]),
-        if (r != null && r.done) ...[
+        if (r != null) ...[
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            _metric('Через VPN', SpeedReport.show(r.vpnMbit), r.vpnMbit == null ? (r.vpnError ?? '—') : 'скачивание',
-                color: r.vpnMbit == null ? C.red : null),
-            _metric('Мимо VPN', r.directMbit == null ? 'не измерялось' : SpeedReport.show(r.directMbit),
-                r.directMbit == null ? (r.directError ?? '—') : 'скачивание'),
+            _gauge('Через VPN', r, 0, r.vpnMbit, r.vpnSamples, r.vpnError),
+            _gauge('Мимо VPN', r, 1, r.directMbit, r.directSamples, r.directError),
           ]),
-          for (final note in r.notes) _note(note),
-          _copy(state, () => r.copyText),
+          if (r.done) ...[
+            for (final note in r.notes) _note(note),
+            _copy(state, () => r.copyText),
+          ],
         ],
       ]),
     );
   }
+}
+
+/// Столбики скорости по ходу замера: по одному на каждое сообщение замера, высота — от наибольшего.
+class _SpeedBars extends CustomPainter {
+  _SpeedBars(this.samples, this.color);
+  final List<double> samples;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final slots = SpeedTest.ticks;
+    final step = size.width / slots, width = step - 2;
+    final peak = samples.fold(1.0, (a, b) => a > b ? a : b);
+    final paint = Paint()..color = color.withValues(alpha: 0.85);
+    final rest = Paint()..color = C.border;
+    for (var i = 0; i < slots; i++) {
+      final has = i < samples.length;
+      // Пустые места — короткими чёрточками: видно, сколько замера ещё впереди.
+      final height = has ? (samples[i] / peak * size.height).clamp(2.0, size.height) : 2.0;
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(i * step, size.height - height, width, height), const Radius.circular(1.5)),
+          has ? paint : rest);
+    }
+  }
+
+  // Список пополняется на месте — сравнить его с прежним нельзя.
+  @override
+  bool shouldRepaint(_SpeedBars old) => true;
 }
 
 /// Проверка DNS-серверов подключения: за сколько отвечает каждый, каким путём идёт запрос и далеко ли

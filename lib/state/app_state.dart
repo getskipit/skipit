@@ -300,15 +300,25 @@ class AppState extends ChangeNotifier {
   Future<void> checkSpeed() async {
     final port = _checkPort;
     if (checkingSpeed || !isConnected || port == null) return;
-    final report = speedReport = SpeedReport()..stage = 'через VPN…';
+    final report = speedReport = SpeedReport()
+      ..stage = 'через VPN…'
+      ..running = 0;
     checkingSpeed = true;
     notifyListeners();
+    // Скорость по ходу замера — для столбиков и полоски времени в окне.
+    SpeedProgress live(List<double> samples) => (mbit, done) {
+          samples.add(mbit);
+          report.progress = done;
+          notifyListeners();
+        };
     try {
-      final vpn = await SpeedTest.viaVpn(port: port);
+      final vpn = await SpeedTest.viaVpn(port: port, onProgress: live(report.vpnSamples));
       report
         ..vpnMbit = vpn.mbit
         ..vpnError = vpn.error
-        ..stage = 'мимо VPN…';
+        ..stage = 'мимо VPN…'
+        ..running = 1
+        ..progress = 0;
       notifyListeners();
       if (killSwitchOn) {
         report.directError = 'включён Kill Switch — мимо VPN программа ничего не отправляет';
@@ -322,7 +332,7 @@ class AppState extends ChangeNotifier {
             final address = (await InternetAddress.lookup(SpeedTest.host, type: InternetAddressType.IPv4)
                     .timeout(const Duration(seconds: 4)))
                 .first;
-            final direct = await SpeedTest.direct(address, source);
+            final direct = await SpeedTest.direct(address, source, onProgress: live(report.directSamples));
             report
               ..directMbit = direct.mbit
               ..directError = direct.error;
@@ -333,7 +343,9 @@ class AppState extends ChangeNotifier {
       }
       log.add('app', report.copyText.split('\n').first);
     } finally {
-      report.done = true;
+      report
+        ..running = null
+        ..done = true;
       checkingSpeed = false;
       notifyListeners();
     }
