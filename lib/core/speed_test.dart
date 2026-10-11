@@ -58,12 +58,17 @@ class SpeedReport {
       ].join('\n');
 }
 
-/// Замер скорости: несколько секунд качается проверочный файл, скачанное никуда не сохраняется.
-/// Через VPN — через вход проверки связи ядра (он всегда ведёт через VPN-сервер), напрямую — через
-/// настоящую сетевую карту. Файл и сервер одни и те же, так что разница — это сам VPN.
+/// Замер скорости: несколько секунд проверочный файл качается сразу в несколько соединений, скачанное
+/// никуда не сохраняется. Через VPN — через вход проверки связи ядра (он всегда ведёт через VPN-сервер),
+/// напрямую — через настоящую сетевую карту. Файл и сервер одни и те же, так что разница — это сам VPN.
+/// Одно соединение упирается в собственный потолок задолго до быстрой линии, поэтому их несколько,
+/// а скорость — их сумма.
 class SpeedTest {
   /// Открытый сервер замера скорости и файл на нём.
   static const host = 'speedtest.selectel.ru', path = '/100MB';
+
+  /// Сколько соединений качают файл одновременно.
+  static const streams = 4;
 
   /// Сколько длится один замер и сколько из этого идёт на разгон (в счёт не идёт).
   static const duration = Duration(seconds: 6), warmup = Duration(seconds: 1);
@@ -81,121 +86,151 @@ class SpeedTest {
     return time.inMilliseconds <= 0 ? 0 : counted * 8 / 1000 / time.inMilliseconds;
   }
 
-  /// Качает файл по готовому защищённому соединению и считает скорость. [onProgress] раз в [tick]
-  /// получает скорость за последний отрезок и долю прошедшего времени.
-  static Future<SpeedResult> _download(RawSecureSocket tls, SpeedProgress? onProgress) async {
-    final done = Completer<void>();
-    final watch = Stopwatch()..start();
-    var total = 0;
-    int? atWarmup;
-    String? status;
-    // Сколько байт придёт всего (заголовки и файл) и когда пришли последние: файл может кончиться
-    // раньше срока замера, и время после него в счёт идти не должно.
-    int? fileEnd;
-    Duration? lastDataAt;
-    var seenBytes = 0, seenAt = Duration.zero;
-    final ticker = Timer.periodic(tick, (_) {
-      if (done.isCompleted) return;
-      final now = watch.elapsed, ms = (now - seenAt).inMilliseconds;
-      // Секунду ничего не приходит, хотя файл уже шёл, — он кончился или соединение встало.
-      if (lastDataAt != null && total > 1024 * 1024 && now - lastDataAt! >= const Duration(seconds: 1)) {
-        done.complete();
-        return;
-      }
-      if (ms > 0) {
-        onProgress?.call((total - seenBytes) * 8 / 1000 / ms, (now.inMilliseconds / duration.inMilliseconds).clamp(0, 1).toDouble());
-      }
-      seenBytes = total;
-      seenAt = now;
-      // Данные могли перестать идти — тогда замер заканчивает не чтение, а время.
-      if (now >= duration && !done.isCompleted) done.complete();
-    });
-    tls.listen((event) {
-      if (event == RawSocketEvent.read) {
-        for (var chunk = tls.read(); chunk != null && chunk.isNotEmpty; chunk = tls.read()) {
-          if (status == null) {
-            final head = latin1.decode(chunk.sublist(0, chunk.length < 2048 ? chunk.length : 2048));
-            status = head.split('\r\n').first;
-            // Размер файла — из заголовков ответа. Сами заголовки (у этого сервера они длиннее двух
-            // килобайт) к нему не прибавляем: на счёт скорости такая малость не влияет.
-            final length = RegExp(r'content-length:\s*(\d+)', caseSensitive: false).firstMatch(head)?.group(1);
-            if (length != null) fileEnd = int.parse(length);
+  /// Открывает [streams] соединений способом [open] и качает файл по всем сразу; скорость — сумма.
+  /// [onProgress] раз в [tick] получает скорость за последний отрезок и долю прошедшего времени.
+  static Future<SpeedResult> _measure(Future<_Link> Function() open, SpeedProgress? onProgress) async {
+    final links = <_Link>[];
+    String? openError;
+    await Future.wait([
+      for (var i = 0; i < streams; i++)
+        () async {
+          try {
+            links.add(await open());
+          } on TimeoutException {
+            openError = 'нет ответа за ${_timeout.inSeconds} с';
+          } catch (_) {
+            openError = 'соединение с сервером замера не установилось';
           }
-          total += chunk.length;
-        }
-        lastDataAt = watch.elapsed;
-        if (atWarmup == null && watch.elapsed >= warmup) atWarmup = total;
-        final whole = fileEnd != null && total >= fileEnd!;
-        if ((whole || watch.elapsed >= duration) && !done.isCompleted) done.complete();
-      } else if (event == RawSocketEvent.closed || event == RawSocketEvent.readClosed) {
+        }(),
+    ]);
+    if (links.isEmpty) return (mbit: null, error: openError ?? 'соединение с сервером замера не установилось');
+    try {
+      final done = Completer<void>();
+      final watch = Stopwatch()..start();
+      var total = 0, alive = links.length;
+      int? atWarmup;
+      String? status;
+      // Когда пришли последние байты: файлы могут кончиться раньше срока, и простой после них в счёт
+      // идти не должен.
+      Duration? lastDataAt;
+      void finish() {
         if (!done.isCompleted) done.complete();
       }
-    }, onError: (Object e) {
-      if (!done.isCompleted) done.complete();
-    });
-    tls.write(ascii.encode('GET $path HTTP/1.1\r\nHost: $host\r\nUser-Agent: SkipIt\r\nAccept: */*\r\n'
-        'Connection: close\r\n\r\n'));
-    await done.future.timeout(duration + _timeout, onTimeout: () {});
-    ticker.cancel();
-    final elapsed = lastDataAt ?? watch.elapsed;
-    if (status == null) return (mbit: null, error: 'сервер замера не ответил');
-    if (!status!.contains(' 200')) return (mbit: null, error: 'сервер замера ответил «$status»');
-    if (total < 200 * 1024) return (mbit: null, error: 'сервер замера не отдал файл');
-    return (mbit: mbit(total: total, atWarmup: atWarmup, elapsed: elapsed), error: null);
-  }
 
-  /// Через VPN: соединение с сервером замера через вход проверки связи ядра на порту [port].
-  static Future<SpeedResult> viaVpn({required int port, SpeedProgress? onProgress}) async {
-    RawSocket? raw;
-    RawSecureSocket? tls;
-    try {
-      final socket = raw = await RawSocket.connect(InternetAddress.loopbackIPv4, port, timeout: _timeout);
-      final answer = Completer<String>();
-      final head = BytesBuilder();
-      final listening = socket.listen((event) {
-        if (answer.isCompleted) return;
-        if (event == RawSocketEvent.read) {
-          head.add(socket.read() ?? const []);
-          final text = latin1.decode(head.toBytes());
-          if (text.contains('\r\n\r\n')) answer.complete(text);
-        } else if (event == RawSocketEvent.closed || event == RawSocketEvent.readClosed) {
-          answer.complete('');
+      for (final link in links) {
+        final tls = link.tls;
+        // Сколько байт придёт по этому соединению (размер файла из заголовков ответа; сами заголовки
+        // к нему не прибавляем — на счёт скорости такая малость не влияет) и сколько уже пришло.
+        int? fileEnd;
+        var got = 0, closed = false;
+        void close() {
+          if (closed) return;
+          closed = true;
+          if (--alive == 0) finish();
         }
-      }, onError: (Object e) {
-        if (!answer.isCompleted) answer.complete('');
+
+        tls.listen((event) {
+          if (event == RawSocketEvent.read) {
+            for (var chunk = tls.read(); chunk != null && chunk.isNotEmpty; chunk = tls.read()) {
+              if (got == 0) {
+                final head = latin1.decode(chunk.sublist(0, chunk.length < 2048 ? chunk.length : 2048));
+                final line = head.split('\r\n').first;
+                if (status == null || line.contains(' 200')) status = line;
+                final length = RegExp(r'content-length:\s*(\d+)', caseSensitive: false).firstMatch(head)?.group(1);
+                if (length != null) fileEnd = int.parse(length);
+              }
+              got += chunk.length;
+              total += chunk.length;
+            }
+            lastDataAt = watch.elapsed;
+            if (atWarmup == null && watch.elapsed >= warmup) atWarmup = total;
+            if (fileEnd != null && got >= fileEnd!) close();
+            if (watch.elapsed >= duration) finish();
+          } else if (event == RawSocketEvent.closed || event == RawSocketEvent.readClosed) {
+            close();
+          }
+        }, onError: (Object e) => close());
+        tls.write(ascii.encode('GET $path HTTP/1.1\r\nHost: $host\r\nUser-Agent: SkipIt\r\nAccept: */*\r\n'
+            'Connection: close\r\n\r\n'));
+      }
+
+      var seenBytes = 0, seenAt = Duration.zero;
+      final ticker = Timer.periodic(tick, (_) {
+        if (done.isCompleted) return;
+        final now = watch.elapsed, ms = (now - seenAt).inMilliseconds;
+        if (atWarmup == null && now >= warmup) atWarmup = total;
+        // Секунду ничего не приходит, хотя файл уже шёл, — соединения встали.
+        if (lastDataAt != null && total > 1024 * 1024 && now - lastDataAt! >= const Duration(seconds: 1)) {
+          finish();
+          return;
+        }
+        if (ms > 0) {
+          onProgress?.call(
+              (total - seenBytes) * 8 / 1000 / ms, (now.inMilliseconds / duration.inMilliseconds).clamp(0, 1).toDouble());
+        }
+        seenBytes = total;
+        seenAt = now;
+        if (now >= duration) finish();
       });
-      socket.write(ascii.encode('CONNECT $host:443 HTTP/1.1\r\nHost: $host:443\r\n\r\n'));
-      final status = (await answer.future.timeout(_timeout, onTimeout: () => '')).split('\r\n').first;
-      if (!status.contains(' 200')) return (mbit: null, error: 'ядро не открыло соединение');
-      tls = await RawSecureSocket.secure(socket, subscription: listening, host: host).timeout(_timeout);
-      return await _download(tls, onProgress);
-    } on TimeoutException {
-      return (mbit: null, error: 'нет ответа за ${_timeout.inSeconds} с');
-    } catch (_) {
-      return (mbit: null, error: 'соединение с сервером замера не установилось');
+      await done.future.timeout(duration + _timeout, onTimeout: () {});
+      ticker.cancel();
+      final elapsed = lastDataAt ?? watch.elapsed;
+      if (status == null) return (mbit: null, error: 'сервер замера не ответил');
+      if (!status!.contains(' 200')) return (mbit: null, error: 'сервер замера ответил «$status»');
+      if (total < 200 * 1024) return (mbit: null, error: 'сервер замера не отдал файл');
+      return (mbit: mbit(total: total, atWarmup: atWarmup, elapsed: elapsed), error: null);
     } finally {
-      await tls?.close();
-      await raw?.close();
+      for (final link in links) {
+        unawaited(link.tls.close().catchError((Object _) => link.tls));
+        unawaited(link.raw.close().catchError((Object _) => link.raw));
+      }
     }
   }
 
-  /// Напрямую: соединение с адресом [address] сервера замера через сетевую карту с адресом [source]
+  /// Через VPN: соединения с сервером замера через вход проверки связи ядра на порту [port].
+  static Future<SpeedResult> viaVpn({required int port, SpeedProgress? onProgress}) => _measure(() async {
+        final socket = await RawSocket.connect(InternetAddress.loopbackIPv4, port, timeout: _timeout);
+        try {
+          final answer = Completer<String>();
+          final head = BytesBuilder();
+          final listening = socket.listen((event) {
+            if (answer.isCompleted) return;
+            if (event == RawSocketEvent.read) {
+              head.add(socket.read() ?? const []);
+              final text = latin1.decode(head.toBytes());
+              if (text.contains('\r\n\r\n')) answer.complete(text);
+            } else if (event == RawSocketEvent.closed || event == RawSocketEvent.readClosed) {
+              answer.complete('');
+            }
+          }, onError: (Object e) {
+            if (!answer.isCompleted) answer.complete('');
+          });
+          socket.write(ascii.encode('CONNECT $host:443 HTTP/1.1\r\nHost: $host:443\r\n\r\n'));
+          final status = (await answer.future.timeout(_timeout, onTimeout: () => '')).split('\r\n').first;
+          if (!status.contains(' 200')) throw const SocketException('ядро не открыло соединение');
+          final tls =
+              await RawSecureSocket.secure(socket, subscription: listening, host: host).timeout(_timeout);
+          return (raw: socket, tls: tls);
+        } catch (_) {
+          unawaited(socket.close().catchError((Object _) => socket));
+          rethrow;
+        }
+      }, onProgress);
+
+  /// Напрямую: соединения с адресом [address] сервера замера через сетевую карту с адресом [source]
   /// (null — обычным маршрутом: так в режимах без адаптера).
   static Future<SpeedResult> direct(InternetAddress address, InternetAddress? source,
-      {SpeedProgress? onProgress}) async {
-    RawSocket? raw;
-    RawSecureSocket? tls;
-    try {
-      raw = await RawSocket.connect(address, 443, sourceAddress: source, timeout: _timeout);
-      tls = await RawSecureSocket.secure(raw, host: host).timeout(_timeout);
-      return await _download(tls, onProgress);
-    } on TimeoutException {
-      return (mbit: null, error: 'нет ответа за ${_timeout.inSeconds} с');
-    } catch (_) {
-      return (mbit: null, error: 'соединение с сервером замера не установилось');
-    } finally {
-      await tls?.close();
-      await raw?.close();
-    }
-  }
+          {SpeedProgress? onProgress}) =>
+      _measure(() async {
+        final raw = await RawSocket.connect(address, 443, sourceAddress: source, timeout: _timeout);
+        try {
+          return (raw: raw, tls: await RawSecureSocket.secure(raw, host: host).timeout(_timeout));
+        } catch (_) {
+          unawaited(raw.close().catchError((Object _) => raw));
+          rethrow;
+        }
+      }, onProgress);
 }
+
+/// Одно соединение замера: само соединение и защищённый канал поверх него.
+typedef _Link = ({RawSocket raw, RawSecureSocket tls});
