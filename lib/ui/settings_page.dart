@@ -352,35 +352,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ]),
           ),
           _Row(
-            title: 'Отчёт для разбора',
-            subtitle: 'Если что-то не работает: версия, настройки и журнал последнего подключения одним файлом — '
-                'без ключей, ссылок подписок и адресов VPN-серверов',
-            trailing: GhostButton(
-              label: 'Собрать',
-              icon: Icons.summarize_rounded,
-              onPressed: () async {
-                final ok = await confirm(
-                    context,
-                    'Собрать отчёт?',
-                    'В журнале есть адреса сайтов, которые открывались при этом подключении '
-                        '(на уровнях логов info и debug — все). Ключи, ссылки подписок и адреса VPN-серверов '
-                        'в отчёт не попадают. Пока VPN подключён, записываются адреса DNS-серверов, к которым '
-                        'ходит программа: по ним можно примерно понять, из какой вы страны. '
-                        'Отправляйте файл только тому, кому доверяете.',
-                    ok: 'Собрать');
-                if (!ok) return;
-                final dir = await WinSys.pickFolder();
-                if (dir == null) return;
-                try {
-                  final path = await state.makeReport(dir);
-                  state.toast('Отчёт сохранён', kind: ToastKind.success, detail: path.split(r'\').last);
-                } catch (e) {
-                  state.toast('Не удалось сохранить отчёт: ${describeNetError(e)}');
-                }
-              },
-            ),
-          ),
-          _Row(
             title: 'Версия SkipIt',
             subtitle: [
               appVersion,
@@ -545,7 +516,6 @@ const _keywords = <String, String>{
   'HWID устройства': 'идентификатор устройство скопировать',
   'Папка данных': 'файлы логи журнал открыть',
   'Перенос настроек': 'экспорт импорт резервная копия бэкап backup сохранить перенести',
-  'Отчёт для разбора': 'диагностика поддержка проблема не работает журнал логи отправить report',
   'Версия SkipIt': 'обновление обновить update новая версия',
   'Канал обновлений': 'бета beta стабильный обновление',
   'Ядра': 'xray sing-box версия ядро',

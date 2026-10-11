@@ -11,6 +11,7 @@ import '../core/windows.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
 import '../version.dart';
+import 'check_page.dart';
 import 'home_page.dart';
 import 'logs_page.dart';
 import 'routing_hub_page.dart';
@@ -168,6 +169,7 @@ class _ShellState extends State<Shell> {
     (Icons.storage_rounded, 'Серверы'),
     (Icons.alt_route_rounded, 'Маршрутизация'),
     (Icons.receipt_long_rounded, 'Логи'),
+    (Icons.troubleshoot_rounded, 'Проверка'),
     (Icons.tune_rounded, 'Настройки'),
   ];
 
@@ -275,6 +277,7 @@ class _ShellState extends State<Shell> {
       const Padding(padding: EdgeInsets.fromLTRB(24, 24, 24 - scrollGutter, 0), child: ServersPanel(manage: true)),
       const RoutingHubPage(),
       const LogsPage(),
+      const CheckPage(),
       const SettingsPage(),
     ];
     return Scaffold(
