@@ -71,16 +71,26 @@ void main() {
       ..firstMs = 260
       ..warmMs = 190
       ..replyMs = 150
+      ..vpnSiteMs = 190
       ..vpnBaseMs = 170;
     expect(usual.notes.single.text,
         'Задержек по дороге не видно: соединение 190 мс — обычное время пути через VPN-сервер, ответ сайта 150 мс');
     // Проверочный адрес ответил дольше сайта — это всплеск на дороге, а не повод для вывода.
     expect(kinds(usual..vpnBaseMs = 420), [SiteNoteKind.ok]);
 
+    // Сайт и проверочный адрес шли разными выходами ядра (у провайдера их несколько): сравнивать нечего,
+    // и долгое соединение само по себе выводом «сайт далеко» не становится.
+    final otherPath = report(ConnRoute.proxy)
+      ..firstMs = 257
+      ..warmMs = 250
+      ..replyMs = 108;
+    expect(otherPath.notes.single.text, 'Задержек по дороге не видно: соединение 250 мс, ответ сайта 108 мс');
+
     final distant = report(ConnRoute.proxy)
       ..firstMs = 700
       ..warmMs = 640
       ..replyMs = 300
+      ..vpnSiteMs = 640
       ..vpnBaseMs = 170;
     expect(distant.notes.single.text, contains('Сайт далеко от VPN-сервера'));
   });

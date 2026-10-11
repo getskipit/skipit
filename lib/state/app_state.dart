@@ -95,13 +95,17 @@ class AppState extends ChangeNotifier {
     }
     final failedAt = _unknownSources.remove(c.source);
     if (failedAt != null && DateTime.now().difference(failedAt) < const Duration(seconds: 3)) c.unknownProcess = true;
+    // Идёт проверка сайта: запоминаем соединения по порту программы — среди них её собственные.
+    if (_siteCheckHost != null) {
+      final localPort = int.tryParse(c.source.split(':').last);
+      if (localPort != null) _siteCheckConns[localPort] = c;
+    }
     // Запрос проверки DNS: запоминаем, каким путём ядро его отправило.
     if (c.inbound == XrayConfig.dnsCheckInTag) {
       _dnsCheckRoute = c.route;
       return true;
     }
-    // Соединение проверки сайта: запоминаем его путь (в списке соединений оно остаётся).
-    if (c.host == _siteCheckHost && c.port == 443) _siteCheckRoute ??= c.route;
+
     // Собственная проверка связи — не соединение программы.
     if (c.route != ConnRoute.dns && c.inbound != 'api' && c.inbound != XrayConfig.checkInTag) log.addConnection(c);
     return true;
@@ -191,9 +195,10 @@ class AppState extends ChangeNotifier {
   SiteReport? siteReport;
   bool checkingSite = false;
 
-  /// Сайт, который сейчас проверяется, и путь, которым ядро отправило соединение с ним.
+  /// Сайт, который сейчас проверяется, и соединения, прошедшие через ядро за время проверки, — по
+  /// порту, с которого они шли: так проверка узнаёт путь и выход каждого своего соединения.
   String? _siteCheckHost;
-  ConnRoute? _siteCheckRoute;
+  final _siteCheckConns = <int, ConnEntry>{};
 
   /// Проверяет сайт [host] так, как к нему ходит браузер, — через локальный HTTP-порт ядра.
   Future<void> checkSite(String host) async {
@@ -201,7 +206,7 @@ class AppState extends ChangeNotifier {
     final report = siteReport = SiteReport(host);
     checkingSite = true;
     _siteCheckHost = host;
-    _siteCheckRoute = null;
+    _siteCheckConns.clear();
     notifyListeners();
     try {
       final tunnel = WinSys.tunnelOnDefaultRoute();
@@ -214,7 +219,7 @@ class AppState extends ChangeNotifier {
           checkHost: XrayConfig.checkHost,
           ownTun: WinSys.ownTunActive(),
           sources: sources,
-          routeOf: () => _siteCheckRoute);
+          connOf: (localPort) => _siteCheckConns[localPort]);
       log.add('app', 'Проверка сайта ${report.host}: ${report.summary}');
     } finally {
       _siteCheckHost = null;

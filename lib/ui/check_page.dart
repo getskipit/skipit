@@ -75,9 +75,10 @@ class _SiteCardState extends State<_SiteCard> {
     if (host != null) widget.state.checkSite(host);
   }
 
-  /// Плитка с одним замером: подпись, значение и, если есть, адрес под ним.
-  Widget _metric(String name, String value, {String? address, Color? color}) => Container(
-        constraints: const BoxConstraints(minWidth: 128),
+  /// Плитка с одним замером: подпись, значение и пояснение под ним ([mono] — это адрес). Плитки одного
+  /// размера: три строки в каждой.
+  Widget _metric(String name, String value, String note, {bool mono = false, Color? color}) => Container(
+        width: 172,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: C.surface2,
@@ -85,11 +86,13 @@ class _SiteCardState extends State<_SiteCard> {
           border: Border.all(color: C.border),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text(name, style: TextStyle(color: C.muted, fontSize: 11)),
+          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 11)),
           const SizedBox(height: 2),
           Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
-          if (address != null)
-            Text(address, style: TextStyle(color: C.muted, fontSize: 11, fontFamily: 'Consolas')),
+          Text(note,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: C.muted, fontSize: 11, fontFamily: mono ? 'Consolas' : null)),
         ]),
       );
 
@@ -185,16 +188,16 @@ class _SiteCardState extends State<_SiteCard> {
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
               if (r.firstMs == null)
-                _metric('Соединение', 'не открылось', color: C.red)
+                _metric('Соединение', 'не открылось', 'этим путём', color: C.red)
               else ...[
-                _metric('Первое соединение', ms(r.firstMs)),
-                _metric('Повторное', ms(r.warmMs)),
-                _metric('Ответ сайта', ms(r.replyMs)),
+                _metric('Первое соединение', ms(r.firstMs), 'вместе с поиском адреса'),
+                _metric('Повторное', ms(r.warmMs), 'лучшее из трёх'),
+                _metric('Ответ сайта', ms(r.replyMs), 'после соединения'),
               ],
-              if (r.vpnBaseMs != null) _metric('Проверочный адрес через VPN', ms(r.vpnBaseMs)),
-              if (r.address != null) _metric('Адрес от DNS ядра, мимо VPN', ms(r.addressMs), address: r.address),
+              if (r.vpnBaseMs != null) _metric('Проверочный адрес', ms(r.vpnBaseMs), 'тем же путём через VPN'),
+              if (r.address != null) _metric('Адрес от DNS ядра', ms(r.addressMs), r.address!, mono: true),
               if (r.otherAddress != null)
-                _metric('Адрес от независимого DNS, мимо VPN', ms(r.otherMs), address: r.otherAddress),
+                _metric('Адрес от независимого DNS', ms(r.otherMs), r.otherAddress!, mono: true),
             ]),
             for (final note in r.notes) _note(note),
           ],

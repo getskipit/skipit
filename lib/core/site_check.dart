@@ -30,8 +30,11 @@ class SiteReport {
   /// Почему соединение не открылось.
   String? error;
 
-  /// То же до проверочного адреса, который всегда идёт через VPN-сервер: время самого пути через VPN.
-  int? vpnBaseMs;
+  /// Сравнение с проверочным адресом, который всегда идёт через VPN: лучшее соединение с сайтом и с этим
+  /// адресом одним и тем же выходом ядра. У провайдера выходов бывает несколько, и на новое соединение они
+  /// тратят разное время — сравнивать сайт на одном с проверочным адресом на другом нельзя. null — общего
+  /// выхода среди замеров не нашлось.
+  int? vpnSiteMs, vpnBaseMs;
 
   /// Адрес, который называет DNS ядра (только когда трафик идёт через свой адаптер), и за сколько с ним
   /// открывается соединение мимо VPN. Меряется только у сайта, идущего напрямую.
@@ -81,10 +84,11 @@ class SiteReport {
           'DNS назвал далёкий адрес: до него $addressMs мс, а до адреса от независимого DNS — $otherMs мс. '
           'Посмотрите серверы в блоке «DNS» выше');
     }
-    if (route == ConnRoute.proxy && vpnBaseMs != null && warm - vpnBaseMs! >= 150 && warm * 2 > vpnBaseMs! * 3) {
+    final compared = route == ConnRoute.proxy && vpnSiteMs != null && vpnBaseMs != null;
+    if (compared && vpnSiteMs! - vpnBaseMs! >= 150 && vpnSiteMs! * 2 > vpnBaseMs! * 3) {
       add(SiteNoteKind.warn,
-          'Сайт далеко от VPN-сервера: соединение с ним $warm мс, а с проверочным адресом через тот же '
-          'сервер — $vpnBaseMs мс');
+          'Сайт далеко от VPN-сервера: соединение с ним $vpnSiteMs мс, а с проверочным адресом тем же '
+          'путём — $vpnBaseMs мс');
     }
     if (replyMs == null) {
       add(SiteNoteKind.warn, 'Соединение открылось, но на запрос сайт не ответил за ${SiteCheck.timeout.inSeconds} с');
@@ -96,7 +100,7 @@ class SiteReport {
       add(
           SiteNoteKind.ok,
           'Задержек по дороге не видно: соединение $warm мс'
-          '${route == ConnRoute.proxy ? ' — обычное время пути через VPN-сервер' : ''}, '
+          '${compared ? ' — обычное время пути через VPN-сервер' : ''}, '
           'ответ сайта ${replyMs ?? '—'} мс');
     }
     return found;
@@ -109,7 +113,7 @@ class SiteReport {
         if (replyMs != null) 'ответ сайта $replyMs мс',
         if (addressMs != null) 'адрес от DNS ядра мимо VPN $addressMs мс',
         if (otherMs != null) 'адрес от независимого DNS $otherMs мс',
-        if (vpnBaseMs != null) 'проверочный адрес через VPN $vpnBaseMs мс',
+        if (vpnBaseMs != null) 'тем же путём через VPN: сайт $vpnSiteMs мс, проверочный адрес $vpnBaseMs мс',
         if (error != null) error!,
       ].join(', ');
 }
@@ -132,13 +136,16 @@ class SiteCheck {
   /// Соединение с [host] (порт 443) через локальный HTTP-порт ядра [port]: за сколько оно готово
   /// (вместе с поиском адреса и шифрованием) и за сколько сайт ответил на запрос заголовков.
   /// [auth] — «логин:пароль» порта, если он закрыт паролем.
-  static Future<({int? readyMs, int? replyMs, String? error})> viaProxy(String host,
+  /// localPort — порт, с которого шло соединение: по нему оно находится в журнале ядра.
+  static Future<({int? readyMs, int? replyMs, String? error, int? localPort})> viaProxy(String host,
       {required int port, String? auth}) async {
     RawSocket? raw;
+    int? localPort;
     RawSecureSocket? secure;
     final watch = Stopwatch()..start();
     try {
       final socket = raw = await RawSocket.connect(InternetAddress.loopbackIPv4, port, timeout: timeout);
+      localPort = socket.port;
       final answer = Completer<String>();
       final head = BytesBuilder();
       final listening = socket.listen((event) {
@@ -157,7 +164,12 @@ class SiteCheck {
       socket.write(ascii.encode('CONNECT $host:443 HTTP/1.1\r\nHost: $host:443\r\n$login\r\n'));
       final status = (await answer.future.timeout(timeout, onTimeout: () => '')).split('\r\n').first;
       if (!status.contains(' 200')) {
-        return (readyMs: null, replyMs: null, error: status.isEmpty ? 'ядро не ответило' : 'ядро ответило «$status»');
+        return (
+          readyMs: null,
+          replyMs: null,
+          error: status.isEmpty ? 'ядро не ответило' : 'ядро ответило «$status»',
+          localPort: localPort
+        );
       }
       // Ядро отвечает «готово» сразу, ещё до соединения с сайтом: открылось ли оно, видно по шифрованию.
       final tls = secure = await RawSecureSocket.secure(socket,
@@ -179,11 +191,21 @@ class SiteCheck {
       tls.write(ascii.encode(
           'HEAD / HTTP/1.1\r\nHost: $host\r\nUser-Agent: SkipIt\r\nAccept: */*\r\nConnection: close\r\n\r\n'));
       final got = await reply.future.timeout(timeout, onTimeout: () => false);
-      return (readyMs: readyMs, replyMs: got ? watch.elapsedMilliseconds - readyMs : null, error: null);
+      return (
+        readyMs: readyMs,
+        replyMs: got ? watch.elapsedMilliseconds - readyMs : null,
+        error: null,
+        localPort: localPort
+      );
     } on TimeoutException {
-      return (readyMs: null, replyMs: null, error: 'нет ответа за ${timeout.inSeconds} с');
+      return (readyMs: null, replyMs: null, error: 'нет ответа за ${timeout.inSeconds} с', localPort: localPort);
     } catch (_) {
-      return (readyMs: null, replyMs: null, error: 'соединение закрылось, не успев установиться');
+      return (
+        readyMs: null,
+        replyMs: null,
+        error: 'соединение закрылось, не успев установиться',
+        localPort: localPort
+      );
     } finally {
       await secure?.close();
       await raw?.close();
@@ -234,31 +256,49 @@ class SiteCheck {
     required String checkHost,
     required bool ownTun,
     List<InternetAddress> sources = const [],
-    required ConnRoute? Function() routeOf,
+    required ConnEntry? Function(int localPort) connOf,
   }) async {
+    // Лучшее время соединения по каждому выходу ядра, которым шли замеры [made].
+    Map<String, int> byOutbound(List<({int? readyMs, int? replyMs, String? error, int? localPort})> made) {
+      final best = <String, int>{};
+      for (final m in made) {
+        final out = m.localPort == null ? null : connOf(m.localPort!)?.outbound;
+        if (out != null && m.readyMs != null) best[out] = _best(best[out], m.readyMs)!;
+      }
+      return best;
+    }
+
     try {
       final first = await viaProxy(report.host, port: port, auth: auth);
+      final site = [first];
       report
         ..firstMs = first.readyMs
         ..replyMs = first.replyMs
         ..error = first.error;
-      // Повторных соединений два, в счёт идёт лучшее: дорога через VPN-сервер то и дело даёт всплески,
+      // Повторных соединений три, в счёт идёт лучшее: дорога через VPN-сервер то и дело даёт всплески,
       // и по одному замеру выводы от проверки к проверке получались разные.
-      for (var i = 0; i < 2 && first.readyMs != null; i++) {
+      for (var i = 0; i < 3 && first.readyMs != null; i++) {
         final again = await viaProxy(report.host, port: port, auth: auth);
+        site.add(again);
         report
           ..warmMs = _best(report.warmMs, again.readyMs)
           ..replyMs = _best(report.replyMs, again.replyMs);
       }
       // Строка журнала ядра о том, куда ушло соединение, приходит чуть позже него самого.
       await Future.delayed(const Duration(milliseconds: 200));
-      report.route = routeOf();
+      report.route = site.map((m) => m.localPort == null ? null : connOf(m.localPort!)).nonNulls.firstOrNull?.route;
 
       if (report.route == ConnRoute.proxy && checkPort != null && report.firstMs != null) {
-        // Первый раз — с поиском адреса; из остальных берётся лучший, как и у самого сайта.
-        await viaProxy(checkHost, port: checkPort);
-        for (var i = 0; i < 2; i++) {
-          report.vpnBaseMs = _best(report.vpnBaseMs, (await viaProxy(checkHost, port: checkPort)).readyMs);
+        final base = [for (var i = 0; i < 4; i++) await viaProxy(checkHost, port: checkPort)];
+        await Future.delayed(const Duration(milliseconds: 200));
+        // Сравниваем только то, что шло одним выходом; если общих несколько — тот, где сайт быстрее.
+        final siteBy = byOutbound(site), baseBy = byOutbound(base);
+        for (final out in siteBy.keys.where(baseBy.containsKey)) {
+          if (report.vpnSiteMs == null || siteBy[out]! < report.vpnSiteMs!) {
+            report
+              ..vpnSiteMs = siteBy[out]
+              ..vpnBaseMs = baseBy[out];
+          }
         }
       }
       // Мимо VPN идём только к сайту, который и так идёт напрямую: адрес сайта, идущего через VPN,
