@@ -146,6 +146,9 @@ class _SiteCardState extends State<_SiteCard> {
   final _site = TextEditingController();
   bool _wrong = false;
 
+  /// Какие сайты из нескольких развёрнуты до подробного вида.
+  final _open = <String>{};
+
   @override
   void dispose() {
     _site.dispose();
@@ -154,7 +157,10 @@ class _SiteCardState extends State<_SiteCard> {
 
   void _check() {
     final hosts = SiteCheck.hostsOf(_site.text);
-    setState(() => _wrong = hosts == null);
+    setState(() {
+      _wrong = hosts == null;
+      _open.clear();
+    });
     if (hosts != null) widget.state.checkSites(hosts);
   }
 
@@ -179,8 +185,11 @@ class _SiteCardState extends State<_SiteCard> {
   List<Widget> _full(SiteReport r) => [
         const SizedBox(height: 14),
         _name(r, 13.5),
-        if (r.done) ...[
-          const SizedBox(height: 10),
+        if (r.done) ...[const SizedBox(height: 10), ..._details(r)],
+      ];
+
+  /// Подробности проверенного сайта: плитки замеров и все строки вывода.
+  List<Widget> _details(SiteReport r) => [
           Wrap(spacing: 8, runSpacing: 8, children: [
             if (r.firstMs == null)
               _metric('Соединение', 'не открылось', 'этим путём', color: C.red)
@@ -192,37 +201,60 @@ class _SiteCardState extends State<_SiteCard> {
             if (r.vpnBaseMs != null) _metric('Проверочный адрес', _ms(r.vpnBaseMs), 'тем же путём через VPN'),
             if (r.address != null) _metric('Адрес от DNS ядра', _ms(r.addressMs), r.address!, mono: true),
             if (r.otherAddress != null)
-              _metric('Адрес от независимого DNS', _ms(r.otherMs), r.otherAddress!, mono: true),
+              _metric('Адрес от другого DNS', _ms(r.otherMs), r.otherAddress!, mono: true),
           ]),
           for (final note in r.notes) _note(note),
-        ],
       ];
 
-  /// Строка одного сайта, когда их несколько: путь, времена и главный вывод.
+  /// Строка одного сайта, когда их несколько: путь, времена и главный вывод. По клику разворачивается
+  /// до того же подробного вида, что у одного сайта.
   Widget _compact(SiteReport r) {
     final note = r.done ? r.mainNote : null;
     final (icon, color) = note == null ? (Icons.circle, C.muted) : _look(note.kind);
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (note != null) ...[
-          Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 16, color: color)),
-          const SizedBox(width: 10),
-        ],
-        Expanded(
+    final open = r.done && _open.contains(r.host);
+    return Hover(
+      enabled: r.done,
+      builder: (context, hovered) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: !r.done ? null : () => setState(() => open ? _open.remove(r.host) : _open.add(r.host)),
+        child: Container(
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.fromLTRB(12, 9, 8, 10),
+          decoration: BoxDecoration(
+            color: hovered || open ? C.surface2 : null,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: C.border),
+          ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _name(r, 12.5),
-            if (r.done && r.firstMs != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                  'первое соединение ${_ms(r.firstMs)} · повторное ${_ms(r.warmMs)} · ответ сайта ${_ms(r.replyMs)}',
-                  style: TextStyle(color: C.muted, fontSize: 12)),
-            ],
-            if (note != null && (note.kind != SiteNoteKind.ok || r.firstMs == null))
-              Text(note.text, style: TextStyle(color: color, fontSize: 12)),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (note != null) ...[
+                Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 16, color: color)),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _name(r, 12.5),
+                  if (!open && r.done && r.firstMs != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                        'первое соединение ${_ms(r.firstMs)} · повторное ${_ms(r.warmMs)} · '
+                        'ответ сайта ${_ms(r.replyMs)}',
+                        style: TextStyle(color: C.muted, fontSize: 12)),
+                  ],
+                  if (!open && note != null && (note.kind != SiteNoteKind.ok || r.firstMs == null))
+                    Text(note.text, style: TextStyle(color: color, fontSize: 12)),
+                ]),
+              ),
+              if (r.done)
+                Tooltip(
+                  message: open ? 'Свернуть' : 'Развернуть: все замеры и выводы',
+                  child: Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: C.muted),
+                ),
+            ]),
+            if (open) ...[const SizedBox(height: 10), ..._details(r)],
           ]),
         ),
-      ]),
+      ),
     );
   }
 
@@ -262,7 +294,7 @@ class _SiteCardState extends State<_SiteCard> {
         ],
         if (reports.length == 1) ..._full(reports.single),
         if (reports.length > 1) ...[
-          const SizedBox(height: 2),
+          const SizedBox(height: 6),
           for (final r in reports) _compact(r),
         ],
         if (reports.isNotEmpty && reports.every((r) => r.done))

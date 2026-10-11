@@ -82,7 +82,7 @@ class SiteReport {
     if (farAddress) {
       add(SiteNoteKind.warn,
           'DNS назвал далёкий адрес: до него $addressMs мс, а до адреса от независимого DNS — $otherMs мс. '
-          'Посмотрите серверы в блоке «DNS» выше');
+          'Серверы можно проверить ниже, в карточке «Как отвечают DNS-серверы»');
     }
     final compared = route == ConnRoute.proxy && vpnSiteMs != null && vpnBaseMs != null;
     if (compared && vpnSiteMs! - vpnBaseMs! >= 150 && vpnSiteMs! * 2 > vpnBaseMs! * 3) {
@@ -140,7 +140,7 @@ class SiteCheck {
   }
 
   /// Сколько сайтов проверяется за один раз.
-  static const maxHosts = 8;
+  static const maxHosts = 5;
 
   /// Несколько сайтов через запятую, пробел или с новой строки — без повторов. null — что-то из
   /// вписанного не имя сайта, или сайтов больше [maxHosts].
