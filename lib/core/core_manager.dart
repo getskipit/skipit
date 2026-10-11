@@ -116,6 +116,10 @@ class TrafficStats {
   int directUp = 0, directDown = 0;
   int upSpeed = 0, downSpeed = 0;
 
+  /// Скорость за последние замеры (новые — в конце): по ним главная рисует график под цифрами.
+  final upHistory = <int>[], downHistory = <int>[];
+  static const historyLength = 90;
+
   int get up => vpnUp + directUp;
   int get down => vpnDown + directDown;
 
@@ -137,6 +141,8 @@ class TrafficStats {
     _xrayDirectUp = _xrayDirectDown = _tunDirectUp = _tunDirectDown = 0;
     _speedAt = null;
     _speedUp = _speedDown = 0;
+    upHistory.clear();
+    downHistory.clear();
     _tunConns.clear();
   }
 
@@ -186,6 +192,10 @@ class TrafficStats {
     _speedAt = now;
     _speedUp = up;
     _speedDown = down;
+    for (final (history, speed) in [(upHistory, upSpeed), (downHistory, downSpeed)]) {
+      history.add(speed);
+      if (history.length > historyLength) history.removeAt(0);
+    }
   }
 
   /// Счётчики выходов Xray: выходы-«freedom» — напрямую, блокировка и DNS не считаются, остальное — VPN.
