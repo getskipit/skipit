@@ -97,6 +97,13 @@ void main() {
       ..vpnMbit = 80
       ..directMbit = 95;
     expect(same.notes.single.kind, SiteNoteKind.ok);
+    expect(same.notes.single.text, 'VPN скорость заметно не режет: 80 Мбит/с против 95 Мбит/с напрямую');
+    // Через VPN быстрее, чем напрямую, — не ошибка замера: об этом сказано словами.
+    final faster = SpeedReport()
+      ..vpnMbit = 307
+      ..directMbit = 144;
+    expect(faster.notes.single.kind, SiteNoteKind.ok);
+    expect(faster.notes.single.text, contains('вышло даже быстрее (307 Мбит/с против 144 Мбит/с напрямую)'));
     final cut = SpeedReport()
       ..vpnMbit = 20
       ..directMbit = 95;
