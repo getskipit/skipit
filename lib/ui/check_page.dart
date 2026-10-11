@@ -217,11 +217,12 @@ class _SiteCardState extends State<_SiteCard> {
       builder: (context, hovered) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: !r.done ? null : () => setState(() => open ? _open.remove(r.host) : _open.add(r.host)),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
           margin: const EdgeInsets.only(top: 8),
           padding: const EdgeInsets.fromLTRB(12, 9, 8, 10),
           decoration: BoxDecoration(
-            color: hovered || open ? C.surface2 : null,
+            color: hovered || open ? C.surface2 : C.surface2.withValues(alpha: 0),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: C.border),
           ),
@@ -234,24 +235,50 @@ class _SiteCardState extends State<_SiteCard> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _name(r, 12.5),
-                  if (!open && r.done && r.firstMs != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                        'первое соединение ${_ms(r.firstMs)} · повторное ${_ms(r.warmMs)} · '
-                        'ответ сайта ${_ms(r.replyMs)}',
-                        style: TextStyle(color: C.muted, fontSize: 12)),
-                  ],
-                  if (!open && note != null && (note.kind != SiteNoteKind.ok || r.firstMs == null))
-                    Text(note.text, style: TextStyle(color: color, fontSize: 12)),
+                  // Короткий итог плавно уступает место подробностям и так же возвращается.
+                  Reveal(
+                    open: !open && r.done,
+                    // Во всю ширину: виджет раскрытия ставит узкое содержимое по центру.
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (r.firstMs != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                            'первое соединение ${_ms(r.firstMs)} · повторное ${_ms(r.warmMs)} · '
+                            'ответ сайта ${_ms(r.replyMs)}',
+                            style: TextStyle(color: C.muted, fontSize: 12)),
+                      ],
+                      if (note != null && (note.kind != SiteNoteKind.ok || r.firstMs == null))
+                        Text(note.text, style: TextStyle(color: color, fontSize: 12)),
+                    ]),
+                    ),
+                  ),
                 ]),
               ),
               if (r.done)
                 Tooltip(
                   message: open ? 'Свернуть' : 'Развернуть: все замеры и выводы',
-                  child: Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: C.muted),
+                  child: AnimatedRotation(
+                    turns: open ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(Icons.expand_more_rounded, color: C.muted),
+                  ),
                 ),
             ]),
-            if (open) ...[const SizedBox(height: 10), ..._details(r)],
+            Reveal(
+              open: open,
+              child: r.done
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 10, right: 4),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _details(r)),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ]),
         ),
       ),
