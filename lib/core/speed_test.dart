@@ -112,9 +112,10 @@ class SpeedTest {
           if (status == null) {
             final head = latin1.decode(chunk.sublist(0, chunk.length < 2048 ? chunk.length : 2048));
             status = head.split('\r\n').first;
-            final end = head.indexOf('\r\n\r\n');
+            // Размер файла — из заголовков ответа. Сами заголовки (у этого сервера они длиннее двух
+            // килобайт) к нему не прибавляем: на счёт скорости такая малость не влияет.
             final length = RegExp(r'content-length:\s*(\d+)', caseSensitive: false).firstMatch(head)?.group(1);
-            if (end >= 0 && length != null) fileEnd = end + 4 + int.parse(length);
+            if (length != null) fileEnd = int.parse(length);
           }
           total += chunk.length;
         }

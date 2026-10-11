@@ -343,6 +343,12 @@ class AppState extends ChangeNotifier {
       }
       log.add('app', report.copyText.split('\n').first);
     } finally {
+      // Замер, оборвавшийся по простою, оставляет в конце нулевые отсчёты — в столбиках им не место.
+      for (final samples in [report.vpnSamples, report.directSamples]) {
+        while (samples.isNotEmpty && samples.last < 0.5) {
+          samples.removeLast();
+        }
+      }
       report
         ..running = null
         ..done = true;
