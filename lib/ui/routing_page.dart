@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/dns_check.dart';
+import '../core/site_check.dart';
 import '../core/xray_config.dart';
 import '../models/routing.dart';
 import '../state/app_scope.dart';
@@ -110,6 +111,8 @@ class RoutingPage extends StatelessWidget {
               ),
             const SizedBox(height: 14),
             _DnsCard(state: state, fromProvider: provider != null),
+            const SizedBox(height: 14),
+            _SiteCard(state: state),
             const SizedBox(height: 14),
             if (own.isNotEmpty) ...[
               Padding(
@@ -363,6 +366,129 @@ class _DnsCardState extends State<_DnsCard> {
           ),
         ]),
       );
+}
+
+/// «Почему тормозит сайт?»: проверка одного сайта — каким путём он идёт и на что уходит время.
+class _SiteCard extends StatefulWidget {
+  const _SiteCard({required this.state});
+  final AppState state;
+
+  @override
+  State<_SiteCard> createState() => _SiteCardState();
+}
+
+class _SiteCardState extends State<_SiteCard> {
+  final _site = TextEditingController();
+  bool _wrong = false;
+
+  @override
+  void dispose() {
+    _site.dispose();
+    super.dispose();
+  }
+
+  void _check() {
+    final host = SiteCheck.hostOf(_site.text);
+    setState(() => _wrong = host == null);
+    if (host != null) widget.state.checkSite(host);
+  }
+
+  Widget _row(String name, String value) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 200, child: Text(name, style: TextStyle(color: C.muted, fontSize: 12.5))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 12.5))),
+        ]),
+      );
+
+  Widget _note(SiteNote note) {
+    final (icon, color) = switch (note.kind) {
+      SiteNoteKind.ok => (Icons.check_circle_rounded, C.green),
+      SiteNoteKind.info => (Icons.info_rounded, C.orange),
+      SiteNoteKind.warn => (Icons.error_rounded, C.orange),
+      SiteNoteKind.bad => (Icons.error_rounded, C.red),
+    };
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 16, color: color)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(note.text,
+              style: TextStyle(fontSize: 12.5, color: note.kind == SiteNoteKind.info ? C.muted : null)),
+        ),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final r = state.siteReport;
+    String ms(int? value) => value == null ? '—' : '$value мс';
+    return Panel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.troubleshoot_rounded, color: C.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Почему тормозит сайт?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              const SizedBox(height: 2),
+              Text('Проверим сайт так, как к нему ходит браузер: каким путём он идёт и на что уходит время',
+                  style: TextStyle(color: C.muted, fontSize: 12)),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _site,
+              onSubmitted: (_) => _check(),
+              decoration: const InputDecoration(labelText: 'Адрес сайта', hintText: 'example.com'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GhostButton(
+            label: 'Проверить',
+            icon: Icons.speed_rounded,
+            busy: state.checkingSite,
+            onPressed: state.isConnected ? _check : null,
+          ),
+        ]),
+        if (_wrong || !state.isConnected) ...[
+          const SizedBox(height: 8),
+          Text(_wrong ? 'Впишите адрес сайта, например example.com' : 'Проверка работает, пока VPN подключён',
+              style: TextStyle(color: _wrong ? C.orange : C.muted, fontSize: 12)),
+        ],
+        if (r != null) ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: Text(r.host, style: const TextStyle(fontFamily: 'Consolas', fontSize: 12.5))),
+            if (!r.done) const Spinner(size: 16),
+          ]),
+          if (r.done) ...[
+            _row('Путь', r.path),
+            _row('Соединение этим путём',
+                r.firstMs == null ? 'не открылось' : '${ms(r.firstMs)}, повторное ${ms(r.warmMs)}'),
+            if (r.firstMs != null) _row('Ответ сайта', ms(r.replyMs)),
+            if (r.vpnBaseMs != null) _row('Проверочный адрес через VPN', ms(r.vpnBaseMs)),
+            if (r.address != null) _row('Адрес от DNS ядра', '${r.address} — мимо VPN ${ms(r.addressMs)}'),
+            if (r.otherAddress != null)
+              _row('Адрес от независимого DNS', '${r.otherAddress} — мимо VPN ${ms(r.otherMs)}'),
+            for (final note in r.notes) _note(note),
+          ],
+        ],
+        const SizedBox(height: 10),
+        Text(
+          'Правила по приложениям на проверку не действуют. Мимо VPN программа обращается только к сайту, '
+          'который и так идёт напрямую: открывает соединение с его адресом и спрашивает адрес у Google.',
+          style: TextStyle(color: C.muted, fontSize: 12),
+        ),
+      ]),
+    );
+  }
 }
 
 class _ProfileTile extends StatelessWidget {

@@ -13,6 +13,7 @@ import '../core/net.dart';
 import '../core/paths.dart';
 import '../core/ping.dart';
 import '../core/report.dart';
+import '../core/site_check.dart';
 import '../core/singbox_config.dart';
 import '../core/tray.dart';
 import '../core/updates.dart';
@@ -99,6 +100,8 @@ class AppState extends ChangeNotifier {
       _dnsCheckRoute = c.route;
       return true;
     }
+    // Соединение проверки сайта: запоминаем его путь (в списке соединений оно остаётся).
+    if (c.host == _siteCheckHost && c.port == 443) _siteCheckRoute ??= c.route;
     // Собственная проверка связи — не соединение программы.
     if (c.route != ConnRoute.dns && c.inbound != 'api' && c.inbound != XrayConfig.checkInTag) log.addConnection(c);
     return true;
@@ -183,6 +186,42 @@ class AppState extends ChangeNotifier {
   String _dnsCheckPassword = '';
   Map<String, dynamic>? _dnsConfig;
   ConnRoute? _dnsCheckRoute;
+
+  /// Проверка одного сайта («Почему тормозит?») — для страницы «Маршрутизация».
+  SiteReport? siteReport;
+  bool checkingSite = false;
+
+  /// Сайт, который сейчас проверяется, и путь, которым ядро отправило соединение с ним.
+  String? _siteCheckHost;
+  ConnRoute? _siteCheckRoute;
+
+  /// Проверяет сайт [host] так, как к нему ходит браузер, — через локальный HTTP-порт ядра.
+  Future<void> checkSite(String host) async {
+    if (checkingSite || !isConnected) return;
+    final report = siteReport = SiteReport(host);
+    checkingSite = true;
+    _siteCheckHost = host;
+    _siteCheckRoute = null;
+    notifyListeners();
+    try {
+      final tunnel = WinSys.tunnelOnDefaultRoute();
+      final sources =
+          tunnel == null ? const <InternetAddress>[] : await Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
+      await SiteCheck.run(report,
+          port: (_session ?? settings).httpPort,
+          auth: Net.proxyAuth,
+          checkPort: _checkPort,
+          checkHost: XrayConfig.checkHost,
+          ownTun: WinSys.ownTunActive(),
+          sources: sources,
+          routeOf: () => _siteCheckRoute);
+      log.add('app', 'Проверка сайта ${report.host}: ${report.summary}');
+    } finally {
+      _siteCheckHost = null;
+      checkingSite = false;
+      notifyListeners();
+    }
+  }
 
   /// Результаты последней проверки — для блока «DNS» на странице «Маршрутизация».
   List<DnsProbe> dnsProbes = [];
