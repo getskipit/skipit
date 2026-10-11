@@ -230,7 +230,8 @@ class AppState extends ChangeNotifier {
             auth: Net.proxyAuth,
             checkPort: _checkPort,
             checkHost: XrayConfig.checkHost,
-            ownTun: WinSys.ownTunActive(),
+            // Сравнение адресов идёт мимо VPN — при Kill Switch его нет.
+            ownTun: WinSys.ownTunActive() && !killSwitchOn,
             sources: sources,
             connOf: (localPort) => _siteCheckConns[localPort]);
         log.add('app', 'Проверка сайта ${report.host}: ${report.summary}');
@@ -376,7 +377,9 @@ class AppState extends ChangeNotifier {
           tunnel == null ? const <InternetAddress>[] : await Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
       for (final probe in dnsProbes) {
         _dnsCheckRoute = null;
-        await DnsCheck.run(probe, checkPort: port, password: _dnsCheckPassword, nic: nic, sources: sources);
+        // При Kill Switch мимо VPN программа сама ничего не отправляет — расстояние до адресов не меряется.
+        await DnsCheck.run(probe,
+            checkPort: port, password: _dnsCheckPassword, nic: nic, sources: sources, measureReach: !killSwitchOn);
         // Строка журнала ядра о том, куда ушёл запрос, приходит чуть позже ответа.
         await Future.delayed(const Duration(milliseconds: 200));
         probe.route = _dnsCheckRoute;

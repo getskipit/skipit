@@ -41,7 +41,7 @@ class SiteReport {
   String? address;
   int? addressMs;
 
-  /// Адрес того же сайта от независимого DNS, спрошенного напрямую, и время до него.
+  /// Адрес того же сайта от Google DNS, спрошенного напрямую, и время до него.
   String? otherAddress;
   int? otherMs;
 
@@ -52,7 +52,7 @@ class SiteReport {
         _ => 'путь не определён',
       };
 
-  /// Адрес от независимого DNS заметно ближе: больше чем в полтора раза и не меньше чем на 60 мс.
+  /// Адрес от Google DNS заметно ближе: больше чем в полтора раза и не меньше чем на 60 мс.
   bool get farAddress =>
       addressMs != null && otherMs != null && addressMs! - otherMs! >= 60 && addressMs! * 2 > otherMs! * 3;
 
@@ -268,7 +268,7 @@ class SiteCheck {
 
   /// Замеры для [report]. [port] и [auth] — локальный HTTP-порт ядра, [checkPort] — вход проверки связи
   /// (всегда ведёт через VPN-сервер к [checkHost]), [ownTun] — трафик идёт через свой адаптер, и системный
-  /// DNS — это DNS ядра. [routeOf] отдаёт путь, которым ядро отправило соединение с сайтом.
+  /// DNS — это DNS ядра. [connOf] по порту, с которого шло соединение, отдаёт запись о нём из журнала ядра: путь и выход.
   static Future<void> run(
     SiteReport report, {
     required int port,
