@@ -83,8 +83,8 @@ void main() {
       await shot('home');
       for (final (icon, title) in [
         (Icons.alt_route_rounded, 'Маршрутизация'),
-        (Icons.receipt_long_rounded, 'Логи'),
         (Icons.troubleshoot_rounded, 'Проверка'),
+        (Icons.receipt_long_rounded, 'Логи'),
         (Icons.tune_rounded, 'Настройки'),
       ]) {
         await tester.tap(find.byIcon(icon).first);

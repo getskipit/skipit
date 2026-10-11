@@ -168,8 +168,8 @@ class _ShellState extends State<Shell> {
     (Icons.bolt_rounded, 'Главная'),
     (Icons.storage_rounded, 'Серверы'),
     (Icons.alt_route_rounded, 'Маршрутизация'),
-    (Icons.receipt_long_rounded, 'Логи'),
     (Icons.troubleshoot_rounded, 'Проверка'),
+    (Icons.receipt_long_rounded, 'Логи'),
     (Icons.tune_rounded, 'Настройки'),
   ];
 
@@ -276,8 +276,8 @@ class _ShellState extends State<Shell> {
       // Раздел «Серверы»: все подписки и серверы, включая скрытые с главной, на всю ширину окна.
       const Padding(padding: EdgeInsets.fromLTRB(24, 24, 24 - scrollGutter, 0), child: ServersPanel(manage: true)),
       const RoutingHubPage(),
-      const LogsPage(),
       const CheckPage(),
+      const LogsPage(),
       const SettingsPage(),
     ];
     return Scaffold(
