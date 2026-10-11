@@ -51,6 +51,12 @@ class LineReport {
   int left = LineCheck.seconds;
   LinePath vpn = LinePath(), direct = LinePath();
 
+  /// По ходу замера — для полосы в окне: время ответа на каждый пакет (null — ответа пока нет),
+  /// сколько пакетов ушло и сколько уйдёт всего.
+  List<int?> vpnRtt = const [], directRtt = const [];
+  int sent = 0, total = LineCheck.packets;
+  double get progress => total == 0 ? 0 : (sent / total).clamp(0, 1).toDouble();
+
   /// Почему путь не измерялся.
   String? vpnSkipped, directSkipped;
   String? error;
@@ -164,6 +170,11 @@ class LineCheck {
       final watch = Stopwatch()..start();
       final sentAt = [List<int?>.filled(total, null), List<int?>.filled(total, null)];
       final rtt = [List<int?>.filled(total, null), List<int?>.filled(total, null)];
+      report.total = total;
+      if (sockets[0] != null) report.vpnRtt = rtt[0];
+      if (sockets[1] != null) report.directRtt = rtt[1];
+      // Пакеты моложе секунды в промежуточный итог не идут: ответ на них может быть ещё в пути.
+      final fresh = 1000 ~/ interval.inMilliseconds;
       for (var i = 0; i < 2; i++) {
         final socket = sockets[i];
         socket?.listen((event) {
@@ -192,9 +203,14 @@ class LineCheck {
           }
         }
         n++;
-        final left = ((total - n) * interval.inMilliseconds / 1000).ceil();
-        if (left != report.left) {
-          report.left = left;
+        report
+          ..sent = n
+          ..left = ((total - n) * interval.inMilliseconds / 1000).ceil();
+        // Окно обновляется четыре раза в секунду — вместе с промежуточным итогом по каждому пути.
+        if (n % (250 ~/ interval.inMilliseconds) == 0) {
+          final settled = n > fresh ? n - fresh : 0;
+          if (sockets[0] != null) report.vpn = path(rtt[0].sublist(0, settled));
+          if (sockets[1] != null) report.direct = path(rtt[1].sublist(0, settled));
           onTick?.call();
         }
       });

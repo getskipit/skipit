@@ -283,18 +283,62 @@ class _LineCard extends StatelessWidget {
   const _LineCard({required this.state});
   final AppState state;
 
-  List<Widget> _path(String name, LinePath p, String? skipped) => [
-        if (skipped != null || !p.measured)
-          _metric(name, 'не измерялось', skipped ?? '—')
-        else if (p.silent)
-          _metric(name, 'ответов нет', 'из ${p.sent} пакетов', color: C.orange)
-        else ...[
-          _metric('$name: потери', p.lossText(), '${p.lost} из ${p.sent} пакетов', color: p.lossPercent >= 1 ? C.orange : null),
-          _metric('$name: ответ', _ms(p.usual), 'худший ${_ms(p.worst)}'),
-          _metric('$name: всплески', '${p.spikes}', 'дольше обычного на ${LineCheck.spikeOver} мс',
-              color: p.rough && p.lossPercent < 1 ? C.orange : null),
-        ],
-      ];
+  /// Плитка одного пути: обычный ответ крупно, под ним полоса замера (столбик — худший ответ за
+  /// отрезок, красный — потеря) и строка с потерями, худшим ответом и всплесками.
+  Widget _gauge(String name, LineReport r, LinePath p, List<int?> rtt, String? skipped) {
+    final off = skipped != null || (r.done && !p.measured);
+    final active = !r.done && !off;
+    final value = off
+        ? 'не измерялось'
+        : p.silent && r.done
+            ? 'ответов нет'
+            : _ms(p.usual);
+    final detail = off
+        ? (skipped ?? '—')
+        : !p.measured
+            ? 'идёт замер…'
+            : p.silent
+                ? 'из ${p.sent} пакетов'
+                : 'потери ${p.lossText()} · худший ${_ms(p.worst)} · всплесков ${p.spikes}';
+    return Container(
+      width: 266,
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+      decoration: BoxDecoration(
+        color: C.surface2,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: active ? C.orange.withValues(alpha: 0.6) : C.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text(name, style: TextStyle(color: C.muted, fontSize: 11)),
+        const SizedBox(height: 2),
+        Text(value,
+            maxLines: 1,
+            style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: off ? C.muted : (p.silent && r.done ? C.orange : null),
+                fontFeatures: const [FontFeature.tabularFigures()])),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 34,
+          width: double.infinity,
+          child: CustomPaint(painter: _LineBars(off ? const [] : rtt, r.sent, r.done, p.usual)),
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(end: off ? 0 : r.progress),
+            duration: const Duration(milliseconds: 250),
+            builder: (context, shown, _) => LinearProgressIndicator(
+                value: shown, minHeight: 3, backgroundColor: C.border, color: active ? C.orange : C.muted),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 11)),
+      ]),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -325,20 +369,85 @@ class _LineCard extends StatelessWidget {
             ),
           ),
         ]),
+        if (r != null && r.error == null) ...[
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            _gauge('Через VPN', r, r.vpn, r.vpnRtt, r.vpnSkipped),
+            _gauge('Напрямую', r, r.direct, r.directRtt, r.directSkipped),
+          ]),
+          if (r.done)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                  'Столбик — худший ответ за отрезок времени: яркий — всплеск (дольше обычного на '
+                  '${LineCheck.spikeOver} мс), красный — пакет потерян',
+                  style: TextStyle(color: C.muted, fontSize: 11.5)),
+            ),
+        ],
         if (r != null && r.done) ...[
-          if (r.error == null) ...[
-            const SizedBox(height: 12),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              ..._path('Через VPN', r.vpn, r.vpnSkipped),
-              ..._path('Напрямую', r.direct, r.directSkipped),
-            ]),
-          ],
           for (final note in r.notes) _note(note),
           _copy(state, () => r.copyText),
         ],
       ]),
     );
   }
+}
+
+/// Полоса замера стабильности: время делится на равные отрезки, столбик — худший ответ за отрезок.
+/// Ровная связь — низкий ровный ряд; всплески торчат яркими столбиками, потери — красными.
+class _LineBars extends CustomPainter {
+  _LineBars(this.rtt, this.sent, this.done, this.usual);
+
+  /// Время ответа на каждый пакет (null — ответа нет) и сколько пакетов уже ушло.
+  final List<int?> rtt;
+  final int sent;
+  final bool done;
+  final int? usual;
+
+  static const _slots = 50;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final step = size.width / _slots, width = step - 1.5;
+    final per = rtt.isEmpty ? 1 : (rtt.length / _slots).ceil();
+    // Пакет считается потерянным, когда ответа нет уже секунду: до того он может быть ещё в пути.
+    final settled = done ? sent : sent - 1000 ~/ LineCheck.interval.inMilliseconds;
+    final base = usual ?? 0;
+    var peak = base * 2 > 100 ? base * 2 : 100;
+    for (var i = 0; i < sent && i < rtt.length; i++) {
+      if ((rtt[i] ?? 0) > peak) peak = rtt[i]!;
+    }
+    void bar(int slot, double height, Color color) => canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(slot * step, size.height - height, width, height), const Radius.circular(1.5)),
+        Paint()..color = color);
+    for (var slot = 0; slot < _slots; slot++) {
+      final from = slot * per;
+      int? worst;
+      var lost = false;
+      for (var i = from; i < from + per && i < rtt.length && i < sent; i++) {
+        final ms = rtt[i];
+        if (ms == null) {
+          lost = lost || i < settled;
+        } else if (worst == null || ms > worst) {
+          worst = ms;
+        }
+      }
+      if (lost) {
+        bar(slot, size.height, C.red.withValues(alpha: 0.9));
+      } else if (worst == null) {
+        // Замер сюда ещё не дошёл.
+        bar(slot, 2, C.border);
+      } else {
+        final spike = worst > base + LineCheck.spikeOver;
+        bar(slot, (worst / peak * size.height).clamp(2.0, size.height), C.orange.withValues(alpha: spike ? 1 : 0.4));
+      }
+    }
+  }
+
+  // Список пополняется на месте — сравнить его с прежним нельзя.
+  @override
+  bool shouldRepaint(_LineBars old) => true;
 }
 
 /// Замер скорости скачивания через VPN и напрямую.
