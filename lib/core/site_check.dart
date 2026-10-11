@@ -61,15 +61,20 @@ class SiteReport {
       add(SiteNoteKind.bad, 'Сайт заблокирован правилом маршрутизации — поэтому он не открывается');
       return found;
     }
-    final warm = warmMs ?? firstMs;
+    // Время самой дороги — лучшее из двух соединений: ядро могло пойти к разным адресам сайта.
+    final warm = firstMs == null || warmMs == null ? (warmMs ?? firstMs) : (firstMs! < warmMs! ? firstMs : warmMs);
     if (warm == null) {
       add(SiteNoteKind.bad, 'Этим путём сайт не открылся${error == null ? '' : ': $error'}');
       if (addressMs != null) add(SiteNoteKind.info, 'Сам адрес сайта при этом отвечает мимо VPN за $addressMs мс');
       return found;
     }
+    // Поиск адреса — разовая задержка: дальше ядро берёт адрес из памяти, и повторная проверка её не
+    // покажет. Причиной медленной работы её считаем, только когда она заметна человеку.
     if (firstMs != null && warmMs != null && firstMs! - warmMs! >= 400) {
-      add(SiteNoteKind.warn,
-          'Первое соединение на ${firstMs! - warmMs!} мс дольше повторного — столько ушло на поиск адреса (DNS)');
+      final lookup = firstMs! - warmMs!;
+      add(lookup >= 1500 ? SiteNoteKind.warn : SiteNoteKind.info,
+          'Первое соединение на $lookup мс дольше повторного: столько занял поиск адреса (DNS). '
+          'Это разовая задержка — дальше адрес берётся из памяти ядра');
     }
     if (farAddress) {
       add(SiteNoteKind.warn,

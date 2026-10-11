@@ -49,6 +49,21 @@ void main() {
       ..warmMs = 120
       ..replyMs = 90;
     expect(slowDns.notes.single.text, contains('на 1580 мс дольше повторного'));
+    expect(slowDns.notes.single.kind, SiteNoteKind.warn);
+
+    // Недолгий поиск адреса — к сведению, а не причина: повторная проверка его уже не покажет,
+    // и вывод у обеих должен быть один — «задержек не видно».
+    final firstRun = report(ConnRoute.direct)
+      ..firstMs = 620
+      ..warmMs = 120
+      ..replyMs = 90;
+    expect(kinds(firstRun), [SiteNoteKind.info, SiteNoteKind.ok]);
+    // Повторное соединение ушло к другому адресу сайта и вышло дольше первого: дорога — лучшее из двух.
+    final otherAddress = report(ConnRoute.direct)
+      ..firstMs = 19
+      ..warmMs = 117
+      ..replyMs = 62;
+    expect(otherAddress.notes.single.text, 'Задержек по дороге не видно: соединение 19 мс, ответ сайта 62 мс');
   });
 
   test('вывод: сайт через VPN сравнивается с проверочным адресом через тот же сервер', () {
