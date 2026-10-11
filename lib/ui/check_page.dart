@@ -320,11 +320,17 @@ class _LineCard extends StatelessWidget {
   Widget _gauge(String name, LineReport r, LinePath p, List<int?> rtt, String? skipped) {
     final off = skipped != null || (r.done && !p.measured);
     final active = !r.done && !off;
+    // Пока идёт замер, крупно — последний пришедший ответ (он и меняется на глазах); после — обычный.
+    int? latest;
+    for (var i = r.sent - 1; active && latest == null && i >= 0 && i >= r.sent - 12 && i < rtt.length; i--) {
+      latest = rtt[i];
+    }
     final value = off
         ? 'не измерялось'
         : p.silent && r.done
             ? 'ответов нет'
-            : _ms(p.usual);
+            : _ms(active ? latest : p.usual);
+    final caption = off || (p.silent && r.done) ? null : (active ? 'сейчас' : 'обычный ответ');
     final detail = off
         ? (skipped ?? '—')
         : !p.measured
@@ -343,13 +349,19 @@ class _LineCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         Text(name, style: TextStyle(color: C.muted, fontSize: 11)),
         const SizedBox(height: 2),
-        Text(value,
-            maxLines: 1,
-            style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: off ? C.muted : (p.silent && r.done ? C.orange : null),
-                fontFeatures: const [FontFeature.tabularFigures()])),
+        Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+          Text(value,
+              maxLines: 1,
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: off ? C.muted : (p.silent && r.done ? C.orange : null),
+                  fontFeatures: const [FontFeature.tabularFigures()])),
+          if (caption != null) ...[
+            const SizedBox(width: 8),
+            Text(caption, style: TextStyle(color: C.muted, fontSize: 11)),
+          ],
+        ]),
         const SizedBox(height: 8),
         SizedBox(
           height: 34,
