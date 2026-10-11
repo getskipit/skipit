@@ -81,7 +81,7 @@ class SiteReport {
     }
     if (farAddress) {
       add(SiteNoteKind.warn,
-          'DNS назвал далёкий адрес: до него $addressMs мс, а до адреса от независимого DNS — $otherMs мс. '
+          'DNS подключения назвал далёкий адрес: до него $addressMs мс, а до адреса от Google DNS — $otherMs мс. '
           'Серверы можно проверить ниже, в карточке «Как отвечают DNS-серверы»');
     }
     final compared = route == ConnRoute.proxy && vpnSiteMs != null && vpnBaseMs != null;
@@ -117,8 +117,8 @@ class SiteReport {
         path,
         if (firstMs != null) 'соединение $firstMs мс${warmMs == null ? '' : ', повторное $warmMs мс'}',
         if (replyMs != null) 'ответ сайта $replyMs мс',
-        if (addressMs != null) 'адрес от DNS ядра напрямую $addressMs мс',
-        if (otherMs != null) 'адрес от независимого DNS $otherMs мс',
+        if (addressMs != null) 'адрес от DNS подключения ${address ?? ''} напрямую $addressMs мс'.replaceAll('  ', ' '),
+        if (otherMs != null && otherAddress != address) 'адрес от Google DNS ${otherAddress ?? ''} $otherMs мс'.replaceAll('  ', ' '),
         if (vpnBaseMs != null) 'тем же путём через VPN: сайт $vpnSiteMs мс, проверочный адрес $vpnBaseMs мс',
         if (error != null) error!,
       ].join(', ');

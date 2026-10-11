@@ -27,7 +27,7 @@ void main() {
       ..otherMs = 52;
     expect(kinds(fine), [SiteNoteKind.ok]);
     expect(fine.summary, 'напрямую, соединение 180 мс, повторное 120 мс, ответ сайта 90 мс, '
-        'адрес от DNS ядра напрямую 55 мс, адрес от независимого DNS 52 мс');
+        'адрес от DNS подключения напрямую 55 мс');
 
     final far = report(ConnRoute.direct)
       ..firstMs = 700
@@ -36,7 +36,12 @@ void main() {
       ..addressMs = 220
       ..otherMs = 55;
     expect(far.farAddress, isTrue);
-    expect(far.notes.single.text, contains('DNS назвал далёкий адрес: до него 220 мс'));
+    expect(far.notes.single.text, contains('DNS подключения назвал далёкий адрес: до него 220 мс'));
+    // Адреса разные — в тексте для копирования оба, каждый со своим временем.
+    far
+      ..address = '203.0.113.52'
+      ..otherAddress = '203.0.113.78';
+    expect(far.summary, contains('адрес от DNS подключения 203.0.113.52 напрямую 220 мс, адрес от Google DNS 203.0.113.78 55 мс'));
 
     final slowSite = report(ConnRoute.direct)
       ..firstMs = 130

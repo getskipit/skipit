@@ -199,9 +199,14 @@ class _SiteCardState extends State<_SiteCard> {
               _metric('Ответ сайта', _ms(r.replyMs), 'после соединения'),
             ],
             if (r.vpnBaseMs != null) _metric('Проверочный адрес', _ms(r.vpnBaseMs), 'тем же путём через VPN'),
-            if (r.address != null) _metric('Адрес от DNS ядра', _ms(r.addressMs), r.address!, mono: true),
-            if (r.otherAddress != null)
-              _metric('Адрес от другого DNS', _ms(r.otherMs), r.otherAddress!, mono: true),
+            // DNS подключения и Google назвали один и тот же адрес — показывать его дважды незачем.
+            if (r.address != null && (r.otherAddress == null || r.otherAddress == r.address))
+              _metric('Адрес сайта, напрямую', _ms(r.addressMs), r.address!, mono: true)
+            else ...[
+              if (r.address != null)
+                _metric('Адрес от DNS подключения', _ms(r.addressMs), r.address!, mono: true),
+              if (r.otherAddress != null) _metric('Адрес от Google DNS', _ms(r.otherMs), r.otherAddress!, mono: true),
+            ],
           ]),
           for (final note in r.notes) _note(note),
       ];
