@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../core/core_manager.dart';
 import '../core/util.dart';
 import '../models/settings.dart';
 import '../state/app_scope.dart';
@@ -181,9 +180,9 @@ class _HomePageState extends State<HomePage> {
       SizedBox(
         width: 360,
         child: Row(children: [
-          Expanded(child: _Speed(icon: Icons.arrow_upward_rounded, label: 'Отдача', speed: state.stats.upSpeed, history: state.stats.upHistory, vpn: state.stats.vpnUp, direct: state.stats.directUp, active: connected)),
+          Expanded(child: _Speed(icon: Icons.arrow_upward_rounded, label: 'Отдача', speed: state.stats.upSpeed, vpn: state.stats.vpnUp, direct: state.stats.directUp, active: connected)),
           const SizedBox(width: 10),
-          Expanded(child: _Speed(icon: Icons.arrow_downward_rounded, label: 'Загрузка', speed: state.stats.downSpeed, history: state.stats.downHistory, vpn: state.stats.vpnDown, direct: state.stats.directDown, active: connected)),
+          Expanded(child: _Speed(icon: Icons.arrow_downward_rounded, label: 'Загрузка', speed: state.stats.downSpeed, vpn: state.stats.vpnDown, direct: state.stats.directDown, active: connected)),
         ]),
       ),
       const SizedBox(height: 10),
@@ -432,7 +431,7 @@ class _NoticeBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.26)),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -559,13 +558,10 @@ class _ErrorBoxState extends State<_ErrorBox> {
       );
 }
 class _Speed extends StatelessWidget {
-  const _Speed({required this.icon, required this.label, required this.speed, required this.history, required this.vpn, required this.direct, required this.active});
+  const _Speed({required this.icon, required this.label, required this.speed, required this.vpn, required this.direct, required this.active});
   final IconData icon;
   final String label;
   final int speed;
-
-  /// Скорость за последние замеры — график на подложке плитки.
-  final List<int> history;
 
   /// Сколько всего прошло через VPN и сколько напрямую.
   final int vpn, direct;
@@ -582,19 +578,13 @@ class _Speed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        clipBehavior: Clip.antiAlias,
-        foregroundDecoration: BoxDecoration(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: C.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: C.border),
         ),
-        decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(14)),
-        child: CustomPaint(
-          painter: active ? _SpeedGraph(history, C.orange) : null,
-          child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), child: _content()),
-        ),
-      );
-
-  Widget _content() => Row(children: [
+        child: Row(children: [
           Icon(icon, size: 18, color: active ? C.orange : C.muted),
           const SizedBox(width: 8),
           Expanded(
@@ -609,44 +599,6 @@ class _Speed extends StatelessWidget {
               ],
             ]),
           ),
-        ]);
-}
-
-/// График скорости на подложке плитки: последние замеры справа, высота — от наибольшего из них.
-class _SpeedGraph extends CustomPainter {
-  _SpeedGraph(this.history, this.color);
-  final List<int> history;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (history.length < 2) return;
-    // Ниже этой скорости шкала не растягивается: фоновые килобайты не должны выглядеть горой.
-    final peak = history.fold(64 * 1024, (a, b) => a > b ? a : b);
-    final step = size.width / (TrafficStats.historyLength - 1);
-    final top = size.height * 0.4;
-    final line = Path();
-    for (var i = 0; i < history.length; i++) {
-      final x = size.width - (history.length - 1 - i) * step;
-      final y = size.height - 1 - history[i] / peak * (size.height - 1 - top);
-      i == 0 ? line.moveTo(x, y) : line.lineTo(x, y);
-    }
-    final area = Path.from(line)
-      ..lineTo(size.width, size.height)
-      ..lineTo(size.width - (history.length - 1) * step, size.height)
-      ..close();
-    canvas
-      ..drawPath(area, Paint()..color = color.withValues(alpha: 0.09))
-      ..drawPath(
-          line,
-          Paint()
-            ..color = color.withValues(alpha: 0.26)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1
-            ..strokeJoin = StrokeJoin.round);
-  }
-
-  // Список пополняется на месте — сравнить его с прежним нельзя.
-  @override
-  bool shouldRepaint(_SpeedGraph old) => true;
+        ]),
+      );
 }

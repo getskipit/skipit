@@ -120,15 +120,6 @@ void main() {
       ..applyXray([_stat('proxy', 'downlink', 61500)], routes)
       ..markSpeed(t0.add(const Duration(seconds: 61)));
     expect(stats.downSpeed, 500);
-    // Каждый замер идёт в историю для графика на главной; хранится не больше historyLength замеров.
-    expect(stats.downHistory.sublist(1), [1000, 500]);
-    expect(stats.upHistory, [0, 0, 0]);
-    for (var i = 0; i < TrafficStats.historyLength + 5; i++) {
-      stats.markSpeed(t0.add(Duration(seconds: 62 + i)));
-    }
-    expect(stats.downHistory.length, TrafficStats.historyLength);
-    stats.reset();
-    expect(stats.downHistory, isEmpty);
   });
 
   test('итог подключения для журнала: VPN и «напрямую» отдельно', () {
