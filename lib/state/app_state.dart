@@ -311,7 +311,7 @@ class AppState extends ChangeNotifier {
         ..stage = 'мимо VPN…';
       notifyListeners();
       if (killSwitchOn) {
-        report.directError = 'включён Kill Switch';
+        report.directError = 'включён Kill Switch — мимо VPN программа ничего не отправляет';
       } else {
         final tunnel = WinSys.tunnelOnDefaultRoute();
         final source = (await _pastVpnSources()).where((a) => a.type == InternetAddressType.IPv4).firstOrNull;

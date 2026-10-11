@@ -64,9 +64,16 @@ void main() {
     // Мимо VPN не меряли (Kill Switch): неровность видна, но чья она — сказать нельзя.
     final unknown = LineReport()
       ..vpn = spiky
-      ..directSkipped = 'включён Kill Switch';
-    expect(unknown.notes.single.text, contains('чья это неровность, не видно'));
+      ..directSkipped = 'включён Kill Switch — мимо VPN пакеты не выпускаются';
+    expect([for (final n in unknown.notes) n.kind], [SiteNoteKind.info, SiteNoteKind.warn]);
+    expect(unknown.notes.first.text, 'Мимо VPN не измерялось: включён Kill Switch — мимо VPN пакеты не выпускаются');
+    expect(unknown.notes.last.text, contains('не видно, чья это неровность'));
     expect(unknown.copyText, contains('мимо VPN: включён Kill Switch'));
+    // Ровная связь через VPN при Kill Switch: причина пропуска и зелёный итог.
+    final guarded = LineReport()
+      ..vpn = even
+      ..directSkipped = 'включён Kill Switch — мимо VPN пакеты не выпускаются';
+    expect([for (final n in guarded.notes) n.kind], [SiteNoteKind.info, SiteNoteKind.ok]);
 
     // Сервер не пропускает пробные пакеты: это не «всё потеряно», а «не измерено».
     final silent = LineReport()

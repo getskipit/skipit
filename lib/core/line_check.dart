@@ -70,6 +70,9 @@ class LineReport {
     if (direct.silent) {
       add(SiteNoteKind.info, 'Мимо VPN ответы на пробные пакеты не пришли — этот путь остался неизмеренным');
     }
+    // Почему путь не измерялся, говорим словами: в плитке причина целиком не помещается.
+    if (directSkipped != null) add(SiteNoteKind.info, 'Мимо VPN не измерялось: $directSkipped');
+    if (vpnSkipped != null) add(SiteNoteKind.info, 'Через VPN не измерялось: $vpnSkipped');
     final vpnOk = vpn.measured && !vpn.silent, directOk = direct.measured && !direct.silent;
     if (directOk && direct.rough) {
       add(SiteNoteKind.warn,
@@ -80,7 +83,7 @@ class LineReport {
         add(SiteNoteKind.warn,
             'Мимо VPN связь ровная, а через VPN — ${detail(vpn)}: неровность даёт путь до VPN-сервера или сам сервер');
       } else if (!directOk) {
-        add(SiteNoteKind.warn, 'Через VPN — ${detail(vpn)}. Мимо VPN не измерялось, поэтому чья это неровность, не видно');
+        add(SiteNoteKind.warn, 'Через VPN — ${detail(vpn)}. Без замера мимо VPN не видно, чья это неровность');
       }
     }
     if (!found.any((n) => n.kind == SiteNoteKind.warn) && (vpnOk || directOk)) {

@@ -318,7 +318,9 @@ class _LineCard extends StatelessWidget {
                   ? 'Чтобы замерить связь, сначала подключитесь к VPN'
                   : state.checkingLine
                       ? 'Идёт замер, осталось ${r?.left ?? LineCheck.seconds} с'
-                      : 'Пакеты идут к ${LineCheck.host}. При включённом Kill Switch меряется только путь через VPN',
+                      : state.killSwitchOn
+                          ? 'Включён Kill Switch: замер пойдёт только через VPN — мимо него программа ничего не отправляет'
+                          : 'Пакеты идут к ${LineCheck.host} — через VPN и мимо него',
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ),
@@ -366,7 +368,8 @@ class _SpeedCard extends StatelessWidget {
                   ? 'Чтобы замерить скорость, сначала подключитесь к VPN'
                   : state.checkingSpeed
                       ? 'Идёт замер ${r?.stage ?? ''}'
-                      : 'Замер тратит трафик подписки: до 100 МБ за раз. Файл берётся с ${SpeedTest.host} и не сохраняется',
+                      : 'Замер тратит трафик подписки: до 100 МБ за раз. Файл берётся с ${SpeedTest.host} и не сохраняется'
+                          '${state.killSwitchOn ? '. Включён Kill Switch: замер пойдёт только через VPN' : ''}',
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ),
