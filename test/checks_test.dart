@@ -99,7 +99,8 @@ void main() {
     final unknown = LineReport()
       ..vpn = spiky
       ..directSkipped = 'включён Kill Switch — напрямую пакеты не выпускаются';
-    expect([for (final n in unknown.notes) n.kind], [SiteNoteKind.info, SiteNoteKind.warn]);
+    expect([for (final n in unknown.notes) n.kind], [SiteNoteKind.info, SiteNoteKind.info, SiteNoteKind.warn]);
+    expect(unknown.notes[1].text, contains('нельзя отличить от запинки самой программы'));
     expect(unknown.notes.first.text, 'Напрямую не измерялось: включён Kill Switch — напрямую пакеты не выпускаются');
     expect(unknown.notes.last.text, contains('не видно, чья это неровность'));
     expect(unknown.copyText, contains('напрямую: включён Kill Switch'));
