@@ -60,8 +60,10 @@ void main() {
     final slowDns = report(ConnRoute.direct)
       ..firstMs = 1700
       ..warmMs = 120
+      ..sameWayMs = 120
       ..replyMs = 90;
-    expect(slowDns.notes.single.text, contains('на 1580 мс дольше повторного'));
+    expect(slowDns.notes.single.text, contains('на 1580 мс дольше повторного тем же путём'));
+    expect(slowDns.notes.single.text, isNot(contains('DNS')));
     expect(slowDns.notes.single.kind, SiteNoteKind.warn);
 
     // Недолгий поиск адреса — к сведению, а не причина: повторная проверка его уже не покажет,
@@ -69,8 +71,15 @@ void main() {
     final firstRun = report(ConnRoute.direct)
       ..firstMs = 620
       ..warmMs = 120
+      ..sameWayMs = 120
       ..replyMs = 90;
     expect(kinds(firstRun), [SiteNoteKind.info, SiteNoteKind.ok]);
+    // Повторные соединения шли другим выходом ядра: разницу мог дать он, а не «первый раз» — строки нет.
+    final otherWay = report(ConnRoute.proxy)
+      ..firstMs = 560
+      ..warmMs = 100
+      ..replyMs = 90;
+    expect(kinds(otherWay), [SiteNoteKind.ok]);
     // Повторное соединение ушло к другому адресу сайта и вышло дольше первого: дорога — лучшее из двух.
     final otherAddress = report(ConnRoute.direct)
       ..firstMs = 19

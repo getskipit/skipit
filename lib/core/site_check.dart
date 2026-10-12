@@ -33,6 +33,11 @@ class SiteReport {
   /// поиском адреса) и повторно. null — соединение не открылось.
   int? firstMs, warmMs;
 
+  /// Лучшее из повторных соединений, прошедших тем же выходом ядра, что и первое; null — таких не было
+  /// или выход неизвестен. Только с ним первое соединение сравнимо: у провайдера выходов бывает
+  /// несколько, и разница между ними — не «первый раз».
+  int? sameWayMs;
+
   /// Сколько сайт отвечал на запрос после того, как соединение установлено.
   int? replyMs;
 
@@ -87,13 +92,15 @@ class SiteReport {
       if (addressMs != null) add(SiteNoteKind.info, 'Сам адрес сайта при этом отвечает напрямую за $addressMs мс');
       return found;
     }
-    // Поиск адреса — разовая задержка: дальше ядро берёт адрес из памяти, и повторная проверка её не
-    // покажет. Причиной медленной работы её считаем, только когда она заметна человеку.
-    if (firstMs != null && warmMs != null && firstMs! - warmMs! >= 400) {
-      final lookup = firstMs! - warmMs!;
-      add(lookup >= 1500 ? SiteNoteKind.warn : SiteNoteKind.info,
-          'Первое соединение на $lookup мс дольше повторного: столько занял поиск адреса (DNS). '
-          'Это разовая задержка — дальше адрес берётся из памяти ядра');
+    // Первое обращение дольше повторных: на него уходят поиск адреса и установка связи. Говорим об этом,
+    // только когда причина известна — первое и повторное соединения шли одним выходом ядра; иначе разницу
+    // мог дать другой выход. Это разовая задержка, повторная проверка её не покажет, поэтому причиной
+    // медленной работы её считаем, только когда она заметна человеку.
+    if (firstMs != null && sameWayMs != null && firstMs! - sameWayMs! >= 400) {
+      final extra = firstMs! - sameWayMs!;
+      add(extra >= 1500 ? SiteNoteKind.warn : SiteNoteKind.info,
+          'Первое соединение на $extra мс дольше повторного тем же путём: столько заняло первое обращение — '
+          'поиск адреса и установка связи. Это разовая задержка, дальше быстрее');
     }
     if (farAddress) {
       add(SiteNoteKind.warn,
@@ -406,6 +413,9 @@ class SiteCheck {
       // Строка журнала ядра о том, куда ушло соединение, приходит чуть позже него самого.
       await Future.delayed(const Duration(milliseconds: 200));
       report.route = site.map((m) => m.localPort == null ? null : connOf(m.localPort!)).nonNulls.firstOrNull?.route;
+      // Первое соединение сравнимо только с повторными, прошедшими тем же выходом.
+      final firstWay = first.localPort == null ? null : connOf(first.localPort!)?.outbound;
+      if (firstWay != null) report.sameWayMs = byOutbound(site.sublist(1))[firstWay];
 
       if (report.route == ConnRoute.proxy && checkPort != null && report.firstMs != null) {
         final base = [for (var i = 0; i < 4; i++) await viaProxy(checkHost, port: checkPort)];
