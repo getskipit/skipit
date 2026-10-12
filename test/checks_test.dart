@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -81,6 +82,29 @@ void main() {
       ..direct = even;
     expect([for (final n in silent.notes) n.kind], [SiteNoteKind.info, SiteNoteKind.ok]);
     expect(silent.notes.last.text, 'Связь ровная напрямую; другой путь не измерялся');
+  });
+
+  test('проверку прерывает отключение VPN: замер останавливается, а не выдаёт потери за плохую связь', () async {
+    // Стабильность: после пяти пакетов подключение «пропало» — дальше пакеты не идут, итог — «прерван».
+    var sent = 0;
+    final line = LineReport();
+    final watch = Stopwatch()..start();
+    await LineCheck.run(line,
+        server: InternetAddress.loopbackIPv4, viaVpn: true, count: 200, keepGoing: () => ++sent <= 5);
+    expect(line.stopped, isTrue);
+    expect(line.done, isTrue);
+    expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+    expect(line.notes.single.kind, SiteNoteKind.bad);
+    expect(line.notes.single.text, 'Замер прерван: VPN отключился или переподключился');
+
+    // Сайт: то же самое словами, без «сайт не открылся».
+    final site = SiteReport('site.example')
+      ..done = true
+      ..stopped = true
+      ..firstMs = 120;
+    expect(site.notes.single.text, 'Проверка прервана: VPN отключился или переподключился');
+    expect(site.copyText, 'site.example — проверка прервана: VPN отключился или переподключился\n'
+        '  • Проверка прервана: VPN отключился или переподключился');
   });
 
   test('скорость: счёт без разгона и вывод — режет ли VPN', () {

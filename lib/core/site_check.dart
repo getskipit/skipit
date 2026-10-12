@@ -11,6 +11,9 @@ enum SiteNoteKind { ok, info, warn, bad }
 
 typedef SiteNote = ({SiteNoteKind kind, String text});
 
+/// Когда и на каком сервере сделана проверка — подпись под результатом и в тексте для копирования.
+typedef CheckStamp = ({DateTime at, String server});
+
 /// Результат проверки одного сайта: каким путём он идёт и на что уходит время.
 class SiteReport {
   SiteReport(this.host);
@@ -29,6 +32,9 @@ class SiteReport {
 
   /// Почему соединение не открылось.
   String? error;
+
+  /// Проверку прервало отключение или переподключение VPN: её замеры уже не про это подключение.
+  bool stopped = false;
 
   /// Сравнение с проверочным адресом, который всегда идёт через VPN: лучшее соединение с сайтом и с этим
   /// адресом одним и тем же выходом ядра. У провайдера выходов бывает несколько, и на новое соединение они
@@ -60,6 +66,10 @@ class SiteReport {
   List<SiteNote> get notes {
     final found = <SiteNote>[];
     void add(SiteNoteKind kind, String text) => found.add((kind: kind, text: text));
+    if (stopped) {
+      add(SiteNoteKind.bad, 'Проверка прервана: VPN отключился или переподключился');
+      return found;
+    }
     if (route == ConnRoute.block) {
       add(SiteNoteKind.bad, 'Сайт заблокирован правилом маршрутизации — поэтому он не открывается');
       return found;
@@ -113,7 +123,9 @@ class SiteReport {
   SiteNote get mainNote => notes.firstWhere((n) => n.kind != SiteNoteKind.info, orElse: () => notes.first);
 
   /// Одной строкой для журнала.
-  String get summary => [
+  String get summary => stopped
+      ? 'проверка прервана: VPN отключился или переподключился'
+      : [
         path,
         if (firstMs != null) 'соединение $firstMs мс${warmMs == null ? '' : ', повторное $warmMs мс'}',
         if (replyMs != null) 'ответ сайта $replyMs мс',
@@ -269,6 +281,7 @@ class SiteCheck {
   /// Замеры для [report]. [port] и [auth] — локальный HTTP-порт ядра, [checkPort] — вход проверки связи
   /// (всегда ведёт через VPN-сервер к [checkHost]), [ownTun] — трафик идёт через свой адаптер, и системный
   /// DNS — это DNS ядра. [connOf] по порту, с которого шло соединение, отдаёт запись о нём из журнала ядра: путь и выход.
+  /// [keepGoing] отвечает, то ли ещё подключение: после отключения VPN проверка останавливается.
   static Future<void> run(
     SiteReport report, {
     required int port,
@@ -278,7 +291,10 @@ class SiteCheck {
     required bool ownTun,
     List<InternetAddress> sources = const [],
     required ConnEntry? Function(int localPort) connOf,
+    bool Function()? keepGoing,
   }) async {
+    // Подключение уже не то, при котором проверку начали.
+    bool gone() => !(keepGoing?.call() ?? true);
     // Лучшее время соединения по каждому выходу ядра, которым шли замеры [made].
     Map<String, int> byOutbound(List<({int? readyMs, int? replyMs, String? error, int? localPort})> made) {
       final best = <String, int>{};
@@ -298,12 +314,16 @@ class SiteCheck {
         ..error = first.error;
       // Повторных соединений три, в счёт идёт лучшее: дорога через VPN-сервер то и дело даёт всплески,
       // и по одному замеру выводы от проверки к проверке получались разные.
-      for (var i = 0; i < 3 && first.readyMs != null; i++) {
+      for (var i = 0; i < 3 && first.readyMs != null && !gone(); i++) {
         final again = await viaProxy(report.host, port: port, auth: auth);
         site.add(again);
         report
           ..warmMs = _best(report.warmMs, again.readyMs)
           ..replyMs = _best(report.replyMs, again.replyMs);
+      }
+      if (gone()) {
+        report.stopped = true;
+        return;
       }
       // Строка журнала ядра о том, куда ушло соединение, приходит чуть позже него самого.
       await Future.delayed(const Duration(milliseconds: 200));

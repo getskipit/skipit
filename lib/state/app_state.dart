@@ -99,8 +99,7 @@ class AppState extends ChangeNotifier {
     if (failedAt != null && DateTime.now().difference(failedAt) < const Duration(seconds: 3)) c.unknownProcess = true;
     // Идёт проверка сайта: запоминаем соединения по порту программы — среди них её собственные.
     if (_watchConns) {
-      final localPort = int.tryParse(c.source.split(':').last);
-      if (localPort != null) _siteCheckConns[localPort] = c;
+      _siteCheckConns[c.source] = c;
     }
     // Запрос проверки DNS: запоминаем, каким путём ядро его отправило.
     if (c.inbound == XrayConfig.dnsCheckInTag) {
@@ -200,7 +199,31 @@ class AppState extends ChangeNotifier {
   /// Пока идёт проверка, соединения, прошедшие через ядро, запоминаются по порту, с которого они шли:
   /// так проверка узнаёт путь и выход каждого своего соединения.
   bool _watchConns = false;
-  final _siteCheckConns = <int, ConnEntry>{};
+  final _siteCheckConns = <String, ConnEntry>{};
+
+  /// Своё соединение проверки в журнале ядра: шло с порта [port] и подходит под [match] — одного номера
+  /// порта мало, с тем же номером за эти секунды могло пройти и чужое соединение.
+  ConnEntry? _ownConn(int port, bool Function(ConnEntry) match) {
+    for (final e in _siteCheckConns.entries) {
+      if (e.key.endsWith(':$port') && match(e.value)) return e.value;
+    }
+    return null;
+  }
+
+  /// Идёт любая из проверок раздела «Проверка». Одновременно их запускать нельзя: они делят список
+  /// соединений ядра, а замер скорости сам портит замер стабильности.
+  bool get checking => checkingSite || checkingLine || checkingSpeed || checkingDns;
+
+  /// Когда и на каком сервере сделана каждая проверка.
+  CheckStamp? siteStamp, lineStamp, speedStamp, dnsStamp;
+  CheckStamp _stampNow() => (at: DateTime.now(), server: log.current?.title ?? selectedServer?.name ?? '');
+
+  /// То ли ещё подключение, при котором проверку начали: после отключения или переподключения её
+  /// замеры уже не про него, и проверка останавливается.
+  bool Function() _sameConnection() {
+    final since = connectedAt;
+    return () => isConnected && connectedAt == since;
+  }
 
   /// Адреса настоящих сетевых карт — для замеров мимо VPN; пусто, если маршрут Windows в адаптер не ведёт.
   Future<List<InternetAddress>> _pastVpnSources() async {
@@ -210,17 +233,19 @@ class AppState extends ChangeNotifier {
 
   /// Проверяет сайты [hosts] по очереди так, как к ним ходит браузер, — через локальный HTTP-порт ядра.
   Future<void> checkSites(List<String> hosts) async {
-    if (checkingSite || !isConnected || hosts.isEmpty) return;
+    if (checking || !isConnected || hosts.isEmpty) return;
     siteReports = [for (final host in hosts) SiteReport(host)];
+    siteStamp = _stampNow();
+    final alive = _sameConnection();
     checkingSite = true;
     _watchConns = true;
     notifyListeners();
     try {
       final sources = await _pastVpnSources();
       for (final report in siteReports) {
-        if (!isConnected) {
+        if (!alive()) {
           report
-            ..error = 'VPN отключился'
+            ..stopped = true
             ..done = true;
           continue;
         }
@@ -233,7 +258,14 @@ class AppState extends ChangeNotifier {
             // Сравнение адресов идёт мимо VPN — при Kill Switch его нет.
             ownTun: WinSys.ownTunActive() && !killSwitchOn,
             sources: sources,
-            connOf: (localPort) => _siteCheckConns[localPort]);
+            keepGoing: alive,
+            // Свои соединения идут с этого компьютера на HTTP-порт ядра — к самому сайту или к проверочному адресу.
+            connOf: (localPort) => _ownConn(
+                localPort,
+                (c) =>
+                    c.network == 'tcp' &&
+                    c.source.startsWith('127.0.0.1:') &&
+                    (c.host == report.host || c.host == XrayConfig.checkHost)));
         log.add('app', 'Проверка сайта ${report.host}: ${report.summary}');
         notifyListeners();
       }
@@ -250,8 +282,9 @@ class AppState extends ChangeNotifier {
 
   /// Шлёт поток пробных пакетов через VPN и мимо него и смотрит на потери и разброс времени ответа.
   Future<void> checkLine() async {
-    if (checkingLine || !isConnected) return;
+    if (checking || !isConnected) return;
     final report = lineReport = LineReport();
+    lineStamp = _stampNow();
     checkingLine = true;
     _watchConns = true;
     _siteCheckConns.clear();
@@ -274,9 +307,11 @@ class AppState extends ChangeNotifier {
           // Без адаптера обычный маршрут и есть путь мимо VPN.
           source: viaVpn ? (pastVpn ? source : null) : InternetAddress.anyIPv4,
           onStart: (port) => vpnPort = port,
-          onTick: notifyListeners);
+          onTick: notifyListeners,
+          keepGoing: _sameConnection());
       // Проверочный адрес по правилам мог уйти напрямую — тогда «через VPN» измерено не было.
-      if (vpnPort != null && _siteCheckConns[vpnPort]?.route == ConnRoute.direct) {
+      final own = vpnPort == null ? null : _ownConn(vpnPort!, (c) => c.network == 'udp' && c.port == LineCheck.port);
+      if (own?.route == ConnRoute.direct) {
         report
           ..vpn = LinePath()
           ..vpnSkipped = 'по правилам маршрутизации проверочный адрес идёт напрямую';
@@ -300,7 +335,9 @@ class AppState extends ChangeNotifier {
   /// Качает проверочный файл через VPN и мимо него и сравнивает скорость.
   Future<void> checkSpeed() async {
     final port = _checkPort;
-    if (checkingSpeed || !isConnected || port == null) return;
+    if (checking || !isConnected || port == null) return;
+    speedStamp = _stampNow();
+    final alive = _sameConnection();
     final report = speedReport = SpeedReport()
       ..stage = 'через VPN…'
       ..running = 0;
@@ -313,7 +350,7 @@ class AppState extends ChangeNotifier {
           notifyListeners();
         };
     try {
-      final vpn = await SpeedTest.viaVpn(port: port, onProgress: live(report.vpnSamples));
+      final vpn = await SpeedTest.viaVpn(port: port, onProgress: live(report.vpnSamples), keepGoing: alive);
       report
         ..vpnMbit = vpn.mbit
         ..vpnError = vpn.error
@@ -321,7 +358,9 @@ class AppState extends ChangeNotifier {
         ..running = 1
         ..progress = 0;
       notifyListeners();
-      if (killSwitchOn) {
+      if (!alive()) {
+        report.directError = 'замер прерван: VPN отключился или переподключился';
+      } else if (killSwitchOn) {
         report.directError = 'включён Kill Switch — напрямую программа ничего не отправляет';
       } else {
         final tunnel = WinSys.tunnelOnDefaultRoute();
@@ -333,7 +372,8 @@ class AppState extends ChangeNotifier {
             final address = (await InternetAddress.lookup(SpeedTest.host, type: InternetAddressType.IPv4)
                     .timeout(const Duration(seconds: 4)))
                 .first;
-            final direct = await SpeedTest.direct(address, source, onProgress: live(report.directSamples));
+            final direct =
+                await SpeedTest.direct(address, source, onProgress: live(report.directSamples), keepGoing: alive);
             report
               ..directMbit = direct.mbit
               ..directError = direct.error;
@@ -365,8 +405,10 @@ class AppState extends ChangeNotifier {
   /// Спрашивает по очереди каждый DNS-сервер подключения: за сколько отвечает и каким путём идёт запрос.
   Future<void> checkDns() async {
     final port = _dnsCheckPort, config = _dnsConfig;
-    if (checkingDns || !isConnected || port == null || config == null) return;
+    if (checking || !isConnected || port == null || config == null) return;
     checkingDns = true;
+    dnsStamp = _stampNow();
+    final alive = _sameConnection();
     dnsProbes = DnsCheck.servers(config, service: XrayConfig.bootstrapAddresses(_session ?? settings).toSet());
     notifyListeners();
     try {
@@ -376,6 +418,12 @@ class AppState extends ChangeNotifier {
       final sources =
           tunnel == null ? const <InternetAddress>[] : await Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
       for (final probe in dnsProbes) {
+        if (!alive()) {
+          probe
+            ..error = 'проверка прервана: VPN отключился или переподключился'
+            ..done = true;
+          continue;
+        }
         _dnsCheckRoute = null;
         // При Kill Switch мимо VPN программа сама ничего не отправляет — расстояние до адресов не меряется.
         await DnsCheck.run(probe,

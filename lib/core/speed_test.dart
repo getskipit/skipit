@@ -88,7 +88,9 @@ class SpeedTest {
 
   /// Открывает [streams] соединений способом [open] и качает файл по всем сразу; скорость — сумма.
   /// [onProgress] раз в [tick] получает скорость за последний отрезок и долю прошедшего времени.
-  static Future<SpeedResult> _measure(Future<_Link> Function() open, SpeedProgress? onProgress) async {
+  /// [keepGoing] отвечает, то ли ещё подключение: после отключения VPN замер останавливается.
+  static Future<SpeedResult> _measure(
+      Future<_Link> Function() open, SpeedProgress? onProgress, bool Function()? keepGoing) async {
     final links = <_Link>[];
     String? openError;
     await Future.wait([
@@ -155,8 +157,14 @@ class SpeedTest {
       }
 
       var seenBytes = 0, seenAt = Duration.zero;
+      var stopped = false;
       final ticker = Timer.periodic(tick, (_) {
         if (done.isCompleted) return;
+        if (!(keepGoing?.call() ?? true)) {
+          stopped = true;
+          finish();
+          return;
+        }
         final now = watch.elapsed, ms = (now - seenAt).inMilliseconds;
         if (atWarmup == null && now >= warmup) atWarmup = total;
         // Секунду ничего не приходит, хотя файл уже шёл, — соединения встали.
@@ -174,6 +182,7 @@ class SpeedTest {
       });
       await done.future.timeout(duration + _timeout, onTimeout: () {});
       ticker.cancel();
+      if (stopped) return (mbit: null, error: 'замер прерван: VPN отключился или переподключился');
       final elapsed = lastDataAt ?? watch.elapsed;
       if (status == null) return (mbit: null, error: 'сервер замера не ответил');
       if (!status!.contains(' 200')) return (mbit: null, error: 'сервер замера ответил «$status»');
@@ -188,7 +197,8 @@ class SpeedTest {
   }
 
   /// Через VPN: соединения с сервером замера через вход проверки связи ядра на порту [port].
-  static Future<SpeedResult> viaVpn({required int port, SpeedProgress? onProgress}) => _measure(() async {
+  static Future<SpeedResult> viaVpn({required int port, SpeedProgress? onProgress, bool Function()? keepGoing}) =>
+      _measure(() async {
         final socket = await RawSocket.connect(InternetAddress.loopbackIPv4, port, timeout: _timeout);
         try {
           final answer = Completer<String>();
@@ -215,12 +225,12 @@ class SpeedTest {
           unawaited(socket.close().catchError((Object _) => socket));
           rethrow;
         }
-      }, onProgress);
+      }, onProgress, keepGoing);
 
   /// Напрямую: соединения с адресом [address] сервера замера через сетевую карту с адресом [source]
   /// (null — обычным маршрутом: так в режимах без адаптера).
   static Future<SpeedResult> direct(InternetAddress address, InternetAddress? source,
-          {SpeedProgress? onProgress}) =>
+          {SpeedProgress? onProgress, bool Function()? keepGoing}) =>
       _measure(() async {
         final raw = await RawSocket.connect(address, 443, sourceAddress: source, timeout: _timeout);
         try {
@@ -229,7 +239,7 @@ class SpeedTest {
           unawaited(raw.close().catchError((Object _) => raw));
           rethrow;
         }
-      }, onProgress);
+      }, onProgress, keepGoing);
 }
 
 /// Одно соединение замера: само соединение и защищённый канал поверх него.

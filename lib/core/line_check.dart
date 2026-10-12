@@ -61,6 +61,9 @@ class LineReport {
   String? vpnSkipped, directSkipped;
   String? error;
 
+  /// Замер прервало отключение или переподключение VPN.
+  bool stopped = false;
+
   List<SiteNote> get notes {
     final found = <SiteNote>[];
     void add(SiteNoteKind kind, String text) => found.add((kind: kind, text: text));
@@ -150,7 +153,8 @@ class LineCheck {
   /// Замер. [server] — адрес проверочного сервера. [viaVpn] — слать ли обычным маршрутом (он ведёт в
   /// адаптер VPN); [source] — адрес настоящей сетевой карты для пути напрямую, null — этот путь не
   /// меряется. [onStart] получает порт, с которого идут пакеты через VPN, — по нему соединение находится
-  /// в журнале ядра; [onTick] вызывается раз в секунду.
+  /// в журнале ядра; [onTick] вызывается по ходу замера; [keepGoing] отвечает, то ли ещё
+  /// подключение: после отключения VPN замер останавливается.
   static Future<void> run(
     LineReport report, {
     required InternetAddress server,
@@ -158,6 +162,7 @@ class LineCheck {
     InternetAddress? source,
     void Function(int vpnPort)? onStart,
     void Function()? onTick,
+    bool Function()? keepGoing,
     int? count,
   }) async {
     final total = count ?? packets;
@@ -189,7 +194,9 @@ class LineCheck {
       var n = 0;
       final sending = Completer<void>();
       Timer.periodic(interval, (timer) {
-        if (n >= total) {
+        // Подключение уже не то, при котором замер начали, — дальше слать незачем.
+        if (n < total && !(keepGoing?.call() ?? true)) report.stopped = true;
+        if (n >= total || report.stopped) {
           timer.cancel();
           sending.complete();
           return;
@@ -215,6 +222,10 @@ class LineCheck {
         }
       });
       await sending.future;
+      if (report.stopped) {
+        report.error = 'Замер прерван: VPN отключился или переподключился';
+        return;
+      }
       // Опоздавшие ответы ещё могут прийти.
       await Future.delayed(const Duration(milliseconds: 1500));
       if (sockets[0] != null) report.vpn = path(rtt[0]);

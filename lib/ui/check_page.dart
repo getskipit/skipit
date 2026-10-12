@@ -10,6 +10,7 @@ import '../core/util.dart';
 import '../core/windows.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
+import 'flag_text.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -109,21 +110,37 @@ Widget _metric(String name, String value, String note, {bool mono = false, Color
       ]),
     );
 
-/// Кнопка «Скопировать результат»: текст проверки — в буфер, чтобы отправить тому, кто помогает.
-Widget _copy(AppState state, String Function() text) => Padding(
+/// Когда и на каком сервере сделана проверка — одной строкой.
+String _stampText(CheckStamp? stamp) => stamp == null
+    ? ''
+    : 'Замерено ${formatDateTime(stamp.at)}${stamp.server.isEmpty ? '' : ' · сервер ${stamp.server}'}';
+
+/// Под результатом: когда и на каком сервере он получен, и кнопка «Скопировать результат» — текст
+/// проверки с той же подписью уходит в буфер, чтобы отправить тому, кто помогает.
+Widget _copy(AppState state, CheckStamp? stamp, String Function() text) => Padding(
       padding: const EdgeInsets.only(top: 10),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: GhostButton(
+      child: Row(children: [
+        GhostButton(
           label: 'Скопировать результат',
           icon: Icons.copy_rounded,
           onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: text()));
+            final head = _stampText(stamp);
+            await Clipboard.setData(ClipboardData(text: [if (head.isNotEmpty) head, text()].join('\n')));
             state.toast('Результат скопирован', kind: ToastKind.success);
           },
         ),
-      ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FlagText(_stampText(stamp),
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 12)),
+        ),
+      ]),
     );
+
+/// Подпись под кнопкой проверки, когда нажать её нельзя; null — можно.
+String? _blocked(AppState state, bool own, String what) => !state.isConnected
+    ? 'Чтобы $what, сначала подключитесь к VPN'
+    : (state.checking && !own ? 'Идёт другая проверка — эта станет доступна, когда она закончится' : null);
 
 Color? _pathColor(ConnRoute? route) => switch (route) {
       ConnRoute.proxy => C.orange,
@@ -313,15 +330,15 @@ class _SiteCardState extends State<_SiteCard> {
             label: 'Проверить',
             icon: Icons.speed_rounded,
             busy: state.checkingSite,
-            onPressed: state.isConnected ? _check : null,
+            onPressed: state.isConnected && !state.checking ? _check : null,
           ),
         ]),
-        if (_wrong || !state.isConnected) ...[
+        if (_wrong || _blocked(state, state.checkingSite, 'проверить сайт') != null) ...[
           const SizedBox(height: 8),
           Text(
               _wrong
                   ? 'Впишите адрес сайта, например example.com; несколько — через запятую, не больше ${SiteCheck.maxHosts}'
-                  : 'Чтобы проверить сайт, сначала подключитесь к VPN',
+                  : _blocked(state, state.checkingSite, 'проверить сайт')!,
               style: TextStyle(color: _wrong ? C.orange : C.muted, fontSize: 12)),
         ],
         if (reports.length == 1) ..._full(reports.single),
@@ -330,7 +347,7 @@ class _SiteCardState extends State<_SiteCard> {
           for (final r in reports) _compact(r),
         ],
         if (reports.isNotEmpty && reports.every((r) => r.done))
-          _copy(state, () => [for (final r in reports) r.copyText].join('\n')),
+          _copy(state, state.siteStamp, () => [for (final r in reports) r.copyText].join('\n')),
         const SizedBox(height: 10),
         Text(
           state.killSwitchOn
@@ -432,13 +449,13 @@ class _LineCard extends StatelessWidget {
             label: 'Замерить',
             icon: Icons.speed_rounded,
             busy: state.checkingLine,
-            onPressed: state.isConnected ? state.checkLine : null,
+            onPressed: state.isConnected && !state.checking ? state.checkLine : null,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              !state.isConnected
-                  ? 'Чтобы замерить связь, сначала подключитесь к VPN'
+              _blocked(state, state.checkingLine, 'замерить связь') != null
+                  ? _blocked(state, state.checkingLine, 'замерить связь')!
                   : state.checkingLine
                       ? 'Идёт замер, осталось ${r?.left ?? LineCheck.seconds} с'
                       : state.killSwitchOn
@@ -465,7 +482,7 @@ class _LineCard extends StatelessWidget {
         ],
         if (r != null && r.done) ...[
           for (final note in r.notes) _note(note),
-          _copy(state, () => r.copyText),
+          _copy(state, state.lineStamp, () => r.copyText),
         ],
       ]),
     );
@@ -609,13 +626,13 @@ class _SpeedCard extends StatelessWidget {
             label: 'Замерить',
             icon: Icons.speed_rounded,
             busy: state.checkingSpeed,
-            onPressed: state.isConnected ? state.checkSpeed : null,
+            onPressed: state.isConnected && !state.checking ? state.checkSpeed : null,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              !state.isConnected
-                  ? 'Чтобы замерить скорость, сначала подключитесь к VPN'
+              _blocked(state, state.checkingSpeed, 'замерить скорость') != null
+                  ? _blocked(state, state.checkingSpeed, 'замерить скорость')!
                   : state.checkingSpeed
                       ? 'Идёт замер ${r?.stage ?? ''}'
                       : 'Замер идёт в четыре соединения и тратит трафик подписки: до 400 МБ за раз. Файл берётся с ${SpeedTest.host} и не сохраняется'
@@ -632,7 +649,7 @@ class _SpeedCard extends StatelessWidget {
           ]),
           if (r.done) ...[
             for (final note in r.notes) _note(note),
-            _copy(state, () => r.copyText),
+            _copy(state, state.speedStamp, () => r.copyText),
           ],
         ],
       ]),
@@ -736,23 +753,23 @@ class _DnsCheckCard extends StatelessWidget {
               label: 'Проверить DNS',
               icon: Icons.speed_rounded,
               busy: state.checkingDns,
-              onPressed: state.isConnected ? state.checkDns : null,
+              onPressed: state.isConnected && !state.checking ? state.checkDns : null,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                state.isConnected
+                _blocked(state, state.checkingDns, 'проверить DNS') == null
                     ? (state.killSwitchOn
                         ? 'Включён Kill Switch: далеко ли адреса от серверов, не меряем — напрямую программа ничего не отправляет'
                         : 'Какие серверы спрашивать, выбирается в разделе «Маршрутизация», блок «DNS»')
-                    : 'Чтобы проверить DNS, сначала подключитесь к VPN',
+                    : _blocked(state, state.checkingDns, 'проверить DNS')!,
                 style: TextStyle(color: C.muted, fontSize: 12),
               ),
             ),
           ]),
           for (final probe in state.dnsProbes) _probe(probe),
           if (state.dnsProbes.isNotEmpty && !state.checkingDns)
-            _copy(state, () => [for (final p in state.dnsProbes) _text(p)].join('\n')),
+            _copy(state, state.dnsStamp, () => [for (final p in state.dnsProbes) _text(p)].join('\n')),
         ]),
       );
 }
