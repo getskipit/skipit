@@ -51,6 +51,10 @@ class LineReport {
   int left = LineCheck.seconds;
   LinePath vpn = LinePath(), direct = LinePath();
 
+  /// Номера пакетов, ответ на которые опоздал сразу на обоих путях (см. [LineCheck.stalls]): это
+  /// запнулась сама программа, и в счёт они не идут.
+  Set<int> stalled = const {};
+
   /// По ходу замера — для полосы в окне: время ответа на каждый пакет (null — ответа пока нет),
   /// сколько пакетов ушло и сколько уйдёт всего.
   List<int?> vpnRtt = const [], directRtt = const [];
@@ -82,6 +86,11 @@ class LineReport {
     // Почему путь не измерялся, говорим словами: в плитке причина целиком не помещается.
     if (directSkipped != null) add(SiteNoteKind.info, 'Напрямую не измерялось: $directSkipped');
     if (vpnSkipped != null) add(SiteNoteKind.info, 'Через VPN не измерялось: $vpnSkipped');
+    if (stalled.isNotEmpty) {
+      add(SiteNoteKind.info,
+          'Ответы опоздали сразу на обоих путях (пакетов: ${stalled.length}). Два разных пути одновременно не '
+          'тормозят — это запнулась сама программа или компьютер; в счёт такие ответы не идут');
+    }
     final vpnOk = vpn.measured && !vpn.silent, directOk = direct.measured && !direct.silent;
     if (directOk && direct.rough) {
       add(SiteNoteKind.warn,
@@ -141,13 +150,31 @@ class LineCheck {
   }
 
   /// Итог пути по времени ответа на каждый пакет ([rtt]: null — ответа не было).
-  static LinePath path(List<int?> rtt) {
-    var gap = 0, longest = 0;
-    for (final ms in rtt) {
+  /// Пакеты с номерами из [skip] в счёт не идут — ни как отправленные, ни как ответы.
+  static LinePath path(List<int?> rtt, {Set<int> skip = const {}}) {
+    var gap = 0, longest = 0, sent = 0;
+    final replies = <int>[];
+    for (var i = 0; i < rtt.length; i++) {
+      if (skip.contains(i)) continue;
+      sent++;
+      final ms = rtt[i];
+      if (ms != null) replies.add(ms);
       gap = ms == null ? gap + 1 : 0;
       if (gap > longest) longest = gap;
     }
-    return LinePath(sent: rtt.length, replies: rtt.nonNulls.toList(), longestGap: longest);
+    return LinePath(sent: sent, replies: replies, longestGap: longest);
+  }
+
+  /// Номера пакетов, ответ на которые опоздал сразу на обоих путях. Два разных пути не тормозят
+  /// одновременно: значит, запнулась сама программа (или компьютер) и прочитала ответы позже, чем они
+  /// пришли. Связь тут ни при чём, и всплеском такой ответ считать нельзя.
+  static Set<int> stalls(List<int?> a, List<int?> b) {
+    final usualA = path(a).usual, usualB = path(b).usual;
+    if (usualA == null || usualB == null) return const {};
+    return {
+      for (var i = 0; i < a.length && i < b.length; i++)
+        if (a[i] != null && b[i] != null && a[i]! > usualA + spikeOver && b[i]! > usualB + spikeOver) i,
+    };
   }
 
   /// Замер. [server] — адрес проверочного сервера. [viaVpn] — слать ли обычным маршрутом (он ведёт в
@@ -191,6 +218,15 @@ class LineCheck {
           }
         }, onError: (_) {});
       }
+      // Итог по первым [upTo] пакетам; ответы, опоздавшие сразу на обоих путях, из счёта убираются.
+      void settle(int upTo) {
+        final a = rtt[0].sublist(0, upTo), b = rtt[1].sublist(0, upTo);
+        final skip = sockets[0] != null && sockets[1] != null ? stalls(a, b) : const <int>{};
+        report.stalled = skip;
+        if (sockets[0] != null) report.vpn = path(a, skip: skip);
+        if (sockets[1] != null) report.direct = path(b, skip: skip);
+      }
+
       var n = 0;
       final sending = Completer<void>();
       Timer.periodic(interval, (timer) {
@@ -215,9 +251,7 @@ class LineCheck {
           ..left = ((total - n) * interval.inMilliseconds / 1000).ceil();
         // Окно обновляется четыре раза в секунду — вместе с промежуточным итогом по каждому пути.
         if (n % (250 ~/ interval.inMilliseconds) == 0) {
-          final settled = n > fresh ? n - fresh : 0;
-          if (sockets[0] != null) report.vpn = path(rtt[0].sublist(0, settled));
-          if (sockets[1] != null) report.direct = path(rtt[1].sublist(0, settled));
+          settle(n > fresh ? n - fresh : 0);
           onTick?.call();
         }
       });
@@ -228,8 +262,7 @@ class LineCheck {
       }
       // Опоздавшие ответы ещё могут прийти.
       await Future.delayed(const Duration(milliseconds: 1500));
-      if (sockets[0] != null) report.vpn = path(rtt[0]);
-      if (sockets[1] != null) report.direct = path(rtt[1]);
+      settle(total);
     } catch (e) {
       report.error = 'Не удалось начать замер: $e';
     } finally {

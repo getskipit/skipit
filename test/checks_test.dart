@@ -52,6 +52,28 @@ void main() {
     expect(LineCheck.path(List<int?>.filled(50, null)).silent, isTrue);
   });
 
+  test('стабильность: ответы, опоздавшие сразу на обоих путях, — запинка программы, а не всплеск', () {
+    // Пакеты 50–52 опоздали и через VPN, и напрямую; пакет 120 — только через VPN.
+    final vpn = <int?>[for (var i = 0; i < 200; i++) i >= 50 && i <= 52 ? 470 : (i == 120 ? 240 : 80)];
+    final direct = <int?>[for (var i = 0; i < 200; i++) i >= 50 && i <= 52 ? 460 : 56];
+    final skip = LineCheck.stalls(vpn, direct);
+    expect(skip, {50, 51, 52});
+    final path = LineCheck.path(vpn, skip: skip);
+    expect(path.sent, 197);
+    expect(path.spikes, 1);
+    expect(path.worst, 240);
+    expect(LineCheck.path(direct, skip: skip).spikes, 0);
+    // Один путь не измерялся — сравнить не с чем, ничего не убирается.
+    expect(LineCheck.stalls(vpn, List<int?>.filled(200, null)), isEmpty);
+
+    final report = LineReport()
+      ..vpn = path
+      ..direct = LineCheck.path(direct, skip: skip)
+      ..stalled = skip;
+    expect([for (final n in report.notes) n.kind], [SiteNoteKind.info, SiteNoteKind.ok]);
+    expect(report.notes.first.text, contains('пакетов: 3'));
+  });
+
   test('стабильность: вывод — где портится связь', () {
     final even = LineCheck.path(List.filled(300, 60));
     final spiky = LineCheck.path([...List.filled(280, 90), ...List.filled(20, 240)]);

@@ -418,7 +418,7 @@ class _LineCard extends StatelessWidget {
         SizedBox(
           height: 34,
           width: double.infinity,
-          child: CustomPaint(painter: _LineBars(off ? const [] : rtt, r.sent, r.done, p.usual)),
+          child: CustomPaint(painter: _LineBars(off ? const [] : rtt, r.sent, r.done, p.usual, r.stalled)),
         ),
         const SizedBox(height: 8),
         ClipRRect(
@@ -476,7 +476,8 @@ class _LineCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                   'Столбик — худший ответ за отрезок времени: яркий — всплеск (дольше обычного на '
-                  '${LineCheck.spikeOver} мс), красный — пакет потерян',
+                  '${LineCheck.spikeOver} мс), с разрывом — выше шкалы, красный — пакет потерян, серый — запнулась '
+                  'сама программа (в счёт не идёт)',
                   style: TextStyle(color: C.muted, fontSize: 11.5)),
             ),
         ],
@@ -492,13 +493,16 @@ class _LineCard extends StatelessWidget {
 /// Полоса замера стабильности: время делится на равные отрезки, столбик — худший ответ за отрезок.
 /// Ровная связь — низкий ровный ряд; всплески торчат яркими столбиками, потери — красными.
 class _LineBars extends CustomPainter {
-  _LineBars(this.rtt, this.sent, this.done, this.usual);
+  _LineBars(this.rtt, this.sent, this.done, this.usual, this.stalled);
 
   /// Время ответа на каждый пакет (null — ответа нет) и сколько пакетов уже ушло.
   final List<int?> rtt;
   final int sent;
   final bool done;
   final int? usual;
+
+  /// Номера пакетов, ответы на которые опоздали из-за запинки самой программы.
+  final Set<int> stalled;
 
   static const _slots = 50;
 
@@ -509,10 +513,9 @@ class _LineBars extends CustomPainter {
     // Пакет считается потерянным, когда ответа нет уже секунду: до того он может быть ещё в пути.
     final settled = done ? sent : sent - 1000 ~/ LineCheck.interval.inMilliseconds;
     final base = usual ?? 0;
-    var peak = base * 2 > 100 ? base * 2 : 100;
-    for (var i = 0; i < sent && i < rtt.length; i++) {
-      if ((rtt[i] ?? 0) > peak) peak = rtt[i]!;
-    }
+    // Шкала — от обычного ответа, а не от худшего: один высокий всплеск не должен прижимать остальные
+    // столбики к полу. Всё, что выше шкалы, рисуется во всю высоту с разрывом.
+    final peak = base * 3 > base + 150 ? base * 3 : base + 150;
     void bar(int slot, double height, Color color) => canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(slot * step, size.height - height, width, height), const Radius.circular(1.5)),
@@ -520,23 +523,35 @@ class _LineBars extends CustomPainter {
     for (var slot = 0; slot < _slots; slot++) {
       final from = slot * per;
       int? worst;
-      var lost = false;
+      var lost = false, stall = false;
       for (var i = from; i < from + per && i < rtt.length && i < sent; i++) {
         final ms = rtt[i];
-        if (ms == null) {
+        if (stalled.contains(i)) {
+          stall = true;
+        } else if (ms == null) {
           lost = lost || i < settled;
         } else if (worst == null || ms > worst) {
           worst = ms;
         }
       }
+      // Запинка программы — серым во всю высоту, позади настоящего столбика отрезка.
+      if (stall) bar(slot, size.height, C.muted.withValues(alpha: 0.3));
       if (lost) {
         bar(slot, size.height, C.red.withValues(alpha: 0.9));
       } else if (worst == null) {
-        // Замер сюда ещё не дошёл.
-        bar(slot, 2, C.border);
+        // Замер сюда ещё не дошёл (или в отрезке одни запинки).
+        if (!stall) bar(slot, 2, C.border);
       } else {
-        final spike = worst > base + LineCheck.spikeOver;
-        bar(slot, (worst / peak * size.height).clamp(2.0, size.height), C.orange.withValues(alpha: spike ? 1 : 0.4));
+        final color = C.orange.withValues(alpha: worst > base + LineCheck.spikeOver ? 1 : 0.4);
+        if (worst > peak) {
+          // Выше шкалы: столбик во всю высоту с разрывом у вершины.
+          bar(slot, size.height - 6, color);
+          canvas.drawRRect(
+              RRect.fromRectAndRadius(Rect.fromLTWH(slot * step, 0, width, 3), const Radius.circular(1.5)),
+              Paint()..color = color);
+        } else {
+          bar(slot, (worst / peak * size.height).clamp(2.0, size.height), color);
+        }
       }
     }
   }
