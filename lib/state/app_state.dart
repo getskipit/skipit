@@ -216,7 +216,11 @@ class AppState extends ChangeNotifier {
 
   /// Когда и на каком сервере сделана каждая проверка.
   CheckStamp? siteStamp, lineStamp, speedStamp, dnsStamp;
-  CheckStamp _stampNow() => (at: DateTime.now(), server: log.current?.title ?? selectedServer?.name ?? '');
+  CheckStamp _stampNow() => (
+        at: DateTime.now(),
+        server: SiteCheck.stampServer(
+            log.current?.title ?? selectedServer?.name ?? '', [for (final s in servers) s.address]),
+      );
 
   /// То ли ещё подключение, при котором проверку начали: после отключения или переподключения её
   /// замеры уже не про него, и проверка останавливается.

@@ -151,6 +151,16 @@ class SiteCheck {
     return RegExp(r'^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$').hasMatch(host) ? host : null;
   }
 
+  /// Название сервера для подписи под результатом. У сервера, добавленного ссылкой без названия,
+  /// названием служит его адрес — такое в подпись не идёт: результат копируют и отправляют, а адрес
+  /// VPN-сервера показывать незачем (отчёт для разбора его тоже скрывает). [addresses] — адреса
+  /// известных серверов.
+  static String stampServer(String name, Iterable<String> addresses) {
+    final lower = name.toLowerCase();
+    final isAddress = RegExp(r'^\[?[0-9a-z.:-]+\]?:\d+$').hasMatch(lower) || InternetAddress.tryParse(name) != null;
+    return isAddress || addresses.any((a) => a.isNotEmpty && lower.contains(a.toLowerCase())) ? '' : name;
+  }
+
   /// Сколько сайтов проверяется за один раз.
   static const maxHosts = 5;
 

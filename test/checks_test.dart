@@ -20,6 +20,16 @@ void main() {
     expect(SiteCheck.hostsOf([for (var i = 0; i <= SiteCheck.maxHosts; i++) 's$i.example'].join(',')), isNull);
   });
 
+  test('подпись под результатом: название сервера — да, его адрес — нет', () {
+    const known = ['vpn.example', '203.0.113.40'];
+    expect(SiteCheck.stampServer('Finland', known), 'Finland');
+    expect(SiteCheck.stampServer('Russia - 1 [Сотовая связь]', known), 'Russia - 1 [Сотовая связь]');
+    // Сервер без названия называется своим адресом — в подпись он не идёт.
+    for (final name in ['vpn.example:443', '203.0.113.40:8443', '203.0.113.40', 'Мой vpn.example', 'other.example:2096']) {
+      expect(SiteCheck.stampServer(name, known), '', reason: name);
+    }
+  });
+
   test('стабильность: пробный пакет и ответ на него, потери, всплески и самая длинная череда потерь', () {
     final request = LineCheck.request(321);
     expect(request.length, 20);
