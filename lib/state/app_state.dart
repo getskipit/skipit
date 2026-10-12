@@ -235,10 +235,10 @@ class AppState extends ChangeNotifier {
     return tunnel == null ? const [] : Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
   }
 
-  /// Проверяет сайты [hosts] по очереди так, как к ним ходит браузер, — через локальный HTTP-порт ядра.
-  Future<void> checkSites(List<String> hosts) async {
-    if (checking || !isConnected || hosts.isEmpty) return;
-    siteReports = [for (final host in hosts) SiteReport(host)];
+  /// Проверяет сайты [names] по очереди так, как к ним ходит браузер, — через локальный HTTP-порт ядра.
+  Future<void> checkSites(List<SiteName> names) async {
+    if (checking || !isConnected || names.isEmpty) return;
+    siteReports = [for (final name in names) SiteReport(name.host, shown: name.shown)];
     siteStamp = _stampNow();
     final alive = _sameConnection();
     checkingSite = true;
@@ -270,7 +270,7 @@ class AppState extends ChangeNotifier {
                     c.network == 'tcp' &&
                     c.source.startsWith('127.0.0.1:') &&
                     (c.host == report.host || c.host == XrayConfig.checkHost)));
-        log.add('app', 'Проверка сайта ${report.host}: ${report.summary}');
+        log.add('app', 'Проверка сайта ${report.shown}: ${report.summary}');
         notifyListeners();
       }
     } finally {
@@ -429,9 +429,15 @@ class AppState extends ChangeNotifier {
           continue;
         }
         _dnsCheckRoute = null;
-        // При Kill Switch мимо VPN программа сама ничего не отправляет — расстояние до адресов не меряется.
+        // Расстояние до названных адресов меряется только у сервера, к которому запросы идут напрямую:
+        // сервер через VPN называет адреса, близкие к VPN-серверу, и для сайтов через VPN это правильно.
+        // При Kill Switch мимо VPN программа сама ничего не отправляет — тогда не меряется вовсе.
         await DnsCheck.run(probe,
-            checkPort: port, password: _dnsCheckPassword, nic: nic, sources: sources, measureReach: !killSwitchOn);
+            checkPort: port,
+            password: _dnsCheckPassword,
+            nic: nic,
+            sources: sources,
+            measureReach: () => !killSwitchOn && (probe.local || _dnsCheckRoute == ConnRoute.direct));
         // Строка журнала ядра о том, куда ушёл запрос, приходит чуть позже ответа.
         await Future.delayed(const Duration(milliseconds: 200));
         probe.route = _dnsCheckRoute;

@@ -183,7 +183,7 @@ class _SiteCardState extends State<_SiteCard> {
 
   Widget _name(SiteReport r, double size) => Row(children: [
         Flexible(
-          child: Text(r.host,
+          child: Text(r.shown,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontFamily: 'Consolas', fontSize: size, fontWeight: FontWeight.w700)),

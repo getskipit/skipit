@@ -10,10 +10,11 @@ import 'package:skipit/core/speed_test.dart';
 /// подсчёт и выводы словами, без выхода в сеть.
 void main() {
   test('несколько сайтов: через запятую с пробелом и без, с новой строки; без повторов', () {
-    expect(SiteCheck.hostsOf('site.example, shop.example'), ['site.example', 'shop.example']);
-    expect(SiteCheck.hostsOf('site.example,shop.example'), ['site.example', 'shop.example']);
-    expect(SiteCheck.hostsOf(' https://site.example/a ;shop.example\nsite.example , '), ['site.example', 'shop.example']);
-    expect(SiteCheck.hostsOf('site.example'), ['site.example']);
+    List<String>? hosts(String input) => SiteCheck.hostsOf(input)?.map((n) => n.host).toList();
+    expect(hosts('site.example, shop.example'), ['site.example', 'shop.example']);
+    expect(hosts('site.example,shop.example'), ['site.example', 'shop.example']);
+    expect(hosts(' https://site.example/a ;shop.example\nsite.example , '), ['site.example', 'shop.example']);
+    expect(hosts('site.example'), ['site.example']);
     // Одно неверное имя — отказ целиком: молча пропустить его значило бы проверить не то, что просили.
     expect(SiteCheck.hostsOf('site.example, не сайт'), isNull);
     expect(SiteCheck.hostsOf(' , '), isNull);

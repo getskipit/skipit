@@ -270,14 +270,16 @@ class DnsCheck {
   }
 
   /// Проверяет один сервер и записывает результат в [probe]. [sources] — см. [reach]. [measureReach] —
-  /// мерить ли, далеко ли названные сервером адреса: для этого программа сама идёт к ним мимо VPN, и при
-  /// включённом Kill Switch этого делать нельзя.
+  /// мерить ли, далеко ли названные сервером адреса (спрашивается после запросов, когда путь к серверу
+  /// уже известен): для этого программа сама идёт к ним мимо VPN. При включённом Kill Switch этого делать
+  /// нельзя, а у сервера, к которому запросы идут через VPN, незачем — его адреса и должны быть ближе
+  /// к VPN-серверу.
   static Future<void> run(DnsProbe probe,
       {required int checkPort,
       required String password,
       String? nic,
       List<InternetAddress> sources = const [],
-      bool measureReach = true}) async {
+      bool Function()? measureReach}) async {
     Process? core;
     try {
       // Свободный порт для входа временного ядра.
@@ -310,7 +312,7 @@ class DnsCheck {
       probe.nextMs = await ask(port, 'www.wikipedia.org', 0x5102, into: wiki);
       // Далеко ли адреса, которые сервер называет: по двум именам, чьи узлы стоят в разных странах.
       // Служебный сервер адресов сайтов не выдаёт — его не меряем.
-      if (probe.ok && !probe.service && measureReach) {
+      if (probe.ok && !probe.service && (measureReach?.call() ?? true)) {
         await ask(port, 'www.microsoft.com', 0x5103, into: akamai);
         for (final ip in [wiki.firstOrNull, akamai.firstOrNull].nonNulls) {
           final ms = await reach(ip, sources);

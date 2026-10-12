@@ -14,10 +14,16 @@ typedef SiteNote = ({SiteNoteKind kind, String text});
 /// Когда и на каком сервере сделана проверка — подпись под результатом и в тексте для копирования.
 typedef CheckStamp = ({DateTime at, String server});
 
+/// Имя сайта для проверки: [host] — как оно уходит в сеть, [shown] — как его вписали и как показывать.
+typedef SiteName = ({String host, String shown});
+
 /// Результат проверки одного сайта: каким путём он идёт и на что уходит время.
 class SiteReport {
-  SiteReport(this.host);
+  SiteReport(this.host, {String? shown}) : shown = shown ?? host;
   final String host;
+
+  /// Имя, как его вписали: у кириллического сайта оно отличается от [host].
+  final String shown;
   bool done = false;
 
   /// Каким путём ядро отправило соединение; null — в журнале ядра его не нашлось.
@@ -117,7 +123,7 @@ class SiteReport {
   }
 
   /// Результат текстом — чтобы скопировать и отправить.
-  String get copyText => ['$host — $summary', for (final n in notes) '  • ${n.text}'].join('\n');
+  String get copyText => ['$shown — $summary', for (final n in notes) '  • ${n.text}'].join('\n');
 
   /// Главная строка вывода: первая, которая не «к сведению».
   SiteNote get mainNote => notes.firstWhere((n) => n.kind != SiteNoteKind.info, orElse: () => notes.first);
@@ -143,12 +149,74 @@ class SiteCheck {
   static const timeout = Duration(seconds: 8);
 
   /// Имя сайта из того, что вписал человек: без `https://`, пути и порта. null — это не имя сайта.
-  static String? hostOf(String input) {
+  static String? hostOf(String input) => nameOf(input)?.host;
+
+  /// То же вместе с именем, как его показывать. Кириллическое имя («сайт.рф») в сеть уходит в
+  /// латинской записи (`xn--…`): так его понимают ядро и DNS, — а в окне остаётся как вписано.
+  static SiteName? nameOf(String input) {
     var text = input.trim().toLowerCase();
-    if (text.isEmpty) return null;
-    if (!text.contains('://')) text = 'https://$text';
-    final host = Uri.tryParse(text)?.host ?? '';
-    return RegExp(r'^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$').hasMatch(host) ? host : null;
+    text = text.replaceFirst(RegExp(r'^[a-z][a-z0-9+.-]*://'), '');
+    text = text.split(RegExp(r'[/?#]')).first;
+    text = text.replaceFirst(RegExp(r':\d+$'), '');
+    if (text.endsWith('.')) text = text.substring(0, text.length - 1);
+    final labels = text.split('.');
+    if (labels.length < 2) return null;
+    final ascii = <String>[];
+    for (final label in labels) {
+      if (!RegExp(r'^[\p{L}\p{N}]([\p{L}\p{N}-]*[\p{L}\p{N}])?$', unicode: true).hasMatch(label)) return null;
+      ascii.add(label.runes.every((c) => c < 0x80) ? label : _punycode(label));
+    }
+    // Зона — не число: иначе это адрес цифрами, а не имя.
+    if (ascii.any((l) => l.length > 63) || !RegExp(r'[a-z]').hasMatch(ascii.last) || ascii.last.length < 2) return null;
+    return (host: ascii.join('.'), shown: text);
+  }
+
+  /// Латинская запись метки имени с нелатинскими буквами (Punycode, RFC 3492): «рф» → `xn--p1ai`.
+  static String _punycode(String label) {
+    const base = 36, tMin = 1, tMax = 26, skew = 38, damp = 700;
+    final input = label.runes.toList();
+    final out = StringBuffer();
+    for (final c in input) {
+      if (c < 0x80) out.writeCharCode(c);
+    }
+    final basic = out.length;
+    if (basic > 0) out.write('-');
+    String digit(int d) => String.fromCharCode(d < 26 ? 97 + d : 22 + d);
+    int adapt(int delta, int points, bool first) {
+      delta = first ? delta ~/ damp : delta ~/ 2;
+      delta += delta ~/ points;
+      var k = 0;
+      while (delta > ((base - tMin) * tMax) ~/ 2) {
+        delta ~/= base - tMin;
+        k += base;
+      }
+      return k + (base - tMin + 1) * delta ~/ (delta + skew);
+    }
+
+    var n = 0x80, delta = 0, bias = 72, handled = basic;
+    while (handled < input.length) {
+      final next = input.where((c) => c >= n).reduce((a, b) => a < b ? a : b);
+      delta += (next - n) * (handled + 1);
+      n = next;
+      for (final c in input) {
+        if (c < n) delta++;
+        if (c != n) continue;
+        var q = delta;
+        for (var k = base;; k += base) {
+          final t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+          if (q < t) break;
+          out.write(digit(t + (q - t) % (base - t)));
+          q = (q - t) ~/ (base - t);
+        }
+        out.write(digit(q));
+        bias = adapt(delta, handled + 1, handled == basic);
+        delta = 0;
+        handled++;
+      }
+      delta++;
+      n++;
+    }
+    return 'xn--$out';
   }
 
   /// Название сервера для подписи под результатом. У сервера, добавленного ссылкой без названия,
@@ -166,14 +234,14 @@ class SiteCheck {
 
   /// Несколько сайтов через запятую, пробел или с новой строки — без повторов. null — что-то из
   /// вписанного не имя сайта, или сайтов больше [maxHosts].
-  static List<String>? hostsOf(String input) {
-    final hosts = <String>{};
+  static List<SiteName>? hostsOf(String input) {
+    final names = <String, SiteName>{};
     for (final part in input.split(RegExp(r'[\s,;]+')).where((p) => p.isNotEmpty)) {
-      final host = hostOf(part);
-      if (host == null) return null;
-      hosts.add(host);
+      final name = nameOf(part);
+      if (name == null) return null;
+      names.putIfAbsent(name.host, () => name);
     }
-    return hosts.isEmpty || hosts.length > maxHosts ? null : hosts.toList();
+    return names.isEmpty || names.length > maxHosts ? null : names.values.toList();
   }
 
   /// Соединение с [host] (порт 443) через локальный HTTP-порт ядра [port]: за сколько оно готово
@@ -343,7 +411,9 @@ class SiteCheck {
         final base = [for (var i = 0; i < 4; i++) await viaProxy(checkHost, port: checkPort)];
         await Future.delayed(const Duration(milliseconds: 200));
         // Сравниваем только то, что шло одним выходом; если общих несколько — тот, где сайт быстрее.
-        final siteBy = byOutbound(site), baseBy = byOutbound(base);
+        // Первое соединение с каждой стороны в счёт не идёт: оно «холодное» — с поиском адреса и новой
+        // связью с VPN-сервером — и рядом с прогретым выглядело бы как далёкий сайт.
+        final siteBy = byOutbound(site.sublist(1)), baseBy = byOutbound(base.sublist(1));
         for (final out in siteBy.keys.where(baseBy.containsKey)) {
           if (report.vpnSiteMs == null || siteBy[out]! < report.vpnSiteMs!) {
             report

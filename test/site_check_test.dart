@@ -8,6 +8,14 @@ void main() {
     expect(SiteCheck.hostOf(' https://Site.Example/page?x=1 '), 'site.example');
     expect(SiteCheck.hostOf('www.site.example:8443'), 'www.site.example');
     expect(SiteCheck.hostOf('site.example'), 'site.example');
+    expect(SiteCheck.hostOf('http://site.example./'), 'site.example');
+    // Кириллическое имя уходит в сеть в латинской записи, а показывается как вписано.
+    expect(SiteCheck.hostOf('Пример.Испытание'), 'xn--e1afmkfd.xn--80akhbyknj4f');
+    expect(SiteCheck.hostOf('https://президент.рф/новости'), 'xn--d1abbgf6aiiy.xn--p1ai');
+    expect(SiteCheck.hostOf('bücher.example'), 'xn--bcher-kva.example');
+    expect(SiteCheck.hostOf('xn--e1afmkfd.xn--p1ai'), 'xn--e1afmkfd.xn--p1ai');
+    expect(SiteCheck.nameOf('Президент.РФ')!.shown, 'президент.рф');
+    expect(SiteReport('xn--d1abbgf6aiiy.xn--p1ai', shown: 'президент.рф').copyText, startsWith('президент.рф — '));
     for (final wrong in ['', 'localhost', '203.0.113.7', 'просто слова', 'site .example', '-a.example']) {
       expect(SiteCheck.hostOf(wrong), isNull, reason: wrong);
     }
