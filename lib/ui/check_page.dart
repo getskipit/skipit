@@ -803,6 +803,30 @@ class _UdpCard extends StatelessWidget {
   const _UdpCard({required this.state});
   final AppState state;
 
+  /// Серверы по подпискам — в том порядке, в каком они идут в списке; добавленные вручную — отдельно.
+  List<(String, List<ServerProfile>)> _groups(List<ServerProfile> list) {
+    final groups = <String?, List<ServerProfile>>{};
+    for (final s in list) {
+      (groups[s.subscriptionId] ??= []).add(s);
+    }
+    return [
+      for (final e in groups.entries)
+        (
+          state.subscriptions.where((sub) => sub.id == e.key).firstOrNull?.displayName ?? 'Свои серверы',
+          e.value,
+        ),
+    ];
+  }
+
+  /// Счёт по группе: у скольких серверов проходит UDP (пока идёт проверка — сколько уже проверено).
+  static String _count(List<ServerProfile> group) {
+    final done = group.where((s) => s.udpMs != null).toList();
+    final ok = done.where((s) => s.udpMs! >= 0).length;
+    return done.length < group.length
+        ? 'проверено ${done.length} из ${group.length}'
+        : 'UDP проходит у $ok из ${group.length}';
+  }
+
   static String _result(ServerProfile s) => s.udpMs == null
       ? 'проверяется…'
       : (s.udpMs! < 0 ? 'UDP не проходит' : 'UDP проходит, ответ ${s.udpMs} мс');
@@ -852,10 +876,31 @@ class _UdpCard extends StatelessWidget {
           ),
         ]),
         if (verdict != null) _note(verdict),
-        for (final s in list) _row(s),
+        for (final (title, group) in _groups(list)) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Row(children: [
+              Expanded(
+                child: FlagText(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+              ),
+              Text(_count(group), style: TextStyle(color: C.muted, fontSize: 12)),
+            ]),
+          ),
+          for (final s in group) _row(s),
+        ],
         if (verdict != null)
           _copy(state, state.udpStamp,
-              () => [verdict.text, for (final s in list) '${s.name} — ${_result(s)}'].join('\n')),
+              () => [
+                    verdict.text,
+                    for (final (title, group) in _groups(list)) ...[
+                      '',
+                      '$title — ${_count(group)}',
+                      for (final s in group) '${s.name} — ${_result(s)}',
+                    ],
+                  ].join('\n')),
       ]),
     );
   }
