@@ -4,10 +4,12 @@ import 'package:flutter/services.dart';
 import '../core/dns_check.dart';
 import '../core/line_check.dart';
 import '../core/log_store.dart';
+import '../core/ping.dart';
 import '../core/site_check.dart';
 import '../core/speed_test.dart';
 import '../core/util.dart';
 import '../core/windows.dart';
+import '../models/server.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
 import 'flag_text.dart';
@@ -35,6 +37,8 @@ class CheckPage extends StatelessWidget {
               _SiteCard(state: state),
               const SizedBox(height: 14),
               _LineCard(state: state),
+              const SizedBox(height: 14),
+              _UdpCard(state: state),
               const SizedBox(height: 14),
               _SpeedCard(state: state),
               const SizedBox(height: 14),
@@ -791,6 +795,70 @@ class _DnsCheckCard extends StatelessWidget {
             _copy(state, state.dnsStamp, () => [for (final p in state.dnsProbes) _text(p)].join('\n')),
         ]),
       );
+}
+
+/// «Проходит ли UDP»: через каждый сервер с главной уходят пакеты к STUN-серверу Cloudflare (см. [Pinger.udpAll]).
+/// Без UDP в играх, голосовых чатах и звонках нет звука или связи. Подключаться к VPN не нужно.
+class _UdpCard extends StatelessWidget {
+  const _UdpCard({required this.state});
+  final AppState state;
+
+  static String _result(ServerProfile s) => s.udpMs == null
+      ? 'проверяется…'
+      : (s.udpMs! < 0 ? 'UDP не проходит' : 'UDP проходит, ответ ${s.udpMs} мс');
+
+  Widget _row(ServerProfile s) => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [
+          s.udpMs == null
+              ? const Spinner(size: 16)
+              : Icon(s.udpMs! < 0 ? Icons.error_rounded : Icons.check_circle_rounded,
+                  size: 16, color: s.udpMs! < 0 ? C.red : C.green),
+          const SizedBox(width: 10),
+          Expanded(child: FlagText(s.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5))),
+          const SizedBox(width: 12),
+          Text(_result(s), style: TextStyle(color: C.muted, fontSize: 12)),
+        ]),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final own = state.udpPending.isNotEmpty;
+    final list = state.udpChecked;
+    final verdict = Pinger.udpVerdict([for (final s in list) s.udpMs]);
+    final servers = state.serversInListOrder;
+    return Panel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _cardTitle(Icons.sports_esports_rounded, 'Проходит ли UDP (игры, звонки)',
+            'Проверим каждый сервер с главной: пропускает ли он UDP. Без него в играх, голосовых чатах и звонках нет звука или связи'),
+        const SizedBox(height: 14),
+        Row(children: [
+          GhostButton(
+            label: 'Проверить UDP',
+            icon: Icons.speed_rounded,
+            busy: own,
+            onPressed: !state.checking && servers.isNotEmpty ? state.checkUdpAll : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              servers.isEmpty
+                  ? 'Сначала добавьте подписку или сервер'
+                  : state.checking && !own
+                      ? 'Идёт другая проверка — эта станет доступна, когда она закончится'
+                      : 'Подключаться к VPN не нужно. Один сервер можно проверить и из его меню в списке серверов',
+              style: TextStyle(color: C.muted, fontSize: 12),
+            ),
+          ),
+        ]),
+        if (verdict != null) _note(verdict),
+        for (final s in list) _row(s),
+        if (verdict != null)
+          _copy(state, state.udpStamp,
+              () => [verdict.text, for (final s in list) '${s.name} — ${_result(s)}'].join('\n')),
+      ]),
+    );
+  }
 }
 
 /// Отчёт для разбора: версия, настройки и журнал последнего подключения одним файлом.

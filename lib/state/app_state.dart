@@ -216,7 +216,7 @@ class AppState extends ChangeNotifier {
 
   /// Идёт любая из проверок раздела «Проверка». Одновременно их запускать нельзя: они делят список
   /// соединений ядра, а замер скорости сам портит замер стабильности.
-  bool get checking => checkingSite || checkingLine || checkingSpeed || checkingDns;
+  bool get checking => checkingSite || checkingLine || checkingSpeed || checkingDns || udpPending.isNotEmpty;
 
   /// Когда и на каком сервере сделана каждая проверка.
   CheckStamp? siteStamp, lineStamp, speedStamp, dnsStamp;
@@ -1513,10 +1513,24 @@ class AppState extends ChangeNotifier {
   /// Серверы, у которых сейчас идёт проверка UDP.
   final udpPending = <String>{};
 
+  /// Серверы последней проверки UDP из раздела «Проверка» и когда она сделана.
+  List<ServerProfile> udpChecked = const [];
+  CheckStamp? udpStamp;
+
+  /// «Проходит ли UDP» в разделе «Проверка»: все серверы с главной. Подключаться к VPN не нужно —
+  /// проверка идёт через отдельное ядро.
+  Future<void> checkUdpAll() async {
+    final list = serversInListOrder;
+    if (checking || list.isEmpty) return;
+    udpChecked = list;
+    udpStamp = (at: DateTime.now(), server: '');
+    await checkUdp(list);
+  }
+
   /// Проходит ли UDP через серверы [list] — нужно играм, голосовым чатам и звонкам. Результат — в
   /// [ServerProfile.udpMs]. Идёт одна проверка за раз; окно обновляется не чаще раза в 200 мс.
   Future<void> checkUdp(List<ServerProfile> list) async {
-    if (udpPending.isNotEmpty || list.isEmpty) return;
+    if (checking || list.isEmpty) return;
     for (final s in list) {
       s.udpMs = null;
       udpPending.add(s.id);

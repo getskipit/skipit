@@ -6,12 +6,23 @@ import 'package:skipit/core/link_parser.dart';
 import 'package:skipit/core/log_store.dart';
 import 'package:skipit/core/paths.dart';
 import 'package:skipit/core/ping.dart';
+import 'package:skipit/core/site_check.dart';
 
 /// Проверка UDP через сервер на настоящем ядре, без интернета: «сервер» — второе ядро Xray с входом
 /// SOCKS (с UDP и без), вместо STUN-сервера Cloudflare — свой ответчик на 127.0.0.1.
 void main() {
   final exe = '${Directory.current.path}\\core\\skipit-xray.exe';
   final hasCore = File(exe).existsSync();
+
+  test('вывод проверки UDP словами', () {
+    expect(Pinger.udpVerdict(const []), isNull);
+    // Пока проверяется хоть один сервер, вывода нет.
+    expect(Pinger.udpVerdict(const [40, null]), isNull);
+    expect(Pinger.udpVerdict(const [40, 55])!.kind, SiteNoteKind.ok);
+    expect(Pinger.udpVerdict(const [40, -1])!.text, startsWith('UDP проходит у 1 из 2 серверов'));
+    expect(Pinger.udpVerdict(const [-1, -1])!.kind, SiteNoteKind.bad);
+    expect(Pinger.udpVerdict(const [-1])!.text, startsWith('UDP через сервер не проходит'));
+  });
 
   test('UDP через сервер: проходит — время ответа, не проходит — -1', () async {
     await AppPaths.init();

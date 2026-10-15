@@ -8,6 +8,7 @@ import '../models/server.dart';
 import '../models/settings.dart';
 import 'core_manager.dart';
 import 'paths.dart';
+import 'site_check.dart';
 import 'xray_config.dart';
 
 /// Отмена идущей проверки задержки: проверка перестаёт брать новые серверы и останавливает тестовое ядро.
@@ -246,6 +247,28 @@ class Pinger {
     } finally {
       await proc.stop();
     }
+  }
+
+  /// Вывод проверки UDP словами по результатам серверов ([ServerProfile.udpMs]); null — ещё нечего сказать.
+  static SiteNote? udpVerdict(List<int?> results) {
+    final done = results.whereType<int>().toList();
+    if (done.isEmpty || done.length < results.length) return null;
+    final ok = done.where((ms) => ms >= 0).length;
+    final n = done.length;
+    if (ok == n) {
+      return (kind: SiteNoteKind.ok, text: n == 1 ? 'UDP через сервер проходит' : 'UDP проходит через все серверы ($n)');
+    }
+    if (ok == 0) {
+      return (
+        kind: SiteNoteKind.bad,
+        text: '${n == 1 ? 'UDP через сервер не проходит' : 'UDP не проходит ни через один сервер'}: в играх, голосовых '
+            'чатах и звонках может не быть звука или связи. Если UDP нужен, спросите провайдера, на каких серверах он есть'
+      );
+    }
+    return (
+      kind: SiteNoteKind.warn,
+      text: 'UDP проходит у $ok из $n серверов. Для игр и звонков выбирайте серверы с зелёной отметкой UDP в списке серверов'
+    );
   }
 
   /// Запрос STUN (Binding Request) на локальный вход [port] и время ответа; -1 — ответа нет.
