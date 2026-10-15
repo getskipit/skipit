@@ -319,13 +319,50 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
           toggle(
               'Шумы (Noises)',
-              'Перед соединением с сервером отправлять случайный UDP-пакет — мешает распознать и заблокировать '
+              'Перед соединением с сервером отправлять лишний UDP-пакет — мешает распознать и заблокировать '
                   'QUIC. Только серверы Hysteria и mKCP из ссылок, не конфиги провайдера в JSON',
               s.noise,
               (v) => s.noise = v),
           if (s.noise) ...[
-            fragmentField('Шумы: длина пакета', 'Байт, число или диапазон: 10-20', s.noisePacket,
-                (v) => s.noisePacket = v, zero: false),
+            _Row(
+              title: 'Шумы: вид пакета',
+              subtitle: 'Случайный подходит почти всегда. Текст, Hex и Base64 — заданный пакет, если провайдер '
+                  'или инструкция назвали конкретное значение',
+              trailing: Segmented<String>(
+                value: s.noiseType,
+                items: const {'rand': 'Случайный', 'str': 'Текст', 'hex': 'Hex', 'base64': 'Base64'},
+                onChanged: (v) {
+                  s.noiseType = v;
+                  state.changed();
+                },
+              ),
+            ),
+            if (s.noiseType == 'rand')
+              fragmentField('Шумы: длина пакета', 'Байт, число или диапазон: 10-20', s.noisePacket,
+                  (v) => s.noisePacket = v, zero: false)
+            else
+              _Row(
+                title: 'Шумы: пакет',
+                subtitle: switch (s.noiseType) {
+                  'hex' => 'Байты в шестнадцатеричном виде, например 0a1b2c. Неверное значение — шумов нет',
+                  'base64' => 'Байты в Base64. Неверное значение — шумов нет',
+                  _ => 'Текст пакета как есть. Пустое поле — шумов нет',
+                },
+                trailing: SizedBox(
+                  width: 260,
+                  child: TextFormField(
+                    // Свой ключ у каждого вида: поле показывает сохранённый пакет и проверяет его заново.
+                    key: ValueKey('noiseData/${s.noiseType}'),
+                    initialValue: s.noiseData,
+                    autovalidateMode: AutovalidateMode.always,
+                    validator: (v) => XrayConfig.noiseDataOk(s.noiseType, v!) ? null : 'Ядро не примет такой пакет',
+                    onChanged: (v) {
+                      s.noiseData = v;
+                      state.changed();
+                    },
+                  ),
+                ),
+              ),
             fragmentField('Шумы: пауза', 'Миллисекунд после пакета: 10-16', s.noiseDelay, (v) => s.noiseDelay = v),
           ],
           toggle(
@@ -654,6 +691,8 @@ const _keywords = <String, String>{
   'MTU TUN-адаптера': 'mtu пакет адаптер',
   'Фрагментация': 'fragment фрагмент блокировка обход dpi tls',
   'Шумы (Noises)': 'noise шум блокировка обход dpi quic hysteria udp',
+  'Шумы: вид пакета': 'noise шум rand str string hex base64 тип',
+  'Шумы: пакет': 'noise шум str string hex base64 содержимое',
   'Мультиплексирование (Mux)': 'mux мультиплексор xudp соединения',
   'Mux: TCP-соединения': 'mux мультиплексор потоки concurrency',
   'Mux: XUDP-соединения': 'mux мультиплексор udp потоки игры',

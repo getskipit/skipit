@@ -307,7 +307,9 @@ class XrayConfig {
         !(alpn.isNotEmpty && alpn.every((a) => a == 'h3')) &&
         ((stream['sockopt'] as Map?)?['dialerProxy'] == null);
     // Шумы — случайные UDP-пакеты перед первым пакетом соединения: только серверы поверх UDP.
+    // Заданный пакет, который ядро не примет (пустой, неверный Hex), — шумов нет, а не ошибка запуска.
     final noise = s.noise &&
+        (s.noiseType == 'rand' || noiseDataOk(s.noiseType, s.noiseData)) &&
         const ['kcp', 'hysteria'].contains(network) &&
         ((stream['sockopt'] as Map?)?['dialerProxy'] == null);
     if (fragment || noise) {
@@ -349,12 +351,39 @@ class XrayConfig {
           'protocol': 'freedom',
           'settings': {
             'noises': [
-              {'type': 'rand', 'packet': s.noisePacket, 'delay': s.noiseDelay},
+              {
+                'type': s.noiseType,
+                'packet': s.noiseType == 'rand' ? s.noisePacket : s.noiseData.trim(),
+                'delay': s.noiseDelay,
+              },
             ],
           },
           'streamSettings': {'sockopt': _directSockopt(s)},
         },
     ];
+  }
+
+  /// Заданный пакет шума годится ядру: текст — не пустой; Hex — чётное число шестнадцатеричных знаков;
+  /// Base64 — обычный или для адресов (ядро само убирает `=` и меняет `+/` на `-_`).
+  static bool noiseDataOk(String type, String v) {
+    final d = v.trim();
+    if (d.isEmpty) return false;
+    switch (type) {
+      case 'str':
+        return true;
+      case 'hex':
+        return d.length.isEven && RegExp(r'^[0-9a-fA-F]+$').hasMatch(d);
+      case 'base64':
+        final raw = d.replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
+        if (!RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(raw) || raw.length % 4 == 1) return false;
+        try {
+          return base64Url.decode(base64Url.normalize(raw)).isNotEmpty;
+        } catch (_) {
+          return false;
+        }
+      default:
+        return false;
+    }
   }
 
   /// Число соединений mux в пределах, которые принимает ядро: от −1 (этот вид мимо mux) до 1024.

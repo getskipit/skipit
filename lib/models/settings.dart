@@ -75,10 +75,13 @@ class AppSettings {
   String fragmentLength = '100-200';
   String fragmentInterval = '10-20';
 
-  /// Шумы: перед первым пакетом соединения с сервером поверх UDP (Hysteria, mKCP) — случайный пакет
-  /// [noisePacket] байт и пауза [noiseDelay] мс.
+  /// Шумы: перед первым пакетом соединения с сервером поверх UDP (Hysteria, mKCP) — пакет и пауза
+  /// [noiseDelay] мс. Вид [noiseType]: `rand` — случайные байты, длина [noisePacket]; `str`, `hex`,
+  /// `base64` — заданный пакет [noiseData] (см. [XrayConfig.noiseDataOk]).
   bool noise = false;
+  String noiseType = 'rand';
   String noisePacket = '10-20';
+  String noiseData = '';
   String noiseDelay = '10-16';
 
   /// Мультиплексирование: до [muxConcurrency] соединений TCP и до [muxXudp] — UDP (XUDP) по одному
@@ -162,7 +165,9 @@ class AppSettings {
         'fragmentLength': fragmentLength,
         'fragmentInterval': fragmentInterval,
         'noise': noise,
+        'noiseType': noiseType,
         'noisePacket': noisePacket,
+        'noiseData': noiseData,
         'noiseDelay': noiseDelay,
         'mux': mux,
         'muxConcurrency': muxConcurrency,
@@ -226,7 +231,9 @@ class AppSettings {
     s.fragmentLength = j['fragmentLength'] as String? ?? s.fragmentLength;
     s.fragmentInterval = j['fragmentInterval'] as String? ?? s.fragmentInterval;
     s.noise = parseBool(j['noise'], s.noise);
+    s.noiseType = const ['str', 'hex', 'base64'].contains(j['noiseType']) ? j['noiseType'] as String : s.noiseType;
     s.noisePacket = j['noisePacket'] as String? ?? s.noisePacket;
+    s.noiseData = j['noiseData'] as String? ?? s.noiseData;
     s.noiseDelay = j['noiseDelay'] as String? ?? s.noiseDelay;
     s.mux = parseBool(j['mux'], s.mux);
     s.muxConcurrency = asInt(j['muxConcurrency']) ?? s.muxConcurrency;

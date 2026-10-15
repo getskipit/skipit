@@ -295,6 +295,53 @@ void main() {
     }
   }, skip: hasCore ? false : 'ядро Xray не скачано (tools\\setup.ps1)');
 
+  test('Шумы: каждый вид пакета ядро принимает, неверный пакет — шумов нет', () async {
+    final link = LinkParser.parseLink(links['Hysteria 2']!)!;
+    Map<String, dynamic> build(String type, String data) => XrayConfig.build(
+        server: link,
+        routing: RoutingProfile.global(),
+        settings: AppSettings()
+          ..noise = true
+          ..noiseType = type
+          ..noiseData = data);
+    bool noisy(Map<String, dynamic> c) => jsonEncode(c).contains(XrayConfig.noiseTag);
+
+    expect(noisy(build('hex', 'abc')), isFalse);
+    expect(noisy(build('str', '  ')), isFalse);
+    for (final (type, data) in [('rand', ''), ('str', 'hello'), ('hex', '0a1B2c'), ('base64', 'aGVsbG8+/w==')]) {
+      final config = build(type, data);
+      expect(noisy(config), isTrue, reason: type);
+      final settings = AppSettings.fromJson((AppSettings()
+            ..noiseType = type
+            ..noiseData = data)
+          .toJson());
+      expect([settings.noiseType, settings.noiseData], [type, data]);
+      ((config['routing'] as Map)['rules'] as List).removeWhere((r) => jsonEncode(r).contains(RegExp('geoip:|geosite:')));
+      final dir = await Directory.systemTemp.createTemp('skipit-xray-test');
+      try {
+        final file = File('${dir.path}\\config.json');
+        await file.writeAsString(jsonEncode(config));
+        final r = await Process.run(exe, ['run', '-test', '-c', file.path], stdoutEncoding: utf8, stderrEncoding: utf8);
+        expect(r.exitCode, 0, reason: '$type: ${r.stdout}\\n${r.stderr}');
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    }
+  }, skip: hasCore ? false : 'ядро Xray не скачано (tools\\setup.ps1)');
+
+  test('Заданный пакет шума: что примет ядро', () {
+    expect(XrayConfig.noiseDataOk('str', 'привет'), isTrue);
+    expect(XrayConfig.noiseDataOk('str', ''), isFalse);
+    expect(XrayConfig.noiseDataOk('hex', '0a1B'), isTrue);
+    expect(XrayConfig.noiseDataOk('hex', '0a1'), isFalse);
+    expect(XrayConfig.noiseDataOk('hex', 'zz'), isFalse);
+    expect(XrayConfig.noiseDataOk('base64', 'aGVsbG8='), isTrue);
+    expect(XrayConfig.noiseDataOk('base64', 'aGVsbG8+/w'), isTrue);
+    expect(XrayConfig.noiseDataOk('base64', 'a'), isFalse);
+    expect(XrayConfig.noiseDataOk('base64', 'aGV%'), isFalse);
+    expect(XrayConfig.noiseDataOk('rand', '10-20'), isFalse);
+  });
+
   test('Поля фрагментации: что примет ядро', () {
     expect(XrayConfig.fragmentValueOk('tlshello', packets: true), isTrue);
     expect(XrayConfig.fragmentValueOk('1-3', packets: true), isTrue);
