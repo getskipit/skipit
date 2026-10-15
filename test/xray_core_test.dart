@@ -257,6 +257,39 @@ void main() {
     }
   }, skip: hasCore ? false : 'ядро Xray не скачано (tools\\setup.ps1)');
 
+  test('Mux: TCP и XUDP задаются отдельно, −1 у обоих — mux выключен', () async {
+    final link = LinkParser.parseLink(links['Trojan + TLS']!)!;
+    Map? muxOf(int tcp, int udp) {
+      final s = AppSettings()
+        ..mux = true
+        ..muxConcurrency = tcp
+        ..muxXudp = udp;
+      final config = XrayConfig.build(server: link, routing: RoutingProfile.global(), settings: s);
+      return (config['outbounds'] as List).cast<Map>().firstWhere((o) => o['tag'] == 'proxy')['mux'] as Map?;
+    }
+
+    expect(muxOf(-1, -1), isNull);
+    expect(muxOf(5000, 8)!['concurrency'], 1024);
+    final udpOnly = muxOf(-1, 0)!;
+    expect([udpOnly['concurrency'], udpOnly['xudpConcurrency']], [-1, 0]);
+    final s = AppSettings()
+      ..mux = true
+      ..muxConcurrency = -1
+      ..muxXudp = 0;
+    expect(AppSettings.fromJson(s.toJson()).muxXudp, 0);
+    final config = XrayConfig.build(server: link, routing: RoutingProfile.global(), settings: s);
+    ((config['routing'] as Map)['rules'] as List).removeWhere((r) => jsonEncode(r).contains(RegExp('geoip:|geosite:')));
+    final dir = await Directory.systemTemp.createTemp('skipit-xray-test');
+    try {
+      final file = File('${dir.path}\\config.json');
+      await file.writeAsString(jsonEncode(config));
+      final r = await Process.run(exe, ['run', '-test', '-c', file.path], stdoutEncoding: utf8, stderrEncoding: utf8);
+      expect(r.exitCode, 0, reason: '${r.stdout}\\n${r.stderr}');
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  }, skip: hasCore ? false : 'ядро Xray не скачано (tools\\setup.ps1)');
+
   test('Поля фрагментации: что примет ядро', () {
     expect(XrayConfig.fragmentValueOk('tlshello', packets: true), isTrue);
     expect(XrayConfig.fragmentValueOk('1-3', packets: true), isTrue);

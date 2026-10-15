@@ -156,6 +156,28 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         );
 
+    // Поле числа соединений mux: от −1 до 1024 (см. [XrayConfig.muxValue]).
+    Widget muxField(String title, String subtitle, int value, void Function(int) set) => _Row(
+          title: title,
+          subtitle: subtitle,
+          trailing: SizedBox(
+            width: 110,
+            child: TextFormField(
+              key: ValueKey(title),
+              initialValue: '$value',
+              textAlign: TextAlign.center,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d{0,4}'))],
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              validator: (v) => _muxOk(v!) ? null : 'От −1 до 1024',
+              onChanged: (v) {
+                if (!_muxOk(v)) return;
+                set(int.parse(v));
+                state.changed();
+              },
+            ),
+          ),
+        );
+
     final sections = <Widget>[
         _Section('Оформление', [
           _Row(
@@ -302,9 +324,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   'XHTTP и конфиги провайдера в JSON',
               s.mux,
               (v) => s.mux = v),
-          if (s.mux)
-            number('Mux: потоков', 'Сколько соединений программ идёт по одному соединению с сервером. '
-                'Обычно 8, не больше 1024', s.muxConcurrency, (v) => s.muxConcurrency = v),
+          if (s.mux) ...[
+            muxField('Mux: TCP-соединения', 'Сколько соединений программ идёт по одному соединению с сервером, '
+                'от −1 до 1024. −1 — TCP мимо mux. Обычно 8', s.muxConcurrency, (v) => s.muxConcurrency = v),
+            muxField('Mux: XUDP-соединения', 'То же для UDP (игры, звонки), от −1 до 1024. −1 — UDP мимо mux, '
+                '0 — вместе с TCP. Обычно 16', s.muxXudp, (v) => s.muxXudp = v),
+          ],
           number('MTU TUN-адаптера', 'Обычно 1500 или 9000', s.mtu, (v) => s.mtu = v),
           _Row(
             title: 'Уровень логов',
@@ -618,6 +643,8 @@ const _keywords = <String, String>{
   'MTU TUN-адаптера': 'mtu пакет адаптер',
   'Фрагментация': 'fragment фрагмент блокировка обход dpi tls',
   'Мультиплексирование (Mux)': 'mux мультиплексор xudp соединения',
+  'Mux: TCP-соединения': 'mux мультиплексор потоки concurrency',
+  'Mux: XUDP-соединения': 'mux мультиплексор udp потоки игры',
   'Уровень логов': 'журнал логи отладка debug info warning подробность',
   'Адрес для проверки': 'пинг задержка url ссылка тест',
   'Исключения системного прокси': 'proxy bypass обход мимо исключить localhost локальные адреса',
@@ -633,6 +660,11 @@ const _keywords = <String, String>{
   'Починить сеть': 'сброс интернет пропал не работает завис зависло адаптер tun прокси dns восстановить',
   'Удалить все данные': 'сброс очистить стереть всё подписки серверы',
 };
+
+bool _muxOk(String v) {
+  final n = int.tryParse(v.trim());
+  return n != null && n >= -1 && n <= 1024;
+}
 
 /// Строки раздела [title], подходящие под поиск [query]: по названию строки, её подписи и ключевым
 /// словам — должны найтись все слова запроса. Если под поиск подходит название раздела — весь раздел.

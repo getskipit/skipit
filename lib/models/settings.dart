@@ -75,9 +75,11 @@ class AppSettings {
   String fragmentLength = '100-200';
   String fragmentInterval = '10-20';
 
-  /// Мультиплексирование: до [muxConcurrency] соединений программ по одному соединению с сервером.
+  /// Мультиплексирование: до [muxConcurrency] соединений TCP и до [muxXudp] — UDP (XUDP) по одному
+  /// соединению с сервером. −1 — этот вид мимо mux; у XUDP 0 — вместе с TCP.
   bool mux = false;
   int muxConcurrency = 8;
+  int muxXudp = 16;
   int mtu = 1500;
   bool autoSelect = false;
   bool autoReconnect = true;
@@ -155,6 +157,7 @@ class AppSettings {
         'fragmentInterval': fragmentInterval,
         'mux': mux,
         'muxConcurrency': muxConcurrency,
+        'muxXudp': muxXudp,
         'mtu': mtu,
         // Метка: MTU уже переведён с прежних 9000 на 1500 (см. fromJson).
         'mtu1500': true,
@@ -215,6 +218,7 @@ class AppSettings {
     s.fragmentInterval = j['fragmentInterval'] as String? ?? s.fragmentInterval;
     s.mux = parseBool(j['mux'], s.mux);
     s.muxConcurrency = asInt(j['muxConcurrency']) ?? s.muxConcurrency;
+    s.muxXudp = asInt(j['muxXudp']) ?? s.muxXudp;
     s.mtu = asInt(j['mtu']) ?? s.mtu;
     // Раньше по умолчанию было 9000 — один раз переводим такие настройки на 1500.
     if (j['mtu1500'] != true && s.mtu == 9000) s.mtu = 1500;

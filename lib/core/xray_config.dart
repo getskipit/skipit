@@ -313,16 +313,18 @@ class XrayConfig {
     // Mux.cool — у протоколов Xray. С Vision ядро и так возит UDP через XUDP, а TCP внутри mux сервер
     // обрывает; у XHTTP своё мультиплексирование.
     final vision = jsonEncode(out['settings'] ?? const {}).contains('xtls-rprx-vision');
+    final tcp = muxValue(s.muxConcurrency), udp = muxValue(s.muxXudp);
     if (mux &&
         s.mux &&
+        !(tcp == -1 && udp == -1) &&
         out['mux'] == null &&
         const ['vless', 'vmess', 'trojan', 'shadowsocks'].contains(out['protocol']) &&
         network != 'xhttp' &&
         !vision) {
       out['mux'] = {
         'enabled': true,
-        'concurrency': s.muxConcurrency.clamp(1, 1024),
-        'xudpConcurrency': 16,
+        'concurrency': tcp,
+        'xudpConcurrency': udp,
         // QUIC (UDP на порт 443) идёт мимо mux, как без него.
         'xudpProxyUDP443': 'skip',
       };
@@ -337,6 +339,9 @@ class XrayConfig {
       'streamSettings': {'sockopt': _directSockopt(s)},
     };
   }
+
+  /// Число соединений mux в пределах, которые принимает ядро: от −1 (этот вид мимо mux) до 1024.
+  static int muxValue(int v) => v.clamp(-1, 1024);
 
   /// Значение поля фрагментации годится ядру: число или диапазон «от-до» (у длины — не с нуля);
   /// у поля пакетов ещё и `tlshello`.
