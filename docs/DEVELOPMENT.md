@@ -38,7 +38,7 @@ powershell -ExecutionPolicy Bypass -File tools\dev.ps1                       # �
 `tools\cores.json`:
 
 ```json
-{ "xray": { "version": "v26.9.30", "sha256": "…" }, "sing-box": { "version": "v1.14.2", "sha256": "…" } }
+{ "xray": { "version": "v26.9.30", "sha256": "…" }, "sing-box": { "version": "v1.14.3", "sha256": "…" } }
 ```
 
 `version` — тег релиза ядра на GitHub, `sha256` — контрольная сумма zip-архива для Windows x64 со страницы
