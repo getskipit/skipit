@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import 'log_store.dart';
 import 'paths.dart';
 import 'util.dart';
@@ -111,7 +113,13 @@ Future<bool> waitForPort(int port, {Duration timeout = const Duration(seconds: 6
 /// Основной источник — Stats API Xray (`xray api statsquery`): у каждого выхода свой счётчик.
 /// Когда TUN держит sing-box, часть трафика он выпускает напрямую сам (программы из правил по
 /// приложениям, локальная сеть) — до Xray она не доходит и берётся из списка соединений sing-box.
-class TrafficStats {
+/// Счётчики трафика. Обновляются раз в секунду и будят только тех, кто их показывает (плитки скорости
+/// на главной), а не всё окно: перестройка всех разделов со списками серверов каждую секунду стоила
+/// заметной доли процессора.
+class TrafficStats extends ChangeNotifier {
+  /// Счётчики обновились — перестроить плитки скорости.
+  void changed() => notifyListeners();
+
   int vpnUp = 0, vpnDown = 0;
   int directUp = 0, directDown = 0;
   int upSpeed = 0, downSpeed = 0;

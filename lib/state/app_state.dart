@@ -526,6 +526,7 @@ class AppState extends ChangeNotifier {
   /// Разделы меню по порядку: главная, серверы, маршрутизация, проверка, логи, настройки.
   static const routingPage = 2;
   static const checkPage = 3;
+  static const logsPage = 4;
   static const settingsPage = 5;
 
   void openPage(int index) {
@@ -1946,7 +1947,8 @@ class AppState extends ChangeNotifier {
         final visible = windowVisible;
         if (!visible && tunStatsPort == null) return;
         await _pollStats?.call(xray: visible);
-        if (visible) notifyListeners();
+        // Будятся только плитки скорости на главной, а не всё окно.
+        if (visible) stats.changed();
       });
       notifyListeners();
     } catch (e) {

@@ -179,11 +179,15 @@ class _HomePageState extends State<HomePage> {
       const SizedBox(height: 8),
       SizedBox(
         width: 360,
-        child: Row(children: [
-          Expanded(child: _Speed(icon: Icons.arrow_upward_rounded, label: 'Отдача', speed: state.stats.upSpeed, vpn: state.stats.vpnUp, direct: state.stats.directUp, active: connected)),
-          const SizedBox(width: 10),
-          Expanded(child: _Speed(icon: Icons.arrow_downward_rounded, label: 'Загрузка', speed: state.stats.downSpeed, vpn: state.stats.vpnDown, direct: state.stats.directDown, active: connected)),
-        ]),
+        // Счётчики меняются раз в секунду — перестраиваются только эти плитки.
+        child: ListenableBuilder(
+          listenable: state.stats,
+          builder: (context, _) => Row(children: [
+            Expanded(child: _Speed(icon: Icons.arrow_upward_rounded, label: 'Отдача', speed: state.stats.upSpeed, vpn: state.stats.vpnUp, direct: state.stats.directUp, active: connected)),
+            const SizedBox(width: 10),
+            Expanded(child: _Speed(icon: Icons.arrow_downward_rounded, label: 'Загрузка', speed: state.stats.downSpeed, vpn: state.stats.vpnDown, direct: state.stats.directDown, active: connected)),
+          ]),
+        ),
       ),
       const SizedBox(height: 10),
       SizedBox(width: 360, child: _RoutingInfo(summary: state.routingSummary, onTap: () => state.openPage(AppState.routingPage))),

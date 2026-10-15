@@ -389,11 +389,11 @@ class LogBuffer extends ChangeNotifier {
   /// Подгружает строки прошлого отрезка с диска (текущий и так в памяти).
   Future<void> load(LogSession s) async {
     if (s.lines != null || s.file == null || !_loading.add(s.id)) return;
-    final lines = <LogLine>[];
-    for (final f in s.files) {
-      lines.addAll((await _readSession(f, keepLines: true))?.lines ?? const []);
-    }
-    s.lines = lines;
+    // В отдельном потоке: файлы отрезка — до 20 МБ, их разбор в потоке окна замораживал его.
+    final paths = [for (final f in s.files) f.path];
+    s.lines = await Isolate.run(() async => [
+          for (final p in paths) ...?(await _readSession(File(p), keepLines: true))?.lines,
+        ]);
     _loading.remove(s.id);
     notifyListeners();
   }

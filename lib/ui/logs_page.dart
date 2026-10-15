@@ -9,6 +9,7 @@ import '../core/log_explain.dart';
 import '../core/paths.dart';
 import '../core/util.dart';
 import '../state/app_scope.dart';
+import '../state/app_state.dart';
 import 'app_menu.dart';
 import 'flag_text.dart';
 import 'smooth_scroll.dart';
@@ -101,6 +102,9 @@ class _LogsPageState extends State<LogsPage> {
     super.dispose();
   }
 
+  /// Пустой источник обновлений для спрятанного раздела: никогда не срабатывает.
+  static final _idle = ChangeNotifier();
+
   /// Отрезок, выбранный пользователем. null — показываем самый свежий и следуем за новыми.
   String? _selectedId;
 
@@ -109,7 +113,9 @@ class _LogsPageState extends State<LogsPage> {
     final state = AppScope.of(context);
     final log = state.log;
     return ListenableBuilder(
-      listenable: log,
+      // Раздел спрятан — новые строки его не перестраивают (на уровне debug они идут десятками в секунду).
+      // При переходе сюда раздел перестроится сам: смена раздела будит всё окно.
+      listenable: state.pageIndex == AppState.logsPage ? log : _idle,
       builder: (context, _) {
         final sessions = log.sessions;
         final selected = sessions.where((s) => s.id == _selectedId).firstOrNull ?? sessions.lastOrNull;
