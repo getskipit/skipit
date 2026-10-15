@@ -220,6 +220,33 @@ class AppState extends ChangeNotifier {
 
   /// Когда и на каком сервере сделана каждая проверка.
   CheckStamp? siteStamp, lineStamp, speedStamp, dnsStamp;
+
+  /// «Очистить» у проверки в разделе «Проверка»: её прошлый результат убирается (иначе он висел бы
+  /// до перезапуска программы). У проверки UDP убираются и отметки в списке серверов.
+  void clearCheck(CheckKind kind) {
+    if (checking) return;
+    switch (kind) {
+      case CheckKind.site:
+        siteReports = [];
+        siteStamp = null;
+      case CheckKind.line:
+        lineReport = null;
+        lineStamp = null;
+      case CheckKind.speed:
+        speedReport = null;
+        speedStamp = null;
+      case CheckKind.dns:
+        dnsProbes = [];
+        dnsStamp = null;
+      case CheckKind.udp:
+        for (final s in udpChecked) {
+          s.udpMs = null;
+        }
+        udpChecked = const [];
+        udpStamp = null;
+    }
+    notifyListeners();
+  }
   CheckStamp _stampNow() => (
         at: DateTime.now(),
         server: SiteCheck.stampServer(
@@ -2346,6 +2373,9 @@ class AppState extends ChangeNotifier {
     super.dispose();
   }
 }
+
+/// Проверки раздела «Проверка» (см. [AppState.clearCheck]).
+enum CheckKind { site, line, speed, dns, udp }
 
 /// Сигнал «что-то обновилось» для тех, кому не нужно перестраивать всё окно (см. [AppState.checkPulse]).
 class Pulse extends ChangeNotifier {

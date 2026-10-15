@@ -123,9 +123,10 @@ String _stampText(CheckStamp? stamp) => stamp == null
     ? ''
     : 'Замерено ${formatDateTime(stamp.at)}${stamp.server.isEmpty ? '' : ' · сервер ${stamp.server}'}';
 
-/// Под результатом: когда и на каком сервере он получен, и кнопка «Скопировать результат» — текст
-/// проверки с той же подписью уходит в буфер, чтобы отправить тому, кто помогает.
-Widget _copy(AppState state, CheckStamp? stamp, String Function() text) => Padding(
+/// Под результатом: когда и на каком сервере он получен, кнопка «Скопировать результат» — текст
+/// проверки с той же подписью уходит в буфер, чтобы отправить тому, кто помогает, — и «Очистить»:
+/// результат убирается, иначе он висел бы до перезапуска программы.
+Widget _copy(AppState state, CheckStamp? stamp, String Function() text, {required CheckKind clear}) => Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Row(children: [
         GhostButton(
@@ -136,6 +137,12 @@ Widget _copy(AppState state, CheckStamp? stamp, String Function() text) => Paddi
             await Clipboard.setData(ClipboardData(text: [if (head.isNotEmpty) head, text()].join('\n')));
             state.toast('Результат скопирован', kind: ToastKind.success);
           },
+        ),
+        const SizedBox(width: 8),
+        GhostButton(
+          label: 'Очистить',
+          icon: Icons.close_rounded,
+          onPressed: state.checking ? null : () => state.clearCheck(clear),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -355,7 +362,7 @@ class _SiteCardState extends State<_SiteCard> {
           for (final r in reports) _compact(r),
         ],
         if (reports.isNotEmpty && reports.every((r) => r.done))
-          _copy(state, state.siteStamp, () => [for (final r in reports) r.copyText].join('\n')),
+          _copy(state, state.siteStamp, clear: CheckKind.site, () => [for (final r in reports) r.copyText].join('\n')),
         const SizedBox(height: 10),
         Text(
           state.killSwitchOn
@@ -491,7 +498,7 @@ class _LineCard extends StatelessWidget {
         ],
         if (r != null && r.done) ...[
           for (final note in r.notes) _note(note),
-          _copy(state, state.lineStamp, () => r.copyText),
+          _copy(state, state.lineStamp, clear: CheckKind.line, () => r.copyText),
         ],
       ]),
     );
@@ -672,7 +679,7 @@ class _SpeedCard extends StatelessWidget {
           ]),
           if (r.done) ...[
             for (final note in r.notes) _note(note),
-            _copy(state, state.speedStamp, () => r.copyText),
+            _copy(state, state.speedStamp, clear: CheckKind.speed, () => r.copyText),
           ],
         ],
       ]),
@@ -792,7 +799,8 @@ class _DnsCheckCard extends StatelessWidget {
           ]),
           for (final probe in state.dnsProbes) _probe(probe),
           if (state.dnsProbes.isNotEmpty && !state.checkingDns)
-            _copy(state, state.dnsStamp, () => [for (final p in state.dnsProbes) _text(p)].join('\n')),
+            _copy(state, state.dnsStamp, clear: CheckKind.dns,
+                () => [for (final p in state.dnsProbes) _text(p)].join('\n')),
         ]),
       );
 }
@@ -892,7 +900,7 @@ class _UdpCard extends StatelessWidget {
           for (final s in group) _row(s),
         ],
         if (verdict != null)
-          _copy(state, state.udpStamp,
+          _copy(state, state.udpStamp, clear: CheckKind.udp,
               () => [
                     verdict.text,
                     for (final (title, group) in _groups(list)) ...[
