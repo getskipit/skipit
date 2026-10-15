@@ -269,6 +269,9 @@ class _ShellState extends State<Shell> {
 
   void go(int i) => AppScope.read(context).openPage(i);
 
+  /// Источник обновлений спрятанных разделов: никогда не срабатывает.
+  static final _asleep = ChangeNotifier();
+
   @override
   Widget build(BuildContext context) {
     final pages = [
@@ -298,7 +301,19 @@ class _ShellState extends State<Shell> {
             autofocus: true,
             child: Row(children: [
           _Sidebar(index: _index, items: _items, onSelect: go),
-          Expanded(child: IndexedStack(index: _index, children: [for (final p in pages) _SmoothPage(child: p)])),
+          // Спрятанные разделы слушают «спящий» источник и не перестраиваются от каждого изменения состояния
+          // (раньше любое изменение перестраивало все шесть, вместе с полной копией списка серверов
+          // в «Серверах»). Открытый раздел перестраивается сразу при переходе: у него меняется источник.
+          Expanded(
+            child: IndexedStack(index: _index, children: [
+              for (var i = 0; i < pages.length; i++)
+                AppScope(
+                  state: AppScope.read(context),
+                  notifier: i == _index ? null : _asleep,
+                  child: _SmoothPage(child: pages[i]),
+                ),
+            ]),
+          ),
         ]),
           ),
         ),

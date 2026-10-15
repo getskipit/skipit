@@ -415,6 +415,29 @@ class _GroupCard extends StatefulWidget {
 class _GroupCardState extends State<_GroupCard> {
   bool _manualExpanded = true;
 
+  /// Построенные строки серверов и то, что они показывают. Пока у сервера ничего не поменялось, отдаётся
+  /// прежний виджет, и Flutter его не перестраивает: иначе каждое изменение состояния (выбор сервера,
+  /// подключение, ответ одного сервера при проверке) перестраивало все строки всех подписок.
+  final _rows = <String, (Object, _ServerRow)>{};
+
+  List<_ServerRow> _rowsFor(AppState state) {
+    // Строки серверов, которых в подписке больше нет, забываются.
+    final ids = {for (final s in widget.servers) s.id};
+    _rows.removeWhere((id, _) => !ids.contains(id));
+    return [for (final s in widget.servers) _row(s, state)];
+  }
+
+  _ServerRow _row(ServerProfile s, AppState state) {
+    final selected = state.settings.selectedServerId == s.id;
+    final shown = (s.name, s.hidden, s.warning, s.delayMs, s.protocolLabel, s.transportLabel, s.isJson,
+        selected, state.pinging, C.isDark);
+    final cached = _rows[s.id];
+    if (cached != null && cached.$1 == shown) return cached.$2;
+    final row = _ServerRow(server: s, selected: selected, pinging: state.pinging);
+    _rows[s.id] = (shown, row);
+    return row;
+  }
+
   /// Заголовок этой подписки сейчас перетаскивают — карточка бледнеет, чтобы было видно, какую несут.
   bool _dragging = false;
 
@@ -674,7 +697,7 @@ class _GroupCardState extends State<_GroupCard> {
           ),
         Reveal(
           open: expanded,
-          child: Column(children: [for (final s in widget.servers) _ServerRow(server: s)]),
+          child: Column(children: _rowsFor(state)),
         ),
       ]),
       ),
@@ -748,9 +771,14 @@ class _SubscriptionBar extends StatelessWidget {
   }
 }
 
+/// Строка сервера. Всё, что она показывает из состояния программы, приходит параметрами ([selected],
+/// [pinging]), а не через AppScope.of: так строка не перестраивается от каждого изменения состояния —
+/// карточка подписки отдаёт прежний виджет, пока у сервера ничего не поменялось (см. [_GroupCardState]).
 class _ServerRow extends StatelessWidget {
-  const _ServerRow({required this.server});
+  const _ServerRow({required this.server, required this.selected, required this.pinging});
   final ServerProfile server;
+  final bool selected;
+  final bool pinging;
 
   Future<void> _menu(BuildContext context, AppState state, Offset? at) async {
     final v = await showAppMenu<String>(context, at: at, items: [
@@ -843,8 +871,7 @@ class _ServerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = AppScope.of(context);
-    final selected = state.settings.selectedServerId == server.id;
+    final state = AppScope.read(context);
     final (country, name) = Flags.leading(server.name);
     return Hover(
       builder: (context, hovered) => GestureDetector(
@@ -897,7 +924,7 @@ class _ServerRow extends StatelessWidget {
                   child: Icon(Icons.warning_amber_rounded, size: 16, color: C.orangeLight),
                 ),
               ),
-            if (server.delayMs != null || state.pinging) DelayBadge(server.delayMs, testing: state.pinging),
+            if (server.delayMs != null || pinging) DelayBadge(server.delayMs, testing: pinging),
             Builder(
               builder: (btn) => AnimatedOpacity(
                 opacity: hovered ? 1 : 0.35,
