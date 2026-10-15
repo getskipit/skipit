@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show mergeSort;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/ping.dart';
 import '../core/util.dart';
 import '../core/windows.dart';
 import '../core/xray_config.dart';
@@ -433,7 +434,9 @@ class _GroupCardState extends State<_GroupCard> {
     final shown = (s.name, s.hidden, s.warning, s.delayMs, s.udpMs, udpTesting, s.protocolLabel, s.transportLabel,
         s.isJson, selected, state.pinging, C.isDark);
     final cached = _rows[s.id];
-    if (cached != null && cached.$1 == shown) return cached.$2;
+    // Тот же объект сервера: после обновления подписки сервер с тем же id — уже новый объект, и строка со
+    // старым действовала бы из меню на устаревший (проверка задержки, скрытие, «Показать JSON»).
+    if (cached != null && identical(cached.$2.server, s) && cached.$1 == shown) return cached.$2;
     final row = _ServerRow(server: s, selected: selected, pinging: state.pinging, udpTesting: udpTesting);
     _rows[s.id] = (shown, row);
     return row;
@@ -938,12 +941,20 @@ class _ServerRow extends StatelessWidget {
               Tooltip(
                 message: server.udpMs == null
                     ? 'Идёт проверка UDP'
-                    : server.udpMs! < 0
-                        ? 'UDP через сервер не проходит: игры и звонки могут не работать'
-                        : 'UDP через сервер проходит',
+                    : server.udpMs == Pinger.udpFailed
+                        ? 'Проверить UDP не удалось — подробности в «Логах»'
+                        : server.udpMs! < 0
+                            ? 'UDP через сервер не проходит: игры и звонки могут не работать'
+                            : 'UDP через сервер проходит',
                 child: Tag(
-                  udpTesting ? 'UDP …' : (server.udpMs! < 0 ? 'UDP нет' : 'UDP ${server.udpMs} мс'),
-                  color: udpTesting ? null : (server.udpMs! < 0 ? C.red : C.green),
+                  udpTesting
+                      ? 'UDP …'
+                      : server.udpMs == Pinger.udpFailed
+                          ? 'UDP ?'
+                          : (server.udpMs! < 0 ? 'UDP нет' : 'UDP ${server.udpMs} мс'),
+                  color: udpTesting || server.udpMs == Pinger.udpFailed
+                      ? null
+                      : (server.udpMs! < 0 ? C.red : C.green),
                 ),
               ),
               const SizedBox(width: 6),

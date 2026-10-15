@@ -22,6 +22,10 @@ void main() {
     expect(Pinger.udpVerdict(const [40, -1])!.text, startsWith('UDP проходит у 1 из 2 серверов'));
     expect(Pinger.udpVerdict(const [-1, -1])!.kind, SiteNoteKind.bad);
     expect(Pinger.udpVerdict(const [-1])!.text, startsWith('UDP через сервер не проходит'));
+    // Проверка не состоялась — это не «UDP не проходит».
+    final failed = Pinger.udpVerdict(const [Pinger.udpFailed, Pinger.udpFailed])!;
+    expect(failed.kind, SiteNoteKind.warn);
+    expect(failed.text, startsWith('Проверить UDP не удалось'));
   });
 
   test('UDP через сервер: проходит — время ответа, не проходит — -1', () async {

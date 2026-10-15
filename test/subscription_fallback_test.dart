@@ -52,6 +52,55 @@ void main() {
     await tmp.delete(recursive: true);
   });
 
+  test('не ответил и запасной адрес — в подписке ошибка основного', () async {
+    await AppPaths.init();
+    final tmp = await Directory.systemTemp.createTemp('skipit-fallback');
+    AppPaths.dataDir = tmp;
+    final main = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    main.listen((r) => r.response
+      ..statusCode = 402
+      ..close());
+    // Запасной адрес на закрытом порту: соединение сразу отклоняется.
+    final closed = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final closedPort = closed.port;
+    await closed.close();
+
+    final state = AppState();
+    final sub = Subscription(url: 'http://127.0.0.1:${main.port}/sub')
+      ..fallbackUrl = 'http://127.0.0.1:$closedPort/sub';
+    state.subscriptions.add(sub);
+    await state.updateSubscription(sub, silent: true);
+    expect(sub.error, contains('402'));
+
+    await main.close(force: true);
+    await tmp.delete(recursive: true);
+  });
+
+  test('подписку удалили, пока шёл запрос, — её серверы не возвращаются', () async {
+    await AppPaths.init();
+    final tmp = await Directory.systemTemp.createTemp('skipit-fallback');
+    AppPaths.dataDir = tmp;
+    final slow = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    slow.listen((r) async {
+      await Future.delayed(const Duration(milliseconds: 500));
+      r.response
+        ..write('trojan://pw@a.example:443#Late')
+        ..close();
+    });
+    final state = AppState();
+    final sub = Subscription(url: 'http://127.0.0.1:${slow.port}/sub');
+    state.subscriptions.add(sub);
+    final update = state.updateSubscription(sub, silent: true);
+    await Future.delayed(const Duration(milliseconds: 100));
+    expect(await state.deleteAllData(), isNull);
+    await update;
+    expect(state.servers, isEmpty);
+    expect(state.subscriptions, isEmpty);
+
+    await slow.close(force: true);
+    await tmp.delete(recursive: true);
+  });
+
   test('запасной адрес из тела подписки; принимаются только http и https', () {
     final sub = Subscription(url: 'https://a.example/sub');
     sub.applyMeta({'fallback-url': 'tg://resolve?domain=x'});

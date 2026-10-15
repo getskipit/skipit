@@ -1,8 +1,10 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/link_parser.dart';
 import 'package:skipit/core/paths.dart';
 import 'package:skipit/models/routing.dart';
+import 'package:skipit/models/server.dart';
 import 'package:skipit/models/subscription.dart';
 import 'package:skipit/state/app_scope.dart';
 import 'package:skipit/state/app_state.dart';
@@ -52,6 +54,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('77 мс'), findsOneWidget); // виден только открытый раздел — «Серверы», он до этого спал
     expect(find.text('123 мс'), findsNothing);
-    await tester.pump(const Duration(seconds: 1));
+
+    // Подписка обновилась: сервер с тем же id и теми же надписями — уже новый объект. Меню строки должно
+    // действовать на него, а не на прежний.
+    final old = state.servers[1];
+    final fresh = ServerProfile(
+      id: old.id,
+      name: old.name,
+      protocol: old.protocol,
+      address: old.address,
+      port: old.port,
+      link: old.link,
+      outbound: old.outbound,
+      subscriptionId: old.subscriptionId,
+      delayMs: old.delayMs,
+    );
+    state.servers[1] = fresh;
+    state.changed();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Beta'), buttons: kSecondaryButton);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Скрыть с главной').last);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(fresh.hidden, isTrue);
+    expect(old.hidden, isFalse);
+    await tester.pump(const Duration(seconds: 5));
   });
 }

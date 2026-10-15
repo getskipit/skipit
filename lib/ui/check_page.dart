@@ -835,17 +835,22 @@ class _UdpCard extends StatelessWidget {
         : 'UDP проходит у $ok из ${group.length}';
   }
 
-  static String _result(ServerProfile s) => s.udpMs == null
-      ? 'проверяется…'
-      : (s.udpMs! < 0 ? 'UDP не проходит' : 'UDP проходит, ответ ${s.udpMs} мс');
+  static String _result(ServerProfile s) => switch (s.udpMs) {
+        null => 'проверяется…',
+        Pinger.udpFailed => 'проверить не удалось',
+        final ms when ms < 0 => 'UDP не проходит',
+        final ms => 'UDP проходит, ответ $ms мс',
+      };
 
   Widget _row(ServerProfile s) => Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Row(children: [
           s.udpMs == null
               ? const Spinner(size: 16)
-              : Icon(s.udpMs! < 0 ? Icons.error_rounded : Icons.check_circle_rounded,
-                  size: 16, color: s.udpMs! < 0 ? C.red : C.green),
+              : s.udpMs == Pinger.udpFailed
+                  ? Icon(Icons.help_rounded, size: 16, color: C.muted)
+                  : Icon(s.udpMs! < 0 ? Icons.error_rounded : Icons.check_circle_rounded,
+                      size: 16, color: s.udpMs! < 0 ? C.red : C.green),
           const SizedBox(width: 10),
           Expanded(child: FlagText(s.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5))),
           const SizedBox(width: 12),

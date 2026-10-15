@@ -1010,6 +1010,11 @@ class AppState extends ChangeNotifier {
   /// как после новой установки. Возвращает текст ошибки или null.
   Future<String?> deleteAllData() async {
     if (status != ConnStatus.disconnected) return 'Сначала отключите VPN';
+    if (checking) return 'Дождитесь окончания проверки';
+    // Результаты проверок — про серверы, которых сейчас не станет.
+    for (final kind in CheckKind.values) {
+      clearCheck(kind);
+    }
     subscriptions.clear();
     servers.clear();
     routingProfiles
@@ -1386,15 +1391,24 @@ class AppState extends ChangeNotifier {
       FetchedSubscription fetched;
       try {
         fetched = await _fetchSubscription(sub);
-      } catch (e) {
+      } catch (e, st) {
         // Основной адрес не ответил или ответил ошибкой — пробуем запасной, если провайдер его присылал.
         final spare = sub.fallbackUrl;
         if (spare == null || spare == sub.url) rethrow;
         log.add('subscription', '${sub.displayName}: основной адрес не ответил (${scrubUrls('$e')}), '
             'пробую запасной адрес от провайдера');
-        fetched = await _fetchSubscription(sub, url: spare);
+        try {
+          fetched = await _fetchSubscription(sub, url: spare);
+        } catch (spareError) {
+          // Не ответил и запасной — в подписке остаётся ошибка основного адреса: она понятнее (например,
+          // «подписка закончилась»), и по ней решается, как часто пробовать снова.
+          log.add('subscription', '${sub.displayName}: запасной адрес тоже не ответил (${scrubUrls('$spareError')})');
+          Error.throwWithStackTrace(e, st);
+        }
         log.add('subscription', '${sub.displayName}: обновлена с запасного адреса');
       }
+      // Подписку удалили, пока шёл запрос («Удалить подписку», «Удалить все данные») — её серверы не возвращаем.
+      if (!subscriptions.contains(sub)) return;
       sub.applyMeta(fetched.meta);
       sub.lastUpdated = DateTime.now();
       sub.error = null;
@@ -1889,7 +1903,9 @@ class AppState extends ChangeNotifier {
       }
       XrayConfig.addDirectInbound(config, port: directPort, settings: session, hosts: [
         for (final s in subscriptions)
-          if (directSubscriptionHost(s.url) != null) directSubscriptionHost(s.url)!,
+          // Запасной адрес подписки — тоже: иначе мимо VPN-сервера (и при Kill Switch) он бы не открылся.
+          for (final url in [s.url, if (s.fallbackUrl != null) s.fallbackUrl!])
+            if (directSubscriptionHost(url) != null) directSubscriptionHost(url)!,
       ]);
       _directPort = directPort;
       // Вход проверки связи: через него программа сама убеждается, что VPN-сервер отвечает.

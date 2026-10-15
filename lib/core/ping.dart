@@ -218,9 +218,10 @@ class Pinger {
     int port = XrayConfig.udpTestPort,
   ]) async {
     if (servers.isEmpty) return;
+    // Проверка не состоялась — это не «UDP не проходит»: у серверов отметка [udpFailed].
     void failAll(String why) {
       for (final s in servers) {
-        onResult(s, -1);
+        onResult(s, udpFailed);
       }
       log.add('test', why);
     }
@@ -235,24 +236,32 @@ class Pinger {
       final ok = await waitForPort(base, alive: () => proc.running);
       if (cancel?.cancelled ?? false) return;
       if (!ok || !proc.running) return failAll('Xray не запустился для проверки UDP');
-      final results = List<int>.filled(servers.length, -1);
+      // Результат каждого сервера — сразу, как он готов. Если ядро проверки завершилось посреди проверки,
+      // ответа и не могло быть — такие серверы отмечаются как непроверенные.
       await _pool(List.generate(servers.length, (i) => i), 12, (i) async {
-        results[i] = await _udpDelay(base + i);
+        final ms = await _udpDelay(base + i);
+        if (!(cancel?.cancelled ?? false)) onResult(servers[i], proc.running ? ms : udpFailed);
       }, cancel);
-      if (cancel?.cancelled ?? false) return;
-      if (!proc.running) return failAll('Тестовый Xray завершился во время проверки UDP');
-      for (var i = 0; i < servers.length; i++) {
-        onResult(servers[i], results[i]);
-      }
+      if (!proc.running) log.add('test', 'Тестовый Xray завершился во время проверки UDP');
     } finally {
       await proc.stop();
     }
   }
 
+  /// Отметка «проверить UDP не удалось» ([ServerProfile.udpMs]): ядро проверки не запустилось или завершилось.
+  static const udpFailed = -2;
+
   /// Вывод проверки UDP словами по результатам серверов ([ServerProfile.udpMs]); null — ещё нечего сказать.
   static SiteNote? udpVerdict(List<int?> results) {
     final done = results.whereType<int>().toList();
     if (done.isEmpty || done.length < results.length) return null;
+    if (done.contains(udpFailed)) {
+      return (
+        kind: SiteNoteKind.warn,
+        text: 'Проверить UDP${done.every((ms) => ms == udpFailed) ? '' : ' у части серверов'} не удалось: '
+            'проверочное ядро не запустилось или завершилось. Подробности — в «Логах»'
+      );
+    }
     final ok = done.where((ms) => ms >= 0).length;
     final n = done.length;
     if (ok == n) {
