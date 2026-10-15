@@ -12,6 +12,9 @@ class FetchedSubscription {
 }
 
 class Net {
+  /// Текст для заголовка HTTP: только видимые латинские знаки, остальное убирается.
+  static String _latin(String s) => s.replaceAll(RegExp(r'[^\x20-\x7E]'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+
   static HttpClient _client(int? proxyPort) {
     final c = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15)
@@ -62,8 +65,10 @@ class Net {
         // Эти заголовки понимают Remnawave/Marzban-подобные панели (лимит устройств).
         req.headers.set('x-hwid', settings.hwid);
         req.headers.set('x-device-os', 'Windows');
-        req.headers.set('x-ver-os', Platform.operatingSystemVersion);
-        req.headers.set('x-device-model', Platform.localHostname);
+        // Название Windows и имя компьютера бывают не латиницей («Майкрософт Windows 11 Pro»), а такой
+        // заголовок HTTP-клиент не отправляет вовсе — подписка не обновилась бы. Оставляем только латиницу.
+        req.headers.set('x-ver-os', _latin(Platform.operatingSystemVersion));
+        req.headers.set('x-device-model', _latin(Platform.localHostname));
       }
       final res = await req.close().timeout(const Duration(seconds: 30));
       // Тело читаем тоже с ограничением: оборвавшееся соединение иначе «висело» бы бесконечно.
