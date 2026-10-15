@@ -67,6 +67,10 @@ class AppState extends ChangeNotifier {
 
   final log = LogBuffer();
   final stats = TrafficStats();
+
+  /// Ход идущего замера в разделе «Проверка» (несколько раз в секунду): будит только этот раздел,
+  /// а не всё окно со списками серверов.
+  final checkPulse = Pulse();
   final _messages = StreamController<ToastMessage>.broadcast();
   Stream<ToastMessage> get messages => _messages.stream;
 
@@ -311,7 +315,7 @@ class AppState extends ChangeNotifier {
           // Без адаптера обычный маршрут и есть путь мимо VPN.
           source: viaVpn ? (pastVpn ? source : null) : InternetAddress.anyIPv4,
           onStart: (port) => vpnPort = port,
-          onTick: notifyListeners,
+          onTick: checkPulse.fire,
           keepGoing: _sameConnection());
       // Проверочный адрес по правилам мог уйти напрямую — тогда «через VPN» измерено не было.
       final own = vpnPort == null ? null : _ownConn(vpnPort!, (c) => c.network == 'udp' && c.port == LineCheck.port);
@@ -351,7 +355,7 @@ class AppState extends ChangeNotifier {
     SpeedProgress live(List<double> samples) => (mbit, done) {
           samples.add(mbit);
           report.progress = done;
-          notifyListeners();
+          checkPulse.fire();
         };
     try {
       final vpn = await SpeedTest.viaVpn(port: port, onProgress: live(report.vpnSamples), keepGoing: alive);
@@ -1449,9 +1453,15 @@ class AppState extends ChangeNotifier {
       s.delayMs = null;
     }
     notifyListeners();
+    // Результаты приходят по одному серверу, а окно обновляется не чаще раза в 200 мс: при сотнях серверов
+    // оно иначе перестраивалось бы сотни раз подряд (вместе со списками серверов) и тормозило всю проверку.
+    Timer? redraw;
     void onResult(ServerProfile s, int ms) {
       s.delayMs = ms;
-      notifyListeners();
+      redraw ??= Timer(const Duration(milliseconds: 200), () {
+        redraw = null;
+        notifyListeners();
+      });
     }
 
     try {
@@ -1476,6 +1486,7 @@ class AppState extends ChangeNotifier {
           s.delayMs ??= before[s];
         }
       }
+      redraw?.cancel();
       _pingCancel = null;
       pinging = false;
       changed();
@@ -2270,4 +2281,9 @@ class AppState extends ChangeNotifier {
     _messages.close();
     super.dispose();
   }
+}
+
+/// Сигнал «что-то обновилось» для тех, кому не нужно перестраивать всё окно (см. [AppState.checkPulse]).
+class Pulse extends ChangeNotifier {
+  void fire() => notifyListeners();
 }

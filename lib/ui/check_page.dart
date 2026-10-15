@@ -25,20 +25,24 @@ class CheckPage extends StatelessWidget {
     return Column(children: [
       const PageHeader('Проверка', subtitle: 'Если что-то работает не так: где теряется время и что показать тому, кто поможет'),
       Expanded(
-        child: ListView(
-          primary: true,
-          padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
-          children: [
-            _SiteCard(state: state),
-            const SizedBox(height: 14),
-            _LineCard(state: state),
-            const SizedBox(height: 14),
-            _SpeedCard(state: state),
-            const SizedBox(height: 14),
-            _DnsCheckCard(state: state),
-            const SizedBox(height: 14),
-            _ReportCard(state: state),
-          ],
+        // Ход замера (несколько раз в секунду) перестраивает только этот раздел.
+        child: ListenableBuilder(
+          listenable: state.checkPulse,
+          builder: (context, _) => ListView(
+            primary: true,
+            padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+            children: [
+              _SiteCard(state: state),
+              const SizedBox(height: 14),
+              _LineCard(state: state),
+              const SizedBox(height: 14),
+              _SpeedCard(state: state),
+              const SizedBox(height: 14),
+              _DnsCheckCard(state: state),
+              const SizedBox(height: 14),
+              _ReportCard(state: state),
+            ],
+          ),
         ),
       ),
     ]);
