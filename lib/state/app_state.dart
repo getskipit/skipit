@@ -887,7 +887,8 @@ class AppState extends ChangeNotifier {
       // поддержку и сайт сюда не идут: они часто ведут в мессенджер, и скрылся бы весь его домен.
       providerHosts: {
         for (final s in subscriptions)
-          if (Uri.tryParse(s.url)?.host case final String host when host.isNotEmpty) host,
+          for (final url in [s.url, if (s.fallbackUrl != null) s.fallbackUrl!])
+            if (Uri.tryParse(url)?.host case final String host when host.isNotEmpty) host,
       },
       log: journal.tail,
       logStart: journal.head,
@@ -1303,22 +1304,27 @@ class AppState extends ChangeNotifier {
 
   /// Загрузка подписки с общим ограничением по времени: зависший запрос не должен навсегда
   /// блокировать следующие обновления. Если через VPN не получилось — пробуем напрямую.
-  Future<FetchedSubscription> _fetchSubscription(Subscription sub) async {
-    const limit = Duration(seconds: 45);
+  /// [url] — запасной адрес подписки вместо основного (см. [Subscription.fallbackUrl]).
+  Future<FetchedSubscription> _fetchSubscription(Subscription sub, {String? url}) async {
+    final address = url ?? sub.url;
+    // Есть запасной адрес — основной ждём недолго (как Happ, ~10 с): заблокированный домен обычно
+    // просто молчит, и минута ожидания задержала бы переход на запасной.
+    final limit = url == null && sub.fallbackUrl != null ? const Duration(seconds: 10) : const Duration(seconds: 45);
+    final key = url == null ? sub.id : '${sub.id}|запасной';
     final viaProxy = isConnected && settings.updateViaProxy ? (_session ?? settings).httpPort : null;
     // Пока VPN подключён, «напрямую» — это через ядро мимо VPN-сервера (см. XrayConfig.addDirectInbound):
     // обычный запрос в режиме TUN ушёл бы в тот же туннель, а Kill Switch его не выпустил бы вовсе.
     // Так идут только подписки по https: по http ссылка с ключом ушла бы открытым текстом через
     // интернет-провайдера. Для них остаётся обычный запрос — в режиме TUN он идёт через туннель.
     // Порт берётся в момент запроса: за время первой попытки VPN могли отключить.
-    Future<FetchedSubscription> direct() => Net.fetchSubscription(sub.url, settings,
-            proxyPort: isConnected && directSubscriptionHost(sub.url) != null ? _directPort : null)
+    Future<FetchedSubscription> direct() => Net.fetchSubscription(address, settings,
+            proxyPort: isConnected && directSubscriptionHost(address) != null ? _directPort : null)
         .timeout(limit);
     // Сервер подписки уже не ответил через VPN, а напрямую ответил — не ждём таймаута ещё раз.
-    if (viaProxy != null && !_subsDirectOnly.contains(sub.id)) {
+    if (viaProxy != null && !_subsDirectOnly.contains(key)) {
       try {
         // Первая попытка короче: если через VPN сервер молчит, быстрее перейти к запросу напрямую.
-        return await Net.fetchSubscription(sub.url, settings, proxyPort: viaProxy)
+        return await Net.fetchSubscription(address, settings, proxyPort: viaProxy)
             .timeout(const Duration(seconds: 15));
       } catch (e) {
         // Сервер ответил отказом — запрос дошёл, идти другим путём незачем.
@@ -1326,7 +1332,7 @@ class AppState extends ChangeNotifier {
         log.add('subscription', '${sub.displayName}: через VPN не удалось (${scrubUrls('$e')}), пробую напрямую');
       }
       final fetched = await direct();
-      _subsDirectOnly.add(sub.id);
+      _subsDirectOnly.add(key);
       return fetched;
     }
     return direct();
@@ -1350,7 +1356,18 @@ class AppState extends ChangeNotifier {
     if (!updatingSubs.add(sub.id)) return;
     notifyListeners();
     try {
-      final fetched = await _fetchSubscription(sub);
+      FetchedSubscription fetched;
+      try {
+        fetched = await _fetchSubscription(sub);
+      } catch (e) {
+        // Основной адрес не ответил или ответил ошибкой — пробуем запасной, если провайдер его присылал.
+        final spare = sub.fallbackUrl;
+        if (spare == null || spare == sub.url) rethrow;
+        log.add('subscription', '${sub.displayName}: основной адрес не ответил (${scrubUrls('$e')}), '
+            'пробую запасной адрес от провайдера');
+        fetched = await _fetchSubscription(sub, url: spare);
+        log.add('subscription', '${sub.displayName}: обновлена с запасного адреса');
+      }
       sub.applyMeta(fetched.meta);
       sub.lastUpdated = DateTime.now();
       sub.error = null;

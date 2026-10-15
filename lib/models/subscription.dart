@@ -14,6 +14,7 @@ class Subscription {
     this.expire,
     this.supportUrl,
     this.webPageUrl,
+    this.fallbackUrl,
     this.announce,
     this.error,
     this.expanded = true,
@@ -32,6 +33,11 @@ class Subscription {
   DateTime? expire;
   String? supportUrl;
   String? webPageUrl;
+
+  /// Запасной адрес подписки от провайдера (заголовок или строка `#fallback-url:` в теле, как у Happ
+  /// и V2RayTun): по нему подписка обновляется, когда основной адрес не отвечает. Запоминается — основной
+  /// адрес могут заблокировать позже, и тогда новых заголовков с него уже не получить.
+  String? fallbackUrl;
   String? announce;
   String? error;
   bool expanded;
@@ -94,8 +100,16 @@ class Subscription {
     String? safe(String? url) => url != null && WinSys.isSafeUrl(url) ? url.trim() : null;
     supportUrl = safe(meta['support-url']) ?? supportUrl;
     webPageUrl = safe(meta['profile-web-page-url']) ?? webPageUrl;
+    fallbackUrl = webUrl(meta['fallback-url']) ?? fallbackUrl;
     final announceValue = meta['announce'];
     announce = announceValue == null ? null : decodeMaybeBase64Prefixed(announceValue);
+  }
+
+  /// Адрес подписки по http или https (другие виды в запасной адрес не годятся); null — не он.
+  static String? webUrl(Object? url) {
+    if (url is! String) return null;
+    final u = Uri.tryParse(url.trim());
+    return u != null && (u.scheme == 'https' || u.scheme == 'http') && u.host.isNotEmpty ? url.trim() : null;
   }
 
   /// Сохранённый адрес, если это обычная веб-ссылка (файл данных тоже могли подменить).
@@ -113,6 +127,7 @@ class Subscription {
         'expire': expire?.toIso8601String(),
         'supportUrl': supportUrl,
         'webPageUrl': webPageUrl,
+        'fallbackUrl': fallbackUrl,
         'announce': announce,
         'error': error,
         'expanded': expanded,
@@ -132,6 +147,7 @@ class Subscription {
         expire: DateTime.tryParse(j['expire'] as String? ?? ''),
         supportUrl: _safeUrl(j['supportUrl']),
         webPageUrl: _safeUrl(j['webPageUrl']),
+        fallbackUrl: webUrl(j['fallbackUrl']),
         announce: j['announce'] as String?,
         error: j['error'] as String?,
         expanded: parseBool(j['expanded'], true),
