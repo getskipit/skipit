@@ -85,6 +85,12 @@ Root: HKCU; Subkey: "Software\SkipIt"; ValueType: none; Flags: uninsdeletekey
 Type: filesandordirs; Name: "{app}\core"
 ; Папка, куда программа скачивает установщик обновления.
 Type: filesandordirs; Name: "{app}\update"
+; Удаление — как будто программы не было: подписки, серверы, настройки (вместе с HWID), журналы и гео-базы.
+; Обновление программы удалением не считается и данные не трогает. Папка тестовой сборки («SkipIt Dev»)
+; называется иначе и не затрагивается.
+Type: filesandordirs; Name: "{userappdata}\SkipIt"
+; Без прав администратора программа качает установщик обновления во временную папку пользователя.
+Type: files; Name: "{%TEMP}\SkipIt-Setup-*"
 
 [Code]
 // Перед установкой и удалением просим запущенный SkipIt корректно выйти: он отключит VPN
