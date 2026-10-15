@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 
@@ -294,9 +295,14 @@ class LogBuffer extends ChangeNotifier {
         ..sort((a, b) => a.path.compareTo(b.path));
       final past = <LogSession>[];
       final continued = <LogSession>[];
-      for (final f in files) {
-        if (sessions.any((s) => s.files.any((x) => x.path == f.path))) continue;
-        final s = await _readSession(f, keepLines: false);
+      final paths = [
+        for (final f in files)
+          if (!sessions.any((s) => s.files.any((x) => x.path == f.path))) f.path,
+      ];
+      // Прошлые отрезки читаются в отдельном потоке: на уровне debug это десятки мегабайт, и разбор строк
+      // в потоке окна на несколько секунд после запуска замораживал его кусками по полсекунды и дольше.
+      final read = await Isolate.run(() async => [for (final p in paths) await _readSession(File(p), keepLines: false)]);
+      for (final s in read) {
         if (s == null) continue;
         (_partName.hasMatch(s.id) ? continued : past).add(s);
       }
