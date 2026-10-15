@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/kill_switch.dart';
 import 'package:skipit/core/paths.dart';
+import 'package:skipit/models/routing.dart';
 import 'package:skipit/models/settings.dart';
 import 'package:skipit/state/app_state.dart';
 
@@ -43,6 +44,47 @@ void main() {
     // Выключение Kill Switch без подключения ничего не ломает (в тестах нет оболочки окна).
     await state.releaseKillSwitch();
     expect(KillSwitch.active, isFalse);
+  });
+
+  test('«Сбросить настройки» и «Удалить все данные»: HWID остаётся, данные — только при сбросе настроек', () async {
+    await AppPaths.init();
+    final tmp = await Directory.systemTemp.createTemp('skipit-test');
+    AppPaths.dataDir = tmp;
+    final file = File(AppPaths.stateFile);
+    await file.writeAsString('{"subscriptions":[{"id":"s1","url":"https://example.com/sub","name":"Test"}],'
+        '"servers":[{"id":"a","name":"A","protocol":"vless","address":"203.0.113.1","port":443,"link":"vless://x","outbound":{},"subscriptionId":"s1"}]}');
+    final state = AppState();
+    await state.loadForTest();
+    final s = state.settings
+      ..mode = ConnectionMode.proxyOnly
+      ..mtu = 1400
+      ..selectedServerId = 'a';
+    final hwid = s.hwid, user = s.portUser, password = s.portPassword;
+
+    expect(await state.resetSettings(), isNull);
+    expect(state.settings.mode, ConnectionMode.mixed);
+    expect(state.settings.mtu, 1500);
+    expect(state.settings.hwid, hwid);
+    expect(state.settings.portUser, user);
+    expect(state.settings.portPassword, password);
+    expect(state.settings.selectedServerId, 'a');
+    expect(state.servers.length, 1);
+    expect(state.subscriptions.length, 1);
+
+    expect(await state.deleteAllData(), isNull);
+    expect(state.servers, isEmpty);
+    expect(state.subscriptions, isEmpty);
+    expect(state.settings.hwid, hwid);
+    expect(state.settings.portPassword, isNot(password));
+    expect(state.settings.selectedServerId, isNull);
+    expect(state.routingProfiles.single.id, RoutingProfile.globalPresetId);
+
+    // Удалённое не возвращается после перезапуска.
+    final again = AppState();
+    await again.loadForTest();
+    expect(again.servers, isEmpty);
+    expect(again.settings.hwid, hwid);
+    await tmp.delete(recursive: true);
   });
 
   test('MTU по умолчанию 1500; сохранённые прежние 9000 один раз заменяются на 1500', () {

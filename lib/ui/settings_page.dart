@@ -412,6 +412,61 @@ class _SettingsPageState extends State<SettingsPage> {
                 : const SizedBox.shrink(),
           ),
         ]),
+        _Section('Сброс', [
+          _Row(
+            title: 'Сбросить настройки',
+            subtitle: 'Все настройки вернутся к стандартным. Подписки, серверы, профили маршрутизации, правила '
+                'программ, HWID и пароль портов останутся',
+            trailing: GhostButton(
+              label: 'Сбросить',
+              icon: Icons.restart_alt_rounded,
+              onPressed: () async {
+                final ok = await confirm(context, 'Сбросить настройки?',
+                    'Все настройки вернутся к стандартным. Подписки, серверы, профили и правила программ останутся.',
+                    ok: 'Сбросить');
+                if (!ok) return;
+                final error = await state.resetSettings();
+                state.toast(error ?? 'Настройки сброшены', kind: error == null ? ToastKind.success : ToastKind.error);
+              },
+            ),
+          ),
+          _Row(
+            title: 'Починить сеть',
+            subtitle: 'Если интернет пропал или VPN «застрял»: отключает VPN, закрывает зависшие ядра, возвращает '
+                'прокси Windows, убирает адаптеры SkipIt и фильтры Kill Switch, очищает кэш DNS',
+            trailing: GhostButton(
+              label: 'Починить',
+              icon: Icons.build_rounded,
+              busy: state.repairing,
+              onPressed: state.isBusy
+                  ? null
+                  : () async {
+                      final ok = await confirm(context, 'Починить сеть?', 'VPN отключится, если он подключён.',
+                          ok: 'Починить');
+                      if (!ok) return;
+                      await state.repairNetwork();
+                      state.toast('Готово: сеть приведена в порядок', kind: ToastKind.success);
+                    },
+            ),
+          ),
+          _Row(
+            title: 'Удалить все данные',
+            subtitle: 'Удаляет подписки, серверы, профили, правила и настройки — как после новой установки. HWID '
+                'останется, поэтому провайдер не посчитает компьютер новым устройством',
+            trailing: GhostButton(
+              label: 'Удалить',
+              icon: Icons.delete_forever_rounded,
+              onPressed: () async {
+                final ok = await confirm(context, 'Удалить все данные?',
+                    'Подписки, серверы, профили, правила программ и настройки будут удалены без возможности '
+                        'вернуть. Чтобы сохранить их, сначала нажмите «Экспорт» в разделе «О приложении».');
+                if (!ok) return;
+                final error = await state.deleteAllData();
+                state.toast(error ?? 'Все данные удалены', kind: error == null ? ToastKind.success : ToastKind.error);
+              },
+            ),
+          ),
+        ]),
     ];
 
     // Ушли в другой раздел меню — поиск сбрасывается: вернувшись, человек видит все настройки.
@@ -519,6 +574,9 @@ const _keywords = <String, String>{
   'Версия SkipIt': 'обновление обновить update новая версия',
   'Канал обновлений': 'бета beta стабильный обновление',
   'Ядра': 'xray sing-box версия ядро',
+  'Сбросить настройки': 'сброс по умолчанию стандартные заводские восстановить',
+  'Починить сеть': 'сброс интернет пропал не работает завис зависло адаптер tun прокси dns восстановить',
+  'Удалить все данные': 'сброс очистить стереть всё подписки серверы',
 };
 
 /// Строки раздела [title], подходящие под поиск [query]: по названию строки, её подписи и ключевым

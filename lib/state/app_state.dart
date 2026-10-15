@@ -957,6 +957,85 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  /// «Сбросить настройки» (Настройки → Сброс): настройки — к стандартным. Подписки, серверы, профили
+  /// маршрутизации и правила программ остаются, а из настроек — HWID, логин и пароль портов (они вписаны
+  /// в другие программы) и выбор сервера и профиля. Возвращает текст ошибки или null.
+  Future<String?> resetSettings() async {
+    if (status != ConnStatus.disconnected) return 'Сначала отключите VPN';
+    final old = settings;
+    settings = _resetKeeping(old)
+      ..portUser = old.portUser
+      ..portPassword = old.portPassword
+      ..selectedServerId = old.selectedServerId
+      ..selectedRoutingId = old.selectedRoutingId
+      ..updateNotified = old.updateNotified;
+    await _afterReset('Настройки сброшены к стандартным');
+    return null;
+  }
+
+  /// «Удалить все данные» (Настройки → Сброс): подписки, серверы, профили, правила программ и настройки —
+  /// как после новой установки. Возвращает текст ошибки или null.
+  Future<String?> deleteAllData() async {
+    if (status != ConnStatus.disconnected) return 'Сначала отключите VPN';
+    subscriptions.clear();
+    servers.clear();
+    routingProfiles
+      ..clear()
+      ..add(RoutingProfile.global());
+    appRules = AppRules();
+    settings = _resetKeeping(settings)..selectedRoutingId = RoutingProfile.globalPresetId;
+    protectedUnreadable = false;
+    await _afterReset('Все данные удалены: подписки, серверы, профили, правила программ и настройки');
+    return null;
+  }
+
+  /// Стандартные настройки, в которых осталось то, что не сбрасывается никогда: HWID (с новым провайдер
+  /// посчитал бы компьютер новым устройством) и состояние системы этого компьютера.
+  static AppSettings _resetKeeping(AppSettings old) => AppSettings()
+    ..hwid = old.hwid
+    ..systemProxyActive = old.systemProxyActive
+    ..previousProxy = old.previousProxy;
+
+  Future<void> _afterReset(String what) async {
+    // Kill Switch по умолчанию выключен: если он держал интернет закрытым, открываем.
+    await KillSwitch.release();
+    log.add('app', what);
+    await saveNow();
+    notifyListeners();
+  }
+
+  /// Идёт «Починить сеть».
+  bool repairing = false;
+
+  /// «Починить сеть» (Настройки → Сброс): та же уборка, что при запуске после сбоя, но по кнопке — когда
+  /// интернет пропал или VPN «застрял»: отключить VPN, закрыть ядра, снять Kill Switch, вернуть прокси
+  /// Windows, убрать свои адаптеры, очистить кэш DNS.
+  Future<void> repairNetwork() async {
+    if (repairing || isBusy) return;
+    repairing = true;
+    notifyListeners();
+    try {
+      log.add('app', 'Починка сети');
+      await disconnect();
+      await KillSwitch.release();
+      for (final pid in WinSys.processesUnder(AppPaths.coreDir.path)) {
+        await WinSys.killPid(pid);
+      }
+      if (settings.systemProxyActive) {
+        await WinSys.restoreProxy(settings.previousProxy);
+        settings.systemProxyActive = false;
+      }
+      await WinSys.disableDeadLocalProxy();
+      await (_tunCleanup = WinSys.removeOwnTunAdapters());
+      _flushDns();
+      await saveNow();
+      log.add('app', 'Починка сети закончена');
+    } finally {
+      repairing = false;
+      notifyListeners();
+    }
+  }
+
   @visibleForTesting
   Future<void> loadForTest() => _load();
 
@@ -1617,7 +1696,8 @@ class AppState extends ChangeNotifier {
 
   /// [ignoreOtherVpn] — пользователь уже предупреждён о другом VPN и решил подключаться всё равно.
   Future<void> connect({bool ignoreOtherVpn = false}) async {
-    if (isBusy || isConnected) return;
+    // Во время «Починить сеть»: уборка закрыла бы только что запущенное ядро.
+    if (isBusy || isConnected || repairing) return;
     // Kill Switch уже держит интернет закрытым (переподключение или сбой ядра): если подключиться
     // не выйдет, он так и останется закрытым.
     final held = KillSwitch.active;

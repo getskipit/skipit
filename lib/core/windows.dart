@@ -589,8 +589,15 @@ class WinSys {
         if (alive[pid] != null && alive[pid] == c.paths[pid]) await killPid(pid);
       }
     }
-    // Закрытый клиент мог оставить системный прокси, указывающий на свой уже мёртвый порт, —
-    // тогда у браузеров пропал бы интернет. Такой прокси выключаем.
+    // Закрытый клиент мог оставить системный прокси, указывающий на свой уже мёртвый порт.
+    await disableDeadLocalProxy();
+    // И адаптеры, оставшиеся от закрытых клиентов (пользователь согласился их закрыть).
+    await removeStaleForeignTunAdapters();
+  }
+
+  /// Системный прокси, указывающий на локальный порт, который никто не слушает (его оставил закрытый
+  /// клиент), выключает: иначе у браузеров пропал бы интернет.
+  static Future<void> disableDeadLocalProxy() async {
     final proxy = await readProxy();
     final m = RegExp(r'^(?:https?=)?(?:127\.0\.0\.1|localhost):(\d+)').firstMatch(proxy.server);
     if (proxy.enabled && m != null) {
@@ -602,8 +609,6 @@ class WinSys {
         await restoreProxy(null);
       }
     }
-    // И адаптеры, оставшиеся от закрытых клиентов (пользователь согласился их закрыть).
-    await removeStaleForeignTunAdapters();
   }
 
   /// Поднялся ли наш TUN-адаптер: трафик в интернет уже идёт через него.
