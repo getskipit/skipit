@@ -197,6 +197,7 @@ void main() {
   final tweaked = AppSettings()
     ..mode = ConnectionMode.tun
     ..fragment = true
+    ..noise = true
     ..mux = true;
   for (final entry in links.entries) {
     test('Xray принимает конфиг с фрагментацией и mux: ${entry.key}', () async {
@@ -211,8 +212,10 @@ void main() {
       final dialer = (stream['sockopt'] as Map?)?['dialerProxy'];
       final fragmented = const ['tls', 'reality'].contains(stream['security']) &&
           !const ['kcp', 'hysteria'].contains(stream['network']);
-      expect(dialer, fragmented ? XrayConfig.fragmentTag : isNull);
+      final noisy = const ['kcp', 'hysteria'].contains(stream['network']);
+      expect(dialer, fragmented ? XrayConfig.fragmentTag : (noisy ? XrayConfig.noiseTag : isNull));
       expect(outbounds.where((o) => o['tag'] == XrayConfig.fragmentTag).length, fragmented ? 1 : 0);
+      expect(outbounds.where((o) => o['tag'] == XrayConfig.noiseTag).length, noisy ? 1 : 0);
       final muxed = const ['vless', 'vmess', 'trojan', 'shadowsocks'].contains(proxy['protocol']) &&
           stream['network'] != 'xhttp' &&
           !entry.key.contains('Vision');
@@ -238,12 +241,14 @@ void main() {
       'outbounds': [link.outbound],
     }, tweaked);
     expect(jsonEncode(provider), isNot(contains(XrayConfig.fragmentTag)));
+    expect(jsonEncode(provider), isNot(contains(XrayConfig.noiseTag)));
     expect(jsonEncode(provider), isNot(contains('"mux"')));
 
-    final servers = [link, LinkParser.parseLink(links['Trojan + TLS']!)!];
+    final servers = [link, LinkParser.parseLink(links['Trojan + TLS']!)!, LinkParser.parseLink(links['Hysteria 2']!)!];
     final config = XrayConfig.buildTest(servers, 20000, tweaked);
     final outbounds = (config['outbounds'] as List).cast<Map>();
     expect(outbounds.where((o) => o['tag'] == XrayConfig.fragmentTag).length, 1);
+    expect(outbounds.where((o) => o['tag'] == XrayConfig.noiseTag).length, 1);
     expect(outbounds.where((o) => o['mux'] != null), isEmpty);
     expect(tweaked.mux, isTrue);
     final dir = await Directory.systemTemp.createTemp('skipit-xray-test');

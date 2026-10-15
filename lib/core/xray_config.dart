@@ -214,7 +214,7 @@ class XrayConfig {
     };
 
     final proxy = dropRemovedOptions(deepCopyMap(server.outbound))..['tag'] = 'proxy';
-    final fragment = applyFragmentMux(proxy, settings);
+    final tweaks = applyServerTweaks(proxy, settings);
 
     final directDomains = normalizeDomains(routing.directSites);
     final remoteDns = _dnsServers(routing.remoteDnsList, fallback: '1.1.1.1');
@@ -284,18 +284,18 @@ class XrayConfig {
           'streamSettings': {'sockopt': _directSockopt(settings)},
         },
         {'tag': 'block', 'protocol': 'blackhole'},
-        if (fragment != null) fragment,
+        ...tweaks,
       ],
       'routing': {'domainStrategy': routing.domainStrategy, 'rules': rules},
     };
   }
 
-  static const fragmentTag = 'skipit-fragment';
+  static const fragmentTag = 'skipit-fragment', noiseTag = 'skipit-noise';
 
-  /// Фрагментация и мультиплексирование (Настройки → Дополнительно) у выхода сервера из ссылки; конфиг
-  /// провайдера в JSON не трогается. Возвращает выход фрагментации, если выход сервера теперь ходит через
-  /// него, — его нужно добавить в конфиг (один на все выходы).
-  static Map<String, dynamic>? applyFragmentMux(Map<String, dynamic> out, AppSettings s, {bool mux = true}) {
+  /// Фрагментация, шумы и мультиплексирование (Настройки → Дополнительно) у выхода сервера из ссылки;
+  /// конфиг провайдера в JSON не трогается. Возвращает выходы, через которые теперь ходит выход сервера, —
+  /// их нужно добавить в конфиг (по одному на все выходы).
+  static List<Map<String, dynamic>> applyServerTweaks(Map<String, dynamic> out, AppSettings s, {bool mux = true}) {
     final stream = (out['streamSettings'] as Map?) ?? const {};
     final network = '${stream['network'] ?? 'tcp'}';
     // Фрагментация делит приветствие TLS — только TLS и Reality поверх TCP. QUIC (Hysteria, h3) не делится,
@@ -306,9 +306,13 @@ class XrayConfig {
         !const ['kcp', 'quic', 'hysteria'].contains(network) &&
         !(alpn.isNotEmpty && alpn.every((a) => a == 'h3')) &&
         ((stream['sockopt'] as Map?)?['dialerProxy'] == null);
-    if (fragment) {
+    // Шумы — случайные UDP-пакеты перед первым пакетом соединения: только серверы поверх UDP.
+    final noise = s.noise &&
+        const ['kcp', 'hysteria'].contains(network) &&
+        ((stream['sockopt'] as Map?)?['dialerProxy'] == null);
+    if (fragment || noise) {
       final st = (out['streamSettings'] ??= <String, dynamic>{}) as Map;
-      ((st['sockopt'] ??= <String, dynamic>{}) as Map)['dialerProxy'] = fragmentTag;
+      ((st['sockopt'] ??= <String, dynamic>{}) as Map)['dialerProxy'] = fragment ? fragmentTag : noiseTag;
     }
     // Mux.cool — у протоколов Xray. С Vision ядро и так возит UDP через XUDP, а TCP внутри mux сервер
     // обрывает; у XHTTP своё мультиплексирование.
@@ -329,15 +333,28 @@ class XrayConfig {
         'xudpProxyUDP443': 'skip',
       };
     }
-    if (!fragment) return null;
-    return {
-      'tag': fragmentTag,
-      'protocol': 'freedom',
-      'settings': {
-        'fragment': {'packets': s.fragmentPackets, 'length': s.fragmentLength, 'interval': s.fragmentInterval},
-      },
-      'streamSettings': {'sockopt': _directSockopt(s)},
-    };
+    return [
+      if (fragment)
+        {
+          'tag': fragmentTag,
+          'protocol': 'freedom',
+          'settings': {
+            'fragment': {'packets': s.fragmentPackets, 'length': s.fragmentLength, 'interval': s.fragmentInterval},
+          },
+          'streamSettings': {'sockopt': _directSockopt(s)},
+        },
+      if (noise)
+        {
+          'tag': noiseTag,
+          'protocol': 'freedom',
+          'settings': {
+            'noises': [
+              {'type': 'rand', 'packet': s.noisePacket, 'delay': s.noiseDelay},
+            ],
+          },
+          'streamSettings': {'sockopt': _directSockopt(s)},
+        },
+    ];
   }
 
   /// Число соединений mux в пределах, которые принимает ядро: от −1 (этот вид мимо mux) до 1024.
@@ -1010,10 +1027,12 @@ class XrayConfig {
       });
       final out = dropRemovedOptions(deepCopyMap(servers[i].outbound))..['tag'] = 'out$i';
       outbounds.add(out);
-      // Фрагментация — и в проверке задержки: сервер, к которому без неё не пускают, иначе вышел бы недоступным.
-      if (settings != null && settings.fragment) {
-        final fragment = applyFragmentMux(out, settings, mux: false);
-        if (fragment != null && !outbounds.any((o) => o['tag'] == fragmentTag)) outbounds.add(fragment);
+      // Фрагментация и шумы — и в проверке задержки: сервер, к которому без них не пускают, иначе вышел бы
+      // недоступным.
+      if (settings != null) {
+        for (final extra in applyServerTweaks(out, settings, mux: false)) {
+          if (!outbounds.any((o) => o['tag'] == extra['tag'])) outbounds.add(extra);
+        }
       }
       rules.add({
         'inboundTag': ['in$i'],

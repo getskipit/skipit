@@ -318,6 +318,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 (v) => s.fragmentInterval = v),
           ],
           toggle(
+              'Шумы (Noises)',
+              'Перед соединением с сервером отправлять случайный UDP-пакет — мешает распознать и заблокировать '
+                  'QUIC. Только серверы Hysteria и mKCP из ссылок, не конфиги провайдера в JSON',
+              s.noise,
+              (v) => s.noise = v),
+          if (s.noise) ...[
+            fragmentField('Шумы: длина пакета', 'Байт, число или диапазон: 10-20', s.noisePacket,
+                (v) => s.noisePacket = v, zero: false),
+            fragmentField('Шумы: пауза', 'Миллисекунд после пакета: 10-16', s.noiseDelay, (v) => s.noiseDelay = v),
+          ],
+          toggle(
               'Мультиплексирование (Mux)',
               'Несколько соединений программ идут по одному соединению с сервером: новые открываются быстрее, '
                   'но при потерях тормозят все сразу. Нужен сервер на Xray. Не действует на серверы с Vision, '
@@ -642,6 +653,7 @@ const _keywords = <String, String>{
   'Сниффинг': 'sniffing домен определение',
   'MTU TUN-адаптера': 'mtu пакет адаптер',
   'Фрагментация': 'fragment фрагмент блокировка обход dpi tls',
+  'Шумы (Noises)': 'noise шум блокировка обход dpi quic hysteria udp',
   'Мультиплексирование (Mux)': 'mux мультиплексор xudp соединения',
   'Mux: TCP-соединения': 'mux мультиплексор потоки concurrency',
   'Mux: XUDP-соединения': 'mux мультиплексор udp потоки игры',
