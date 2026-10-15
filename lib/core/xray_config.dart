@@ -1041,6 +1041,28 @@ class XrayConfig {
     cfg['dns'] = dns;
   }
 
+  /// Куда идут пакеты проверки UDP: STUN-сервер Cloudflare (как в «Стабильности связи»).
+  static const udpTestHost = 'stun.cloudflare.com', udpTestPort = 3478;
+
+  /// Конфиг для проверки UDP: на каждый сервер свой вход dokodemo-door на своём порту, который отправляет
+  /// пакеты через этот сервер к [udpTestHost]. Фрагментация и шумы — как при подключении, без mux.
+  static Map<String, dynamic> buildUdpTest(List<ServerProfile> servers, int basePort, AppSettings? settings,
+      {String host = udpTestHost, int port = udpTestPort}) {
+    final config = buildTest(servers, basePort, settings);
+    config['inbounds'] = [
+      for (var i = 0; i < servers.length; i++)
+        {
+          'tag': 'in$i',
+          'protocol': 'dokodemo-door',
+          'listen': '127.0.0.1',
+          'port': basePort + i,
+          // TCP тоже слушается — по нему видно, что ядро запустилось (UDP-порт так не проверить).
+          'settings': {'address': host, 'port': port, 'network': 'tcp,udp'},
+        },
+    ];
+    return config;
+  }
+
   /// Конфиг для проверки задержки: на каждый сервер свой HTTP-inbound на своём порту.
   static Map<String, dynamic> buildTest(List<ServerProfile> servers, int basePort, [AppSettings? settings]) {
     final inbounds = <Map<String, dynamic>>[];

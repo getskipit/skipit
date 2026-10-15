@@ -1510,6 +1510,39 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Серверы, у которых сейчас идёт проверка UDP.
+  final udpPending = <String>{};
+
+  /// Проходит ли UDP через серверы [list] — нужно играм, голосовым чатам и звонкам. Результат — в
+  /// [ServerProfile.udpMs]. Идёт одна проверка за раз; окно обновляется не чаще раза в 200 мс.
+  Future<void> checkUdp(List<ServerProfile> list) async {
+    if (udpPending.isNotEmpty || list.isEmpty) return;
+    for (final s in list) {
+      s.udpMs = null;
+      udpPending.add(s.id);
+    }
+    notifyListeners();
+    Timer? redraw;
+    try {
+      await Pinger.udpAll(list, log, (s, ms) {
+        s.udpMs = ms;
+        udpPending.remove(s.id);
+        redraw ??= Timer(const Duration(milliseconds: 200), () {
+          redraw = null;
+          notifyListeners();
+        });
+      }, null, settings);
+      final ok = list.where((s) => (s.udpMs ?? -1) >= 0).length;
+      log.add('test', 'Проверка UDP: проходит у $ok из ${list.length}');
+    } catch (e) {
+      toast('Ошибка проверки UDP: $e');
+    } finally {
+      redraw?.cancel();
+      udpPending.clear();
+      notifyListeners();
+    }
+  }
+
   ServerProfile? bestOf(List<ServerProfile> list) {
     final ok = list.where((s) => (s.delayMs ?? -1) > 0).toList()
       ..sort((a, b) => a.delayMs!.compareTo(b.delayMs!));

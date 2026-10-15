@@ -429,11 +429,12 @@ class _GroupCardState extends State<_GroupCard> {
 
   _ServerRow _row(ServerProfile s, AppState state) {
     final selected = state.settings.selectedServerId == s.id;
-    final shown = (s.name, s.hidden, s.warning, s.delayMs, s.protocolLabel, s.transportLabel, s.isJson,
-        selected, state.pinging, C.isDark);
+    final udpTesting = state.udpPending.contains(s.id);
+    final shown = (s.name, s.hidden, s.warning, s.delayMs, s.udpMs, udpTesting, s.protocolLabel, s.transportLabel,
+        s.isJson, selected, state.pinging, C.isDark);
     final cached = _rows[s.id];
     if (cached != null && cached.$1 == shown) return cached.$2;
-    final row = _ServerRow(server: s, selected: selected, pinging: state.pinging);
+    final row = _ServerRow(server: s, selected: selected, pinging: state.pinging, udpTesting: udpTesting);
     _rows[s.id] = (shown, row);
     return row;
   }
@@ -653,6 +654,7 @@ class _GroupCardState extends State<_GroupCard> {
                   _MenuAction(
                     tooltip: 'Ещё',
                     items: [
+                      const AppMenuItem('udp', 'Проверить UDP серверов (игры, звонки)', icon: Icons.sports_esports_rounded),
                       AppMenuItem('pin', sub.pinned ? 'Открепить' : 'Закрепить вверху',
                           icon: sub.pinned ? Icons.push_pin_outlined : Icons.push_pin_rounded),
                       AppMenuItem('hide', sub.hidden ? 'Показывать на главной' : 'Скрыть с главной',
@@ -664,6 +666,8 @@ class _GroupCardState extends State<_GroupCard> {
                     ],
                     onSelected: (v) async {
                       switch (v) {
+                        case 'udp':
+                          await state.checkUdp(state.serversOf(sub.id));
                         case 'pin':
                           sub.pinned = !sub.pinned;
                           state.changed();
@@ -775,14 +779,18 @@ class _SubscriptionBar extends StatelessWidget {
 /// [pinging]), а не через AppScope.of: так строка не перестраивается от каждого изменения состояния —
 /// карточка подписки отдаёт прежний виджет, пока у сервера ничего не поменялось (см. [_GroupCardState]).
 class _ServerRow extends StatelessWidget {
-  const _ServerRow({required this.server, required this.selected, required this.pinging});
+  const _ServerRow({required this.server, required this.selected, required this.pinging, this.udpTesting = false});
   final ServerProfile server;
   final bool selected;
   final bool pinging;
 
+  /// У этого сервера сейчас идёт проверка UDP.
+  final bool udpTesting;
+
   Future<void> _menu(BuildContext context, AppState state, Offset? at) async {
     final v = await showAppMenu<String>(context, at: at, items: [
       const AppMenuItem('ping', 'Проверить задержку (пинг)', icon: Icons.speed_rounded),
+      const AppMenuItem('udp', 'Проверить UDP (игры, звонки)', icon: Icons.sports_esports_rounded),
       const AppMenuItem('json', 'Показать JSON', icon: Icons.data_object_rounded),
       AppMenuItem('hide', server.hidden ? 'Показывать на главной' : 'Скрыть с главной',
           icon: server.hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded),
@@ -795,6 +803,8 @@ class _ServerRow extends StatelessWidget {
     switch (v) {
       case 'ping':
         await state.ping([server]);
+      case 'udp':
+        await state.checkUdp([server]);
       case 'json':
         await _showJson(context, state);
       case 'hide':
@@ -924,6 +934,20 @@ class _ServerRow extends StatelessWidget {
                   child: Icon(Icons.warning_amber_rounded, size: 16, color: C.orangeLight),
                 ),
               ),
+            if (server.udpMs != null || udpTesting) ...[
+              Tooltip(
+                message: server.udpMs == null
+                    ? 'Идёт проверка UDP'
+                    : server.udpMs! < 0
+                        ? 'UDP через сервер не проходит: игры и звонки могут не работать'
+                        : 'UDP через сервер проходит',
+                child: Tag(
+                  udpTesting ? 'UDP …' : (server.udpMs! < 0 ? 'UDP нет' : 'UDP ${server.udpMs} мс'),
+                  color: udpTesting ? null : (server.udpMs! < 0 ? C.red : C.green),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             if (server.delayMs != null || pinging) DelayBadge(server.delayMs, testing: pinging),
             Builder(
               builder: (btn) => AnimatedOpacity(

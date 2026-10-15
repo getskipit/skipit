@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
 import '../models/server.dart';
 import '../models/settings.dart';
@@ -199,6 +201,94 @@ class Pinger {
       return -1;
     } finally {
       client.close(force: true);
+    }
+  }
+
+  /// Проходит ли UDP через сервер: на каждый сервер — вход временного ядра Xray, который отправляет
+  /// пакеты к STUN-серверу Cloudflare через этот сервер (см. [XrayConfig.buildUdpTest]). Результат — время
+  /// ответа в мс или -1: UDP через сервер не проходит. Нужно играм, голосовым чатам и звонкам.
+  static Future<void> udpAll(
+    List<ServerProfile> servers,
+    LogBuffer log,
+    void Function(ServerProfile, int) onResult, [
+    PingCancel? cancel,
+    AppSettings? settings,
+    String host = XrayConfig.udpTestHost,
+    int port = XrayConfig.udpTestPort,
+  ]) async {
+    if (servers.isEmpty) return;
+    void failAll(String why) {
+      for (final s in servers) {
+        onResult(s, -1);
+      }
+      log.add('test', why);
+    }
+
+    final base = await _freeRange(servers.length);
+    if (base == null) return failAll('Нет свободных портов для проверки UDP');
+    final config = jsonEncode(XrayConfig.buildUdpTest(servers, base, settings, host: host, port: port));
+    final proc = CoreProcess('test', log);
+    cancel?._onCancel.add(proc.stop);
+    try {
+      await proc.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'], input: config);
+      final ok = await waitForPort(base, alive: () => proc.running);
+      if (cancel?.cancelled ?? false) return;
+      if (!ok || !proc.running) return failAll('Xray не запустился для проверки UDP');
+      final results = List<int>.filled(servers.length, -1);
+      await _pool(List.generate(servers.length, (i) => i), 12, (i) async {
+        results[i] = await _udpDelay(base + i);
+      }, cancel);
+      if (cancel?.cancelled ?? false) return;
+      if (!proc.running) return failAll('Тестовый Xray завершился во время проверки UDP');
+      for (var i = 0; i < servers.length; i++) {
+        onResult(servers[i], results[i]);
+      }
+    } finally {
+      await proc.stop();
+    }
+  }
+
+  /// Запрос STUN (Binding Request) на локальный вход [port] и время ответа; -1 — ответа нет.
+  /// Первый запрос открывает путь через сервер, второй — честное время; не ответил второй — берётся первый.
+  static Future<int> _udpDelay(int port) async {
+    final socket = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final replies = StreamController<List<int>>.broadcast();
+    final sub = socket.listen((e) {
+      if (e != RawSocketEvent.read) return;
+      final d = socket.receive();
+      if (d != null) replies.add(d.data);
+    });
+    final random = Random();
+    Future<int> once() async {
+      final tx = List<int>.generate(12, (_) => random.nextInt(256));
+      final request = Uint8List(20)
+        ..buffer.asByteData().setUint16(0, 0x0001)
+        ..buffer.asByteData().setUint32(4, 0x2112A442)
+        ..setRange(8, 20, tx);
+      final reply = replies.stream.firstWhere((d) =>
+          d.length >= 20 &&
+          d[0] == 0x01 &&
+          d[1] == 0x01 &&
+          List.generate(12, (i) => d[8 + i]).join(',') == tx.join(','));
+      final sw = Stopwatch()..start();
+      socket.send(request, InternetAddress.loopbackIPv4, port);
+      await reply.timeout(const Duration(seconds: 5));
+      return sw.elapsedMilliseconds;
+    }
+
+    try {
+      final first = await once();
+      try {
+        return await once();
+      } catch (_) {
+        return first;
+      }
+    } catch (_) {
+      return -1;
+    } finally {
+      await sub.cancel();
+      await replies.close();
+      socket.close();
     }
   }
 }
