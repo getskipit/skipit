@@ -292,7 +292,7 @@ class XrayConfig {
 
   static const fragmentTag = 'skipit-fragment', noiseTag = 'skipit-noise';
 
-  /// Фрагментация, шумы и мультиплексирование (Настройки → Дополнительно) у выхода сервера из ссылки;
+  /// Фрагментация, шумы и мультиплексирование (Настройки → Соединение с сервером) у выхода сервера из ссылки;
   /// конфиг провайдера в JSON не трогается. Возвращает выходы, через которые теперь ходит выход сервера, —
   /// их нужно добавить в конфиг (по одному на все выходы).
   static List<Map<String, dynamic>> applyServerTweaks(Map<String, dynamic> out, AppSettings s, {bool mux = true}) {

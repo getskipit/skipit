@@ -70,6 +70,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _search = TextEditingController();
   String _query = '';
 
+
   @override
   void dispose() {
     _search.dispose();
@@ -179,7 +180,81 @@ class _SettingsPageState extends State<SettingsPage> {
         );
 
     final sections = <Widget>[
-        _Section('Оформление', [
+        _Section('Подключение', [
+          toggle('Подключаться при запуске', 'Автоматически включать VPN при автозапуске', s.connectOnStart,
+              (v) => s.connectOnStart = v),
+          toggle('Переподключаться при сбое', 'Перезапускать ядро, если оно упало', s.autoReconnect,
+              (v) => s.autoReconnect = v),
+          toggle('Автовыбор сервера', 'Перед подключением выбирать самый быстрый сервер подписки', s.autoSelect,
+              (v) => s.autoSelect = v),
+          toggle(
+              'Kill Switch',
+              'Если VPN оборвался, интернет закрывается, а не идёт напрямую — пока VPN не вернётся или вы сами '
+                  'его не откроете. Действует в режимах TUN и «Смешанный»; локальная сеть остаётся доступной',
+              s.killSwitch,
+              (v) => state.setKillSwitch(v)),
+          _Row(
+            title: 'Ядро для TUN',
+            subtitle: s.tunCore == TunCore.xray
+                ? 'Xray: адаптер поднимает то же ядро, что и подключение, sing-box не запускается'
+                : 'sing-box держит адаптер и передаёт трафик в Xray. Действует в режимах TUN и «Смешанный»',
+            trailing: Segmented<TunCore>(
+              value: s.tunCore,
+              items: const {TunCore.xray: 'Xray', TunCore.singbox: 'sing-box'},
+              onChanged: (v) {
+                s.tunCore = v;
+                state.changed();
+              },
+            ),
+          ),
+        ]),
+        _Section('Подписки', [
+          toggle('Обновлять при запуске', 'Загружать свежий список серверов при старте', s.updateSubsOnStart,
+              (v) => s.updateSubsOnStart = v),
+          toggle('Обновлять через VPN', 'Если подключено — качать подписку через туннель', s.updateViaProxy,
+              (v) => s.updateViaProxy = v),
+          _Row(
+            title: 'User-Agent',
+            subtitle: 'Некоторые панели отдают разный формат по User-Agent',
+            trailing: SizedBox(
+              width: 340,
+              child: _UserAgentField(
+                value: s.userAgent,
+                onChanged: (v) {
+                  // Пустое поле — это стандартное значение, а не пустой заголовок в запросе.
+                  s.userAgent = v.isEmpty ? AppSettings.defaultUserAgent : v;
+                  state.changed();
+                },
+              ),
+            ),
+          ),
+          toggle('Отправлять HWID', 'Заголовки x-hwid / x-device-os для лимита устройств у провайдера', s.sendHwid,
+              (v) => s.sendHwid = v),
+          _Row(
+            title: 'HWID устройства',
+            subtitle: s.hwid,
+            trailing: IconButton(
+              icon: const Icon(Icons.copy_rounded),
+              onPressed: () => Clipboard.setData(ClipboardData(text: s.hwid)),
+            ),
+          ),
+        ]),
+        _Section('Проверка задержки', [
+          _Row(
+            title: 'Тип проверки',
+            subtitle: 'Реальная — запрос через сервер, TCP — только доступность порта',
+            trailing: Segmented<PingType>(
+              value: s.pingType,
+              items: const {PingType.realDelay: 'Реальная', PingType.tcp: 'TCP'},
+              onChanged: (v) {
+                s.pingType = v;
+                state.changed();
+              },
+            ),
+          ),
+          text('Адрес для проверки', 'Должен отвечать быстро (204)', s.testUrl, (v) => s.testUrl = v),
+        ]),
+        _Section('Программа', [
           _Row(
             title: 'Тема',
             subtitle: '«Как в системе» следует за настройкой Windows',
@@ -194,8 +269,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           toggle('Меньше анимаций', 'Списки, меню и переходы срабатывают сразу, без плавного движения. Для слабых компьютеров',
               s.reduceMotion, (v) => s.reduceMotion = v),
-        ]),
-        _Section('Система', [
           _Row(
             title: 'Права администратора',
             subtitle: state.isAdmin ? 'Есть — режим TUN доступен' : 'Нет — для режима TUN нужен перезапуск',
@@ -225,84 +298,23 @@ class _SettingsPageState extends State<SettingsPage> {
           toggle('Уведомления Windows', 'Пока окно спрятано, сообщать: VPN оборвался, переподключился, связи через сервер нет. '
                   'И напоминать, что программа осталась в трее',
               s.notifications, (v) => s.notifications = v),
-          toggle('Подключаться при запуске', 'Автоматически включать VPN при автозапуске', s.connectOnStart,
-              (v) => s.connectOnStart = v),
-          toggle('Переподключаться при сбое', 'Перезапускать ядро, если оно упало', s.autoReconnect,
-              (v) => s.autoReconnect = v),
         ]),
-        _Section('Подключение', [
-          _Row(
-            title: 'Ядро для TUN',
-            subtitle: s.tunCore == TunCore.xray
-                ? 'Xray: адаптер поднимает то же ядро, что и подключение, sing-box не запускается'
-                : 'sing-box держит адаптер и передаёт трафик в Xray. Действует в режимах TUN и «Смешанный»',
-            trailing: Segmented<TunCore>(
-              value: s.tunCore,
-              items: const {TunCore.xray: 'Xray', TunCore.singbox: 'sing-box'},
-              onChanged: (v) {
-                s.tunCore = v;
-                state.changed();
-              },
-            ),
-          ),
-          toggle(
-              'Kill Switch',
-              'Если VPN оборвался, интернет закрывается, а не идёт напрямую — пока VPN не вернётся или вы сами '
-                  'его не откроете. Действует в режимах TUN и «Смешанный»; локальная сеть остаётся доступной',
-              s.killSwitch,
-              (v) => state.setKillSwitch(v)),
-          toggle('Автовыбор сервера', 'Перед подключением выбирать самый быстрый сервер подписки', s.autoSelect,
-              (v) => s.autoSelect = v),
+        _CollapsibleSection('Сеть', 'IPv6, MTU, сниффинг, исключения системного прокси, доступ из локальной сети — обычно менять не нужно', [
+          toggle('IPv6', 'Включить IPv6 в туннеле и DNS', s.ipv6, (v) => s.ipv6 = v),
+          number('MTU TUN-адаптера', 'Обычно 1500 или 9000', s.mtu, (v) => s.mtu = v),
+          toggle('Сниффинг', 'Определять домен по TLS/HTTP/QUIC — нужен для маршрутизации по сайтам', s.sniffing,
+              (v) => s.sniffing = v),
+          text(
+              'Исключения системного прокси',
+              'Адреса через «;», которые идут мимо прокси в режимах «Смешанный» и «Прокси». '
+                  'Пустое поле — стандартный список',
+              s.proxyBypass.isEmpty ? WinSys.defaultProxyBypass : s.proxyBypass,
+              // Стандартный список не сохраняем: если он изменится в новой версии, человек получит новый.
+              (v) => s.proxyBypass = v == WinSys.defaultProxyBypass ? '' : v),
           toggle('Разрешить подключения из локальной сети', 'Раздавать прокси другим устройствам (0.0.0.0)', s.allowLan,
               (v) => s.allowLan = v),
         ]),
-        _Section('Проверка задержки', [
-          _Row(
-            title: 'Тип проверки',
-            subtitle: 'Реальная — запрос через сервер, TCP — только доступность порта',
-            trailing: Segmented<PingType>(
-              value: s.pingType,
-              items: const {PingType.realDelay: 'Реальная', PingType.tcp: 'TCP'},
-              onChanged: (v) {
-                s.pingType = v;
-                state.changed();
-              },
-            ),
-          ),
-        ]),
-        _Section('Подписки', [
-          toggle('Обновлять при запуске', 'Загружать свежий список серверов при старте', s.updateSubsOnStart,
-              (v) => s.updateSubsOnStart = v),
-          toggle('Обновлять через VPN', 'Если подключено — качать подписку через туннель', s.updateViaProxy,
-              (v) => s.updateViaProxy = v),        ]),
-        _CollapsibleSection('Дополнительно', 'Порты, MTU, сниффинг, логи, адрес проверки, User-Agent и HWID — обычно менять не нужно', [
-          number('SOCKS-порт', 'Локальный SOCKS5-прокси', s.socksPort, (v) => s.socksPort = v),
-          number('HTTP-порт', 'Используется системным прокси', s.httpPort, (v) => s.httpPort = v),
-          toggle(
-              'Пароль на локальные порты',
-              'Другие программы смогут ходить через SOCKS-порт только с логином и паролем. HTTP-порт закрыт '
-                  'паролем в режиме «Только порты»; в остальных режимах он открыт: им пользуются Windows и '
-                  'программы, запомнившие системный прокси',
-              s.portAuth,
-              (v) => state.setPortAuth(v)),
-          if (s.portAuth) ...[
-            _PortSecretRow(
-              title: 'Логин портов',
-              what: 'логин',
-              value: s.portUser,
-              onReset: state.resetPortUser,
-            ),
-            _PortSecretRow(
-              title: 'Пароль портов',
-              what: 'пароль',
-              value: s.portPassword,
-              onReset: state.resetPortPassword,
-            ),
-          ],
-          number('Порт API статистики', 'Для счётчиков трафика', s.apiPort, (v) => s.apiPort = v),
-          toggle('IPv6', 'Включить IPv6 в туннеле и DNS', s.ipv6, (v) => s.ipv6 = v),
-          toggle('Сниффинг', 'Определять домен по TLS/HTTP/QUIC — нужен для маршрутизации по сайтам', s.sniffing,
-              (v) => s.sniffing = v),
+        _CollapsibleSection('Соединение с сервером', 'Фрагментация, шумы и мультиплексирование (Mux) — для серверов из ссылок', [
           toggle(
               'Фрагментация',
               'Отправлять начало соединения с сервером частями — помогает, если интернет-провайдер не пускает '
@@ -378,7 +390,34 @@ class _SettingsPageState extends State<SettingsPage> {
             muxField('Mux: XUDP-соединения', 'То же для UDP (игры, звонки), от −1 до 1024. −1 — UDP мимо mux, '
                 '0 — вместе с TCP. Обычно 16', s.muxXudp, (v) => s.muxXudp = v),
           ],
-          number('MTU TUN-адаптера', 'Обычно 1500 или 9000', s.mtu, (v) => s.mtu = v),
+        ]),
+        _CollapsibleSection('Локальные порты', 'SOCKS и HTTP, пароль на порты, порт статистики — обычно менять не нужно', [
+          number('SOCKS-порт', 'Локальный SOCKS5-прокси', s.socksPort, (v) => s.socksPort = v),
+          number('HTTP-порт', 'Используется системным прокси', s.httpPort, (v) => s.httpPort = v),
+          toggle(
+              'Пароль на локальные порты',
+              'Другие программы смогут ходить через SOCKS-порт только с логином и паролем. HTTP-порт закрыт '
+                  'паролем в режиме «Только порты»; в остальных режимах он открыт: им пользуются Windows и '
+                  'программы, запомнившие системный прокси',
+              s.portAuth,
+              (v) => state.setPortAuth(v)),
+          if (s.portAuth) ...[
+            _PortSecretRow(
+              title: 'Логин портов',
+              what: 'логин',
+              value: s.portUser,
+              onReset: state.resetPortUser,
+            ),
+            _PortSecretRow(
+              title: 'Пароль портов',
+              what: 'пароль',
+              value: s.portPassword,
+              onReset: state.resetPortPassword,
+            ),
+          ],
+          number('Порт API статистики', 'Для счётчиков трафика', s.apiPort, (v) => s.apiPort = v),
+        ]),
+        _Section('Журнал и данные', [
           _Row(
             title: 'Уровень логов',
             subtitle: 'debug — максимум подробностей',
@@ -391,41 +430,6 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
-          text('Адрес для проверки', 'Должен отвечать быстро (204)', s.testUrl, (v) => s.testUrl = v),
-          text(
-              'Исключения системного прокси',
-              'Адреса через «;», которые идут мимо прокси в режимах «Смешанный» и «Прокси». '
-                  'Пустое поле — стандартный список',
-              s.proxyBypass.isEmpty ? WinSys.defaultProxyBypass : s.proxyBypass,
-              // Стандартный список не сохраняем: если он изменится в новой версии, человек получит новый.
-              (v) => s.proxyBypass = v == WinSys.defaultProxyBypass ? '' : v),
-          _Row(
-            title: 'User-Agent',
-            subtitle: 'Некоторые панели отдают разный формат по User-Agent',
-            trailing: SizedBox(
-              width: 340,
-              child: _UserAgentField(
-                value: s.userAgent,
-                onChanged: (v) {
-                  // Пустое поле — это стандартное значение, а не пустой заголовок в запросе.
-                  s.userAgent = v.isEmpty ? AppSettings.defaultUserAgent : v;
-                  state.changed();
-                },
-              ),
-            ),
-          ),
-          toggle('Отправлять HWID', 'Заголовки x-hwid / x-device-os для лимита устройств у провайдера', s.sendHwid,
-              (v) => s.sendHwid = v),
-          _Row(
-            title: 'HWID устройства',
-            subtitle: s.hwid,
-            trailing: IconButton(
-              icon: const Icon(Icons.copy_rounded),
-              onPressed: () => Clipboard.setData(ClipboardData(text: s.hwid)),
-            ),
-          ),
-        ]),
-        _Section('О приложении', [
           _Row(
             title: 'Папка данных',
             subtitle: 'Настройки, подписки и журнал (папка logs)',
@@ -477,6 +481,8 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ]),
           ),
+        ]),
+        _Section('О приложении', [
           _Row(
             title: 'Версия SkipIt',
             subtitle: [
@@ -905,7 +911,11 @@ class _CollapsibleSection extends StatefulWidget {
 }
 
 class _CollapsibleSectionState extends State<_CollapsibleSection> {
-  bool _open = false;
+  /// Раскрытые разделы — общие на весь запуск: ушли в другой раздел меню и вернулись — они раскрыты.
+  static final _opened = <String>{};
+
+  bool get _open => _opened.contains(widget.title);
+  set _open(bool v) => v ? _opened.add(widget.title) : _opened.remove(widget.title);
 
   @override
   Widget build(BuildContext context) {

@@ -160,7 +160,7 @@ class _HomePageState extends State<HomePage> {
             ConnectionMode.proxyOnly =>
               'Система не меняется · SOCKS :${state.settings.socksPort} · HTTP :${state.settings.httpPort}'
                   // Порты под паролем: без подсказки непонятно, почему программа с одним адресом не подключается.
-                  '${state.settings.portAuth ? '\nс логином и паролем — Настройки → Дополнительно' : ''}',
+                  '${state.settings.portAuth ? '\nс логином и паролем — Настройки → Локальные порты' : ''}',
           },
           textAlign: TextAlign.center,
           maxLines: 2,

@@ -9,7 +9,7 @@ import 'package:skipit/ui/theme.dart';
 
 /// Поиск по настройкам: по названию строки, по подписи и по ключевым словам.
 void main() {
-  testWidgets('поиск оставляет подходящие строки и сам раскрывает «Дополнительно»', (tester) async {
+  testWidgets('поиск оставляет подходящие строки и сам раскрывает свёрнутые разделы', (tester) async {
     await tester.runAsync(AppPaths.init);
     C.use(Palette.dark);
     tester.view.physicalSize = const Size(1100, 3000);
@@ -27,20 +27,23 @@ void main() {
 
     Future<void> search(String text) async {
       await tester.enterText(find.widgetWithText(TextField, 'Поиск по настройкам'), text);
-      await tester.pump(const Duration(milliseconds: 600));
-      await tester.pump(const Duration(milliseconds: 600));
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
     }
 
-    expect(find.text('Тема'), findsOneWidget);
-    expect(find.text('Перенос настроек'), findsOneWidget);
+    // Частые разделы раскрыты, редкие свёрнуты: видны заголовок и что в нём лежит.
+    expect(find.text('Тема').hitTestable(), findsOneWidget);
+    expect(find.textContaining('SOCKS и HTTP'), findsOneWidget);
+    expect(find.text('SOCKS-порт').hitTestable(), findsNothing);
 
     // По ключевому слову: в названии и подписи строки слова «бэкап» нет.
     await search('бэкап');
-    expect(find.text('Перенос настроек'), findsOneWidget);
+    expect(find.text('Перенос настроек').hitTestable(), findsOneWidget);
     expect(find.text('Тема'), findsNothing);
-    expect(find.text('ОФОРМЛЕНИЕ'), findsNothing);
+    expect(find.text('ПРОГРАММА'), findsNothing);
 
-    // По названию; строки свёрнутого раздела «Дополнительно» находятся тоже.
+    // По названию; строки свёрнутого раздела находятся тоже.
     await search('порт');
     expect(find.text('SOCKS-порт'), findsOneWidget);
     expect(find.text('HTTP-порт'), findsOneWidget);
@@ -52,7 +55,7 @@ void main() {
     expect(find.text('Порт API статистики'), findsNothing);
 
     // По названию раздела — весь раздел.
-    await search('оформление');
+    await search('программа');
     expect(find.text('Тема'), findsOneWidget);
     expect(find.text('Меньше анимаций'), findsOneWidget);
 
@@ -71,8 +74,8 @@ void main() {
     await search('ъъъ');
     await tester.tap(find.byTooltip('Очистить'));
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.text('Тема'), findsOneWidget);
-    expect(find.text('Перенос настроек'), findsOneWidget);
+    expect(find.text('ПРОГРАММА'), findsOneWidget);
+    expect(find.text('ЖУРНАЛ И ДАННЫЕ'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
   });
 }

@@ -13,7 +13,7 @@ import 'package:skipit/ui/shell.dart';
 import 'package:skipit/ui/theme.dart';
 import 'package:skipit/ui/widgets.dart';
 
-/// Настройки, до которых общий тест окна не доходит: свёрнутый раздел «Дополнительно» с выпадающим
+/// Настройки, до которых общий тест окна не доходит: свёрнутый раздел «Сеть» с выпадающим
 /// списком и выключатель Kill Switch. Проверяется, что они переключаются без ошибок отрисовки.
 void main() {
   setUpAll(() async {
@@ -40,6 +40,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     final scroll = find.descendant(of: find.byType(SettingsPage), matching: find.byType(Scrollable)).first;
 
+
     // Kill Switch: выключен, включается и выключается кликом; VPN не подключён, фильтры не ставятся.
     await tester.scrollUntilVisible(find.text('Kill Switch'), 200, scrollable: scroll);
     expect(state.settings.killSwitch, isFalse);
@@ -62,15 +63,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(state.settings.killSwitch, isFalse);
 
-    // «Дополнительно» раскрывается; уровень логов меняется через выпадающий список.
+    // Свёрнутая «Сеть» раскрывается без ошибок; уровень логов меняется через выпадающий список.
     Future<void> show(Finder f) async {
       await tester.scrollUntilVisible(f, 200, scrollable: scroll);
       await Scrollable.ensureVisible(tester.element(f), alignment: 0.4);
       await tester.pump(const Duration(milliseconds: 300));
     }
 
-    await show(find.text('ДОПОЛНИТЕЛЬНО'));
-    await tester.tap(find.text('ДОПОЛНИТЕЛЬНО'));
+    await show(find.text('СЕТЬ'));
+    await tester.tap(find.text('СЕТЬ'));
     for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 80));
       expect(tester.takeException(), isNull);

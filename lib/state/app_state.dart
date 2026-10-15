@@ -608,7 +608,7 @@ class AppState extends ChangeNotifier {
     await load();
     if (protectedUnreadable) {
       lastError = 'Сохранённые подписки зашифрованы для другой учётной записи Windows и не читаются. '
-          'Добавьте подписки заново или загрузите файл экспорта: Настройки → О приложении → Импорт.';
+          'Добавьте подписки заново или загрузите файл экспорта: Настройки → Журнал и данные → Импорт.';
     }
     // Окно должно узнать о данных сразу, даже если дальше что-то пойдёт не так.
     notifyListeners();
@@ -1632,7 +1632,7 @@ class AppState extends ChangeNotifier {
     if (!taken.contains(preferred) && await _portFree(preferred)) return preferred;
     if (settings.mode == ConnectionMode.proxyOnly) {
       throw CoreException('Порт $preferred ($what) уже занят другой программой — например, другим VPN-клиентом. '
-          'Закройте её или смените порт в Настройки → Дополнительно.');
+          'Закройте её или смените порт в Настройки → Локальные порты.');
     }
     for (var p = preferred + 1000; p < preferred + 1100; p++) {
       if (!taken.contains(p) && await _portFree(p)) {
