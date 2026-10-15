@@ -191,4 +191,82 @@ void main() {
       }
     }, skip: hasCore ? false : 'ядро Xray не скачано (tools\\setup.ps1)');
   }
+
+  // Фрагментация и мультиплексирование: какие серверы их получают, и ядро принимает такой конфиг —
+  // в том числе в режиме TUN, где у выхода сервера ещё и своя стратегия поиска адреса.
+  final tweaked = AppSettings()
+    ..mode = ConnectionMode.tun
+    ..fragment = true
+    ..mux = true;
+  for (final entry in links.entries) {
+    test('Xray принимает конфиг с фрагментацией и mux: ${entry.key}', () async {
+      final server = LinkParser.parseLink(entry.value)!;
+      final config = XrayConfig.build(server: server, routing: RoutingProfile.global(), settings: tweaked);
+      XrayConfig.addTun(config, settings: tweaked, apps: AppRules());
+      XrayConfig.resolveServersInside(config, settings: tweaked);
+      ((config['routing'] as Map)['rules'] as List).removeWhere((r) => jsonEncode(r).contains(RegExp('geoip:|geosite:')));
+      final outbounds = (config['outbounds'] as List).cast<Map>();
+      final proxy = outbounds.firstWhere((o) => o['tag'] == 'proxy');
+      final stream = proxy['streamSettings'] as Map? ?? const {};
+      final dialer = (stream['sockopt'] as Map?)?['dialerProxy'];
+      final fragmented = const ['tls', 'reality'].contains(stream['security']) &&
+          !const ['kcp', 'hysteria'].contains(stream['network']);
+      expect(dialer, fragmented ? XrayConfig.fragmentTag : isNull);
+      expect(outbounds.where((o) => o['tag'] == XrayConfig.fragmentTag).length, fragmented ? 1 : 0);
+      final muxed = const ['vless', 'vmess', 'trojan', 'shadowsocks'].contains(proxy['protocol']) &&
+          stream['network'] != 'xhttp' &&
+          !entry.key.contains('Vision');
+      expect(proxy['mux'] != null, muxed);
+
+      final dir = await Directory.systemTemp.createTemp('skipit-xray-test');
+      try {
+        final file = File('${dir.path}\\config.json');
+        await file.writeAsString(jsonEncode(config));
+        final r = await Process.run(exe, ['run', '-test', '-c', file.path], stdoutEncoding: utf8, stderrEncoding: utf8);
+        final out = '${r.stdout}\\n${r.stderr}';
+        expect(r.exitCode, 0, reason: out);
+        expect(out, isNot(contains('setting is deprecated')), reason: out);
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    }, skip: hasCore ? false : 'ядро Xray не скачано (tools\\setup.ps1)');
+  }
+
+  test('Фрагментация не трогает конфиг провайдера; проверка задержки — с фрагментацией, без mux', () async {
+    final link = LinkParser.parseLink(links['VLESS + WS + TLS']!)!;
+    final provider = XrayConfig.buildFromProvider({
+      'outbounds': [link.outbound],
+    }, tweaked);
+    expect(jsonEncode(provider), isNot(contains(XrayConfig.fragmentTag)));
+    expect(jsonEncode(provider), isNot(contains('"mux"')));
+
+    final servers = [link, LinkParser.parseLink(links['Trojan + TLS']!)!];
+    final config = XrayConfig.buildTest(servers, 20000, tweaked);
+    final outbounds = (config['outbounds'] as List).cast<Map>();
+    expect(outbounds.where((o) => o['tag'] == XrayConfig.fragmentTag).length, 1);
+    expect(outbounds.where((o) => o['mux'] != null), isEmpty);
+    expect(tweaked.mux, isTrue);
+    final dir = await Directory.systemTemp.createTemp('skipit-xray-test');
+    try {
+      final file = File('${dir.path}\\config.json');
+      await file.writeAsString(jsonEncode(config));
+      final r = await Process.run(exe, ['run', '-test', '-c', file.path], stdoutEncoding: utf8, stderrEncoding: utf8);
+      expect(r.exitCode, 0, reason: '${r.stdout}\\n${r.stderr}');
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  }, skip: hasCore ? false : 'ядро Xray не скачано (tools\\setup.ps1)');
+
+  test('Поля фрагментации: что примет ядро', () {
+    expect(XrayConfig.fragmentValueOk('tlshello', packets: true), isTrue);
+    expect(XrayConfig.fragmentValueOk('1-3', packets: true), isTrue);
+    expect(XrayConfig.fragmentValueOk('0-3', packets: true), isFalse);
+    expect(XrayConfig.fragmentValueOk('tlshello'), isFalse);
+    expect(XrayConfig.fragmentValueOk('100-200', zero: false), isTrue);
+    expect(XrayConfig.fragmentValueOk('0-200', zero: false), isFalse);
+    expect(XrayConfig.fragmentValueOk('0'), isTrue);
+    expect(XrayConfig.fragmentValueOk('20-10'), isFalse);
+    expect(XrayConfig.fragmentValueOk('10 - 20'), isFalse);
+    expect(XrayConfig.fragmentValueOk(''), isFalse);
+  });
 }

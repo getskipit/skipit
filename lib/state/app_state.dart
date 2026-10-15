@@ -1465,7 +1465,7 @@ class AppState extends ChangeNotifier {
             : await Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
         await Pinger.tcpAll(list, onResult, cancel, sources);
       } else {
-        await Pinger.realDelayAll(list, settings.testUrl, log, onResult, cancel);
+        await Pinger.realDelayAll(list, settings.testUrl, log, onResult, cancel, settings);
       }
     } catch (e) {
       if (!cancel.cancelled) toast('Ошибка проверки: $e');

@@ -8,6 +8,7 @@ import '../core/updates.dart';
 import '../core/util.dart';
 import '../core/tray.dart';
 import '../core/windows.dart';
+import '../core/xray_config.dart';
 import '../models/settings.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
@@ -97,7 +98,10 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: subtitle,
           trailing: SizedBox(
             width: 110,
+            // Ключ — по названию: строки выше могут появиться или исчезнуть (поиск, фрагментация),
+            // и без него поле взяло бы значение соседнего.
             child: TextFormField(
+              key: ValueKey(title),
               initialValue: '$value',
               textAlign: TextAlign.center,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -118,8 +122,33 @@ class _SettingsPageState extends State<SettingsPage> {
           trailing: SizedBox(
             width: width,
             child: TextFormField(
+              key: ValueKey(title),
               initialValue: value,
               onChanged: (v) {
+                set(v.trim());
+                state.changed();
+              },
+            ),
+          ),
+        );
+
+    // Поле фрагментации: значение сохраняется, только если его примет ядро (см. [XrayConfig.fragmentValueOk]).
+    Widget fragmentField(String title, String subtitle, String value, void Function(String) set,
+            {bool packets = false, bool zero = true}) =>
+        _Row(
+          title: title,
+          subtitle: subtitle,
+          trailing: SizedBox(
+            width: 140,
+            child: TextFormField(
+              key: ValueKey(title),
+              initialValue: value,
+              textAlign: TextAlign.center,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              validator: (v) =>
+                  XrayConfig.fragmentValueOk(v!.trim(), packets: packets, zero: zero) ? null : 'Например, $value',
+              onChanged: (v) {
+                if (!XrayConfig.fragmentValueOk(v.trim(), packets: packets, zero: zero)) return;
                 set(v.trim());
                 state.changed();
               },
@@ -252,6 +281,30 @@ class _SettingsPageState extends State<SettingsPage> {
           toggle('IPv6', 'Включить IPv6 в туннеле и DNS', s.ipv6, (v) => s.ipv6 = v),
           toggle('Сниффинг', 'Определять домен по TLS/HTTP/QUIC — нужен для маршрутизации по сайтам', s.sniffing,
               (v) => s.sniffing = v),
+          toggle(
+              'Фрагментация',
+              'Отправлять начало соединения с сервером частями — помогает, если интернет-провайдер не пускает '
+                  'к серверу. Только серверы из ссылок с TLS или Reality, не конфиги провайдера в JSON',
+              s.fragment,
+              (v) => s.fragment = v),
+          if (s.fragment) ...[
+            fragmentField('Фрагментация: пакеты', 'tlshello — приветствие TLS; 1-3 — первые пакеты соединения',
+                s.fragmentPackets, (v) => s.fragmentPackets = v, packets: true),
+            fragmentField('Фрагментация: длина части', 'Байт, число или диапазон: 100-200', s.fragmentLength,
+                (v) => s.fragmentLength = v, zero: false),
+            fragmentField('Фрагментация: пауза', 'Миллисекунд между частями: 10-20', s.fragmentInterval,
+                (v) => s.fragmentInterval = v),
+          ],
+          toggle(
+              'Мультиплексирование (Mux)',
+              'Несколько соединений программ идут по одному соединению с сервером: новые открываются быстрее, '
+                  'но при потерях тормозят все сразу. Нужен сервер на Xray. Не действует на серверы с Vision, '
+                  'XHTTP и конфиги провайдера в JSON',
+              s.mux,
+              (v) => s.mux = v),
+          if (s.mux)
+            number('Mux: потоков', 'Сколько соединений программ идёт по одному соединению с сервером. '
+                'Обычно 8, не больше 1024', s.muxConcurrency, (v) => s.muxConcurrency = v),
           number('MTU TUN-адаптера', 'Обычно 1500 или 9000', s.mtu, (v) => s.mtu = v),
           _Row(
             title: 'Уровень логов',
@@ -563,6 +616,8 @@ const _keywords = <String, String>{
   'IPv6': 'ipv6 айпи адрес',
   'Сниффинг': 'sniffing домен определение',
   'MTU TUN-адаптера': 'mtu пакет адаптер',
+  'Фрагментация': 'fragment фрагмент блокировка обход dpi tls',
+  'Мультиплексирование (Mux)': 'mux мультиплексор xudp соединения',
   'Уровень логов': 'журнал логи отладка debug info warning подробность',
   'Адрес для проверки': 'пинг задержка url ссылка тест',
   'Исключения системного прокси': 'proxy bypass обход мимо исключить localhost локальные адреса',

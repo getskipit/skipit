@@ -214,6 +214,7 @@ class XrayConfig {
     };
 
     final proxy = dropRemovedOptions(deepCopyMap(server.outbound))..['tag'] = 'proxy';
+    final fragment = applyFragmentMux(proxy, settings);
 
     final directDomains = normalizeDomains(routing.directSites);
     final remoteDns = _dnsServers(routing.remoteDnsList, fallback: '1.1.1.1');
@@ -283,9 +284,68 @@ class XrayConfig {
           'streamSettings': {'sockopt': _directSockopt(settings)},
         },
         {'tag': 'block', 'protocol': 'blackhole'},
+        if (fragment != null) fragment,
       ],
       'routing': {'domainStrategy': routing.domainStrategy, 'rules': rules},
     };
+  }
+
+  static const fragmentTag = 'skipit-fragment';
+
+  /// Фрагментация и мультиплексирование (Настройки → Дополнительно) у выхода сервера из ссылки; конфиг
+  /// провайдера в JSON не трогается. Возвращает выход фрагментации, если выход сервера теперь ходит через
+  /// него, — его нужно добавить в конфиг (один на все выходы).
+  static Map<String, dynamic>? applyFragmentMux(Map<String, dynamic> out, AppSettings s, {bool mux = true}) {
+    final stream = (out['streamSettings'] as Map?) ?? const {};
+    final network = '${stream['network'] ?? 'tcp'}';
+    // Фрагментация делит приветствие TLS — только TLS и Reality поверх TCP. QUIC (Hysteria, h3) не делится,
+    // а выход, уже идущий через другой выход, не трогаем.
+    final alpn = ((stream['tlsSettings'] as Map?)?['alpn'] as List?) ?? const [];
+    final fragment = s.fragment &&
+        const ['tls', 'reality'].contains(stream['security']) &&
+        !const ['kcp', 'quic', 'hysteria'].contains(network) &&
+        !(alpn.isNotEmpty && alpn.every((a) => a == 'h3')) &&
+        ((stream['sockopt'] as Map?)?['dialerProxy'] == null);
+    if (fragment) {
+      final st = (out['streamSettings'] ??= <String, dynamic>{}) as Map;
+      ((st['sockopt'] ??= <String, dynamic>{}) as Map)['dialerProxy'] = fragmentTag;
+    }
+    // Mux.cool — у протоколов Xray. С Vision ядро и так возит UDP через XUDP, а TCP внутри mux сервер
+    // обрывает; у XHTTP своё мультиплексирование.
+    final vision = jsonEncode(out['settings'] ?? const {}).contains('xtls-rprx-vision');
+    if (mux &&
+        s.mux &&
+        out['mux'] == null &&
+        const ['vless', 'vmess', 'trojan', 'shadowsocks'].contains(out['protocol']) &&
+        network != 'xhttp' &&
+        !vision) {
+      out['mux'] = {
+        'enabled': true,
+        'concurrency': s.muxConcurrency.clamp(1, 1024),
+        'xudpConcurrency': 16,
+        // QUIC (UDP на порт 443) идёт мимо mux, как без него.
+        'xudpProxyUDP443': 'skip',
+      };
+    }
+    if (!fragment) return null;
+    return {
+      'tag': fragmentTag,
+      'protocol': 'freedom',
+      'settings': {
+        'fragment': {'packets': s.fragmentPackets, 'length': s.fragmentLength, 'interval': s.fragmentInterval},
+      },
+      'streamSettings': {'sockopt': _directSockopt(s)},
+    };
+  }
+
+  /// Значение поля фрагментации годится ядру: число или диапазон «от-до» (у длины — не с нуля);
+  /// у поля пакетов ещё и `tlshello`.
+  static bool fragmentValueOk(String v, {bool packets = false, bool zero = true}) {
+    if (packets && v == 'tlshello') return true;
+    final m = RegExp(r'^(\d{1,5})(?:-(\d{1,5}))?$').firstMatch(v);
+    if (m == null) return false;
+    final from = int.parse(m.group(1)!), to = int.parse(m.group(2) ?? m.group(1)!);
+    return from <= to && (zero || from > 0) && !(packets && from == 0);
   }
 
   /// Адрес DNS из поля ввода → запись для Xray (строка или, если указан порт, объект). `1.1.1.1` и
@@ -931,7 +991,7 @@ class XrayConfig {
   }
 
   /// Конфиг для проверки задержки: на каждый сервер свой HTTP-inbound на своём порту.
-  static Map<String, dynamic> buildTest(List<ServerProfile> servers, int basePort) {
+  static Map<String, dynamic> buildTest(List<ServerProfile> servers, int basePort, [AppSettings? settings]) {
     final inbounds = <Map<String, dynamic>>[];
     final outbounds = <Map<String, dynamic>>[];
     final rules = <Map<String, dynamic>>[];
@@ -943,7 +1003,13 @@ class XrayConfig {
         'port': basePort + i,
         'settings': <String, dynamic>{},
       });
-      outbounds.add(dropRemovedOptions(deepCopyMap(servers[i].outbound))..['tag'] = 'out$i');
+      final out = dropRemovedOptions(deepCopyMap(servers[i].outbound))..['tag'] = 'out$i';
+      outbounds.add(out);
+      // Фрагментация — и в проверке задержки: сервер, к которому без неё не пускают, иначе вышел бы недоступным.
+      if (settings != null && settings.fragment) {
+        final fragment = applyFragmentMux(out, settings, mux: false);
+        if (fragment != null && !outbounds.any((o) => o['tag'] == fragmentTag)) outbounds.add(fragment);
+      }
       rules.add({
         'inboundTag': ['in$i'],
         'outboundTag': 'out$i',

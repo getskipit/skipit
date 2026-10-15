@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../models/server.dart';
+import '../models/settings.dart';
 import 'core_manager.dart';
 import 'paths.dart';
 import 'xray_config.dart';
@@ -130,6 +131,7 @@ class Pinger {
     LogBuffer log,
     void Function(ServerProfile, int) onResult, [
     PingCancel? cancel,
+    AppSettings? settings,
   ]) async {
     if (servers.isEmpty) return;
     void failAll(String why) {
@@ -142,7 +144,7 @@ class Pinger {
     final base = await _freeRange(servers.length);
     if (base == null) return failAll('Нет свободных портов для проверки задержки');
     // Конфиг проверки (в нём адреса и ключи серверов) ядро получает напрямую, без файла на диске.
-    final config = jsonEncode(XrayConfig.buildTest(servers, base));
+    final config = jsonEncode(XrayConfig.buildTest(servers, base, settings));
     try {
       final old = File(AppPaths.testConfigFile);
       if (old.existsSync()) await old.delete();
