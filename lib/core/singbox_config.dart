@@ -141,7 +141,7 @@ class SingboxConfig {
           'mtu': settings.mtu,
           'auto_route': true,
           'strict_route': true,
-          'stack': 'mixed',
+          'stack': settings.singboxStack,
         },
       ],
       'outbounds': [

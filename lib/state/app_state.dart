@@ -891,6 +891,7 @@ class AppState extends ChangeNotifier {
         'Состояние': '${status.name}${linkDown ? ', связи через сервер нет' : ''}',
         'Режим': settings.mode.label,
         'Ядро TUN': tun ? settings.tunCore.name : null,
+        'Стек sing-box': tun && settings.tunCore == TunCore.singbox ? settings.singboxStack : null,
         'Kill Switch': tun ? (settings.killSwitch ? 'включён' : 'выключен') : null,
         ...(connected ? _reportConn : null) ?? _connFacts(selectedServer, selectedRouting),
         'Страна выхода': exitCountry,

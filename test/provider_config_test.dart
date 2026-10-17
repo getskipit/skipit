@@ -194,6 +194,24 @@ void main() {
     }
   });
 
+  test('sing-box принимает все три стека адаптера', () async {
+    for (final stack in AppSettings.singboxStacks) {
+      final tun = SingboxConfig.build(
+          settings: AppSettings()..singboxStack = stack,
+          routing: RoutingProfile(name: 'Весь трафик'),
+          apps: AppRules(),
+          serverDomains: const []);
+      expect(((tun['inbounds'] as List).first as Map)['stack'], stack);
+      final singbox = File('core/skipit-sing-box.exe');
+      if (!singbox.existsSync()) continue;
+      final f = File('${Directory.systemTemp.path}\skipit-stack-test.json');
+      await f.writeAsString(jsonEncode(tun));
+      final r = await Process.run(singbox.absolute.path, ['check', '-c', f.path]);
+      expect(r.exitCode, 0, reason: '$stack: ${r.stdout}\n${r.stderr}');
+      await f.delete();
+    }
+  });
+
   test('свой профиль и свой DNS работают вместе с конфигом провайдера', () async {
     final server = LinkParser.parseText(_provider).servers.single;
     final profile = RoutingProfile(

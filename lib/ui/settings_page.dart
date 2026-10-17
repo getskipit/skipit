@@ -207,6 +207,23 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
+          if (s.tunCore == TunCore.singbox)
+            _Row(
+              title: 'Сетевой стек sing-box',
+              subtitle: switch (s.singboxStack) {
+                'system' => 'Системный: соединения обрабатывает сама Windows — быстрее и легче для процессора',
+                'gvisor' => 'gVisor: стек внутри самого sing-box — медленнее, но выручает, если с другими что-то не работает',
+                _ => 'Смешанный: TCP обрабатывает Windows, UDP — gVisor. Подходит большинству',
+              },
+              trailing: Segmented<String>(
+                value: s.singboxStack,
+                items: const {'system': 'Системный', 'gvisor': 'gVisor', 'mixed': 'Смешанный'},
+                onChanged: (v) {
+                  s.singboxStack = v;
+                  state.changed();
+                },
+              ),
+            ),
         ]),
         _Section('Подписки', [
           toggle('Обновлять при запуске', 'Загружать свежий список серверов при старте', s.updateSubsOnStart,
@@ -680,6 +697,7 @@ const _keywords = <String, String>{
   'Подключаться при запуске': 'автоподключение автозапуск старт',
   'Переподключаться при сбое': 'обрыв падение автоматически восстановить',
   'Ядро для TUN': 'xray sing-box singbox адаптер ядро',
+  'Сетевой стек sing-box': 'stack стек gvisor system mixed системный смешанный адаптер',
   'Kill Switch': 'килл свитч защита утечка обрыв блокировка интернета',
   'Автовыбор сервера': 'лучший быстрый пинг авто',
   'Разрешить подключения из локальной сети': 'lan wifi роутер телефон раздать другим устройствам',

@@ -46,6 +46,10 @@ enum UpdateChannel { stable, beta }
 class AppSettings {
   ConnectionMode mode = ConnectionMode.mixed;
   TunCore tunCore = TunCore.xray;
+
+  /// Сетевой стек адаптера sing-box: system, gvisor или mixed (TCP — стек Windows, UDP — gVisor).
+  String singboxStack = 'mixed';
+  static const singboxStacks = ['system', 'gvisor', 'mixed'];
   int socksPort = 10808;
   int httpPort = 10809;
   int apiPort = 10813;
@@ -151,6 +155,7 @@ class AppSettings {
         // Метка: режим уже выбран с «Смешанным» по умолчанию (см. fromJson).
         'mixedDefault': true,
         'tunCore': tunCore.name,
+        'singboxStack': singboxStack,
         'socksPort': socksPort,
         'httpPort': httpPort,
         'apiPort': apiPort,
@@ -215,6 +220,7 @@ class AppSettings {
     // Раньше по умолчанию был TUN — один раз переводим такие настройки на «Смешанный».
     if (j['mixedDefault'] != true && s.mode == ConnectionMode.tun) s.mode = ConnectionMode.mixed;
     s.tunCore = TunCore.values.asNameMap()[j['tunCore']] ?? s.tunCore;
+    if (singboxStacks.contains(j['singboxStack'])) s.singboxStack = j['singboxStack'] as String;
     s.socksPort = asInt(j['socksPort']) ?? s.socksPort;
     s.httpPort = asInt(j['httpPort']) ?? s.httpPort;
     s.apiPort = asInt(j['apiPort']) ?? s.apiPort;

@@ -95,4 +95,10 @@ void main() {
     final own = AppSettings()..mtu = 9000;
     expect(AppSettings.fromJson(own.toJson()).mtu, 9000);
   });
+
+  test('стек sing-box: по умолчанию mixed, выбор сохраняется, неизвестное значение не принимается', () {
+    expect(AppSettings().singboxStack, 'mixed');
+    expect(AppSettings.fromJson((AppSettings()..singboxStack = 'gvisor').toJson()).singboxStack, 'gvisor');
+    expect(AppSettings.fromJson(const {'singboxStack': 'lwip'}).singboxStack, 'mixed');
+  });
 }
