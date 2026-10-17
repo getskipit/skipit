@@ -207,23 +207,25 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
-          if (s.tunCore == TunCore.singbox)
-            _Row(
+          _RevealRow(
+            open: s.tunCore == TunCore.singbox,
+            row: _Row(
               title: 'Сетевой стек sing-box',
               subtitle: switch (s.singboxStack) {
-                'system' => 'Системный: соединения обрабатывает сама Windows — быстрее и легче для процессора',
+                'system' => 'System: соединения обрабатывает сама Windows — быстрее и легче для процессора',
                 'gvisor' => 'gVisor: стек внутри самого sing-box — медленнее, но выручает, если с другими что-то не работает',
-                _ => 'Смешанный: TCP обрабатывает Windows, UDP — gVisor. Подходит большинству',
+                _ => 'Mixed: TCP обрабатывает Windows, UDP — gVisor. Подходит большинству',
               },
               trailing: Segmented<String>(
                 value: s.singboxStack,
-                items: const {'system': 'Системный', 'gvisor': 'gVisor', 'mixed': 'Смешанный'},
+                items: const {'system': 'System', 'gvisor': 'gVisor', 'mixed': 'Mixed'},
                 onChanged: (v) {
                   s.singboxStack = v;
                   state.changed();
                 },
               ),
             ),
+          ),
         ]),
         _Section('Подписки', [
           toggle('Обновлять при запуске', 'Загружать свежий список серверов при старте', s.updateSubsOnStart,
@@ -753,6 +755,7 @@ List<Widget> _found(String title, List<Widget> rows, String query) {
       if (switch (row) {
         _Row r => has('${r.title} ${r.subtitle} ${_keywords[r.title] ?? ''}'),
         _PortSecretRow r => has('${r.title} ${_keywords[r.title] ?? ''}'),
+        _RevealRow r => r.open && has('${r.row.title} ${r.row.subtitle} ${_keywords[r.row.title] ?? ''}'),
         _ => false,
       })
         row,
@@ -780,10 +783,13 @@ class _Section extends StatelessWidget {
         Panel(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
           child: Column(children: [
-            for (var i = 0; i < rows.length; i++) ...[
-              if (i > 0) const Divider(height: 1),
-              rows[i],
-            ],
+            for (var i = 0; i < rows.length; i++)
+              if (rows[i] case final _RevealRow r)
+                _RevealRow(open: r.open, row: r.row, divider: i > 0)
+              else ...[
+                if (i > 0) const Divider(height: 1),
+                rows[i],
+              ],
           ]),
         ),
       ]),
@@ -884,6 +890,19 @@ class _PortSecretRowState extends State<_PortSecretRow> {
           ),
         ]),
       );
+}
+
+/// Строка, которая плавно появляется и сворачивается вместе со своей чертой-разделителем (её ставит
+/// раздел), а не выскакивает рывком.
+class _RevealRow extends StatelessWidget {
+  const _RevealRow({required this.open, required this.row, this.divider = false});
+  final bool open;
+  final _Row row;
+  final bool divider;
+
+  @override
+  Widget build(BuildContext context) =>
+      Reveal(open: open, child: Column(children: [if (divider) const Divider(height: 1), row]));
 }
 
 class _Row extends StatelessWidget {
