@@ -1,7 +1,7 @@
 {
   "xray": {
-    "version": "v26.9.30",
-    "sha256": "b17a619343c11b89d8faf36278298856749b15c52277d875d32051b33dcda617"
+    "version": "v26.10.17",
+    "sha256": "c10a532a9271964f2aa2f4b4c0757605ff529222cb1d5d7ab88f8ecc52e67fb0"
   },
   "sing-box": {
     "version": "v1.14.3",

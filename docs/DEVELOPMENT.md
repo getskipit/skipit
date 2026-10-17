@@ -14,11 +14,11 @@ Visual Studio 2022 с нагрузкой «Разработка классиче
 [Inno Setup](https://jrsoftware.org/isdl.php).
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Version 1.1.5      # программа + установщик
+powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Version 1.1.6      # программа + установщик
 powershell -ExecutionPolicy Bypass -File tools\dev.ps1                       # тестовая копия «SkipIt Dev»
 ```
 
-Результат сборки — `build\installer\SkipIt-Setup-Windows-1.1.5.exe` и файл `.sha256` с его контрольной суммой.
+Результат сборки — `build\installer\SkipIt-Setup-Windows-1.1.6.exe` и файл `.sha256` с его контрольной суммой.
 Тесты: `flutter test`. Иконка пересобирается скриптом `tools\make_icon.ps1`.
 
 Тест `min_window_test.dart` отрисовывает каждую страницу в окне наименьшего размера. Чтобы посмотреть
@@ -38,7 +38,7 @@ powershell -ExecutionPolicy Bypass -File tools\dev.ps1                       # �
 `tools\cores.json`:
 
 ```json
-{ "xray": { "version": "v26.9.30", "sha256": "…" }, "sing-box": { "version": "v1.14.3", "sha256": "…" } }
+{ "xray": { "version": "v26.10.17", "sha256": "…" }, "sing-box": { "version": "v1.14.3", "sha256": "…" } }
 ```
 
 `version` — тег релиза ядра на GitHub, `sha256` — контрольная сумма zip-архива для Windows x64 со страницы
@@ -51,10 +51,10 @@ powershell -ExecutionPolicy Bypass -File tools\dev.ps1                       # �
 
 Собирать вручную не нужно — это делает GitHub Actions (`.github/workflows/build.yml`).
 
-1. **Releases → Draft a new release**, тег — `v` и номер версии: `v1.1.5`; предварительная версия — с буквой в конце, например `v1.1.5a`
+1. **Releases → Draft a new release**, тег — `v` и номер версии: `v1.1.6`; предварительная версия — с буквой в конце, например `v1.1.6a`
    (сначала сравниваются цифры, при равных — буква; версия без буквы новее версии с буквой).
 2. Галочку **pre-release** можно не трогать — сборка выставит её сама по номеру версии:
-   буква в конце (`v1.1.5a`) → pre-release, без буквы (`v1.1.5`) → обычный релиз.
+   буква в конце (`v1.1.6a`) → pre-release, без буквы (`v1.1.6`) → обычный релиз.
    Кто что получает:
    - канал **«Бета»** — всегда самую свежую версию, включая пре-релизы;
    - канал **«Стабильный»** (по умолчанию) — только обычные релизы. Пока ни одного обычного
