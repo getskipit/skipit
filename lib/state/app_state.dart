@@ -685,8 +685,9 @@ class AppState extends ChangeNotifier {
     _subsTimer = Timer.periodic(const Duration(minutes: 1), (_) => _updateDueSubscriptions());
 
     await handleArgs(args);
-    final wantConnect = args.contains('--connect') ||
-        (settings.connectOnStart && (args.contains('--autostart') || args.contains('--elevated')));
+    // «Подключаться при запуске» — только при автозапуске с Windows. Раньше сюда же попадал перезапуск
+    // с правами администратора (--elevated), и программа подключалась и при ручном открытии.
+    final wantConnect = args.contains('--connect') || (settings.connectOnStart && args.contains('--autostart'));
     if (wantConnect && selectedServer != null) {
       // Подписки обновляем после подключения, а не одновременно с ним: запросы, начатые напрямую,
       // оборвались бы на полпути, когда трафик уходит в адаптер (а Kill Switch их просто не выпустит).
@@ -1137,6 +1138,8 @@ class AppState extends ChangeNotifier {
     if (settings.systemProxyActive) {
       await WinSys.restoreProxy(settings.previousProxy);
       settings.systemProxyActive = false;
+      // Ядра уже остановлены: возвращённый прокси на мёртвый локальный порт выключаем (см. _teardown).
+      await WinSys.disableDeadLocalProxy();
     }
     settings.lastXrayPid = settings.lastSingboxPid = null;
     await saveNow();
@@ -2201,15 +2204,17 @@ class AppState extends ChangeNotifier {
     _statsTimer = null;
     _pollStats = null;
     _stopLinkCheck();
-    if (settings.systemProxyActive) {
+    final restoredProxy = settings.systemProxyActive;
+    if (restoredProxy) {
       await WinSys.restoreProxy(settings.previousProxy);
       settings.systemProxyActive = false;
     }
     await _singbox.stop();
     await _xray.stop();
-    // Возвращённый прокси может указывать на локальный порт, который больше никто не слушает (его
-    // запомнили раньше, до этого исправления, или оставил другой клиент) — тогда выключаем его.
-    await WinSys.disableDeadLocalProxy();
+    // Возвращённый нами прокси может указывать на локальный порт, который больше никто не слушает (его
+    // запомнили раньше, до этого исправления, или оставил другой клиент) — тогда выключаем его. Если прокси
+    // мы не ставили, его не трогаем: это чужая настройка.
+    if (restoredProxy) await WinSys.disableDeadLocalProxy();
     _session = null;
     _directPort = null;
     _appliedAppRules = null;
