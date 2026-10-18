@@ -598,10 +598,6 @@ class AppState extends ChangeNotifier {
   /// Проверяется при запуске и перед каждым подключением без прав администратора.
   String? serviceVersion;
 
-  /// Служба SkipIt на месте и понимает эту версию программы: режимы с адаптером и Kill Switch работают
-  /// без прав администратора, и запрашивать их при запуске не нужно.
-  bool get serviceReady => serviceVersion == ServiceClient.protocol;
-
   Timer? _statsTimer;
 
   /// Запрос счётчиков трафика у ядер текущего подключения.

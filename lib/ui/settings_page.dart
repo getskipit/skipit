@@ -288,34 +288,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           toggle('Меньше анимаций', 'Списки, меню и переходы срабатывают сразу, без плавного движения. Для слабых компьютеров',
               s.reduceMotion, (v) => s.reduceMotion = v),
-          _Row(
-            title: 'Права администратора',
-            subtitle: state.isAdmin
-                ? 'Есть — режим TUN доступен'
-                : state.serviceReady
-                    ? 'Не нужны — режимы TUN и «Смешанный» и Kill Switch работают через службу SkipIt'
-                    : 'Нет — для режима TUN нужен перезапуск',
-            // Без прав и без службы TUN не включится — подпись красная, чтобы это было видно сразу.
-            subtitleColor: state.isAdmin || state.serviceReady ? null : C.red,
-            trailing: state.isAdmin || state.serviceReady
-                ? Icon(Icons.verified_user_rounded, color: C.green)
-                : GhostButton(
-                    label: 'Перезапустить',
-                    icon: Icons.admin_panel_settings_rounded,
-                    onPressed: () async {
-                      if (await WinSys.relaunchAsAdmin(const [])) {
-                        await state.shutdown();
-                        await Tray.quit();
-                        exit(0);
-                      }
-                    },
-                  ),
-          ),
-          // Со службой права не нужны, и запуск их не просит — переключатель ни на что не влияет.
-          if (!state.serviceReady)
-            toggle('Запускать от имени администратора',
-                'Нужно для режимов TUN и «Смешанный». При запуске Windows спросит разрешение', s.runAsAdmin,
-                (v) => s.runAsAdmin = v),
           toggle('Запускать вместе с Windows', 'Запускать приложение при входе в Windows', state.autostart,
               (v) => state.setAutostart(v)),
           toggle('Сворачивать в трей при закрытии', 'Крестик прячет окно в трей, VPN продолжает работать. Выход — через меню значка в трее',
@@ -697,8 +669,6 @@ class _SettingsQuery extends InheritedWidget {
 const _keywords = <String, String>{
   'Тема': 'оформление цвет тёмная темная светлая ночная dark light вид',
   'Меньше анимаций': 'анимация плавность тормозит лагает производительность слабый компьютер',
-  'Права администратора': 'админ администратор uac перезапуск',
-  'Запускать от имени администратора': 'админ администратор uac права',
   'Запускать вместе с Windows': 'автозапуск автозагрузка старт включение компьютера',
   'Сворачивать в трей при закрытии': 'трей значок крестик закрыть фон свернуть',
   'Уведомления Windows': 'оповещения сообщения всплывающие',
