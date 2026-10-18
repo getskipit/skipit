@@ -606,16 +606,24 @@ class WinSys {
   /// клиент), выключает: иначе у браузеров пропал бы интернет.
   static Future<void> disableDeadLocalProxy() async {
     final proxy = await readProxy();
-    final m = RegExp(r'^(?:https?=)?(?:127\.0\.0\.1|localhost):(\d+)').firstMatch(proxy.server);
-    if (proxy.enabled && m != null) {
+    final port = localProxyPort(proxy);
+    if (port != null) {
       try {
-        final s = await Socket.connect(InternetAddress.loopbackIPv4, int.parse(m.group(1)!),
+        final s = await Socket.connect(InternetAddress.loopbackIPv4, port,
             timeout: const Duration(milliseconds: 400));
         s.destroy();
       } catch (_) {
         await restoreProxy(null);
       }
     }
+  }
+
+  /// Порт включённого системного прокси на этом компьютере (127.0.0.1 или localhost); null — прокси
+  /// выключен или он не локальный.
+  static int? localProxyPort(SystemProxyState proxy) {
+    if (!proxy.enabled) return null;
+    final m = RegExp(r'^(?:https?=)?(?:127\.0\.0\.1|localhost):(\d+)').firstMatch(proxy.server);
+    return m == null ? null : int.tryParse(m.group(1)!);
   }
 
   /// Поднялся ли наш TUN-адаптер: трафик в интернет уже идёт через него.

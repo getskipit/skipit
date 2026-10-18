@@ -2071,7 +2071,13 @@ class AppState extends ChangeNotifier {
       }
       _checkCancel();
       if (settings.mode == ConnectionMode.systemProxy || settings.mode == ConnectionMode.mixed) {
-        if (!settings.systemProxyActive) settings.previousProxy = await WinSys.readProxy();
+        if (!settings.systemProxyActive) {
+          // Прокси, который уже смотрит на наш же порт, «прежним» не считается: его оставили мы сами
+          // (после сбоя) или вторая копия SkipIt на том же порту. Вернуть его при отключении значило бы
+          // оставить Windows смотреть в мёртвый порт — у браузеров пропал бы интернет.
+          final now = await WinSys.readProxy();
+          settings.previousProxy = WinSys.localProxyPort(now) == session.httpPort ? null : now;
+        }
         await WinSys.setProxy('127.0.0.1:${session.httpPort}', bypass: settings.proxyBypass);
         settings.systemProxyActive = true;
       }
@@ -2200,6 +2206,9 @@ class AppState extends ChangeNotifier {
     }
     await _singbox.stop();
     await _xray.stop();
+    // Возвращённый прокси может указывать на локальный порт, который больше никто не слушает (его
+    // запомнили раньше, до этого исправления, или оставил другой клиент) — тогда выключаем его.
+    await WinSys.disableDeadLocalProxy();
     _session = null;
     _directPort = null;
     _appliedAppRules = null;
