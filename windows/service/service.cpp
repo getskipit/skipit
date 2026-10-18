@@ -10,8 +10,9 @@
 //    было бы перехватывать подключения программы. Программа со своей стороны сверяет, что на том
 //    конце канала именно процесс службы (см. lib\core\service_client.dart);
 //  - присланный конфиг ядра считается враждебным: ядро исполнит его с правами системы, а в конфигах
-//    Xray и sing-box есть пути к файлам (журналы, кэш, сертификаты). Любой путь, который может уйти
-//    за рабочую папку ядра, отклоняется (см. ConfigProblem);
+//    Xray и sing-box есть пути к файлам (журналы, кэш, сертификаты). Служба разбирает конфиг, удаляет
+//    поля с файлами и отклоняет любой оставшийся путь, который может уйти за рабочую папку ядра
+//    (см. CleanConfig); ядру уходит уже очищенный конфиг;
 //  - ядро запускается только из папки core рядом со службой, с рабочей папкой work там же
 //    (в Program Files: туда без прав не записать), и живёт в задании Windows — закрылась служба,
 //    закрывается и ядро. Отключилась программа — ядро тоже останавливается.
@@ -20,6 +21,7 @@
 //   skipit-service.exe --stop --name SkipIt
 //   skipit-service.exe --uninstall --name SkipIt
 //   skipit-service.exe --check-config <файл>   (проверка конфига для тестов: «ok» или причина отказа)
+//   skipit-service.exe --clean-config <файл>   (то же, но вместо «ok» — очищенный конфиг)
 // Запуск без этих ключей делает Windows (диспетчер служб): --name <имя> --client <путь>.
 //
 // Протокол — сообщения канала в режиме сообщений:
@@ -42,6 +44,9 @@
 
 #include "kill_switch.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <iterator>
 #include <map>
@@ -129,50 +134,313 @@ bool Escapes(const std::string& s, bool leading_slash_ok) {
   if (s.size() >= 2 && IsPathSep(s[0]) && IsPathSep(s[1])) return true;
   // Ведущий «\» (корень диска, «\??\…») — всегда путь к файлу; ведущий «/» — только там, где это адрес на сервере.
   if (!s.empty() && (s[0] == '\\' || (s[0] == '/' && !leading_slash_ok))) return true;
-  for (size_t i = 0; i + 1 < s.size(); i++) {
+  // У «ext:файл:метка» путь начинается после «ext:» — «ext:..\x» тоже переход вверх.
+  const size_t from = s.rfind("ext:", 0) == 0 ? 4 : 0;
+  for (size_t i = from; i + 1 < s.size(); i++) {
     if (s[i] == '.' && s[i + 1] == '.' &&
-        (i == 0 || IsPathSep(s[i - 1])) && (i + 2 == s.size() || IsPathSep(s[i + 2]))) {
+        (i == from || IsPathSep(s[i - 1])) && (i + 2 == s.size() || IsPathSep(s[i + 2]))) {
       return true;
     }
   }
   return false;
 }
 
-// Разбор строки JSON с позиции после открывающей кавычки; pos — после закрывающей.
-bool ReadJsonString(const std::string& text, size_t& pos, std::string& out) {
-  out.clear();
-  while (pos < text.size()) {
-    const char c = text[pos++];
-    if (c == '"') return true;
-    if (c != '\\') {
-      out += c;
-      continue;
+// ---------- разбор JSON ----------
+
+// Конфиг разбирается целиком, а не просматривается по строкам: служба и ядро должны одинаково понимать,
+// где ключ и где значение. Строгий JSON (без комментариев и лишних запятых), как у encoding/json в Go;
+// одинаковые ключи — действует последний, тоже как в Go.
+struct Json {
+  enum Type { kObject, kArray, kString, kRaw } type = kRaw;
+  std::vector<std::pair<std::string, Json>> members;  // Объект: ключи по порядку.
+  std::vector<Json> items;                            // Список.
+  std::string text;                                   // Строка (UTF-8) или число, true, false, null как есть.
+
+  const Json* Member(const std::string& key) const {
+    for (const auto& m : members) {
+      if (m.first == key) return &m.second;
     }
-    if (pos >= text.size()) return false;
-    const char e = text[pos++];
-    switch (e) {
-      case '"': case '\\': case '/': out += e; break;
-      case 'b': out += '\b'; break;
-      case 'f': out += '\f'; break;
-      case 'n': out += '\n'; break;
-      case 'r': out += '\r'; break;
-      case 't': out += '\t'; break;
-      case 'u': {
-        if (pos + 4 > text.size()) return false;
-        const unsigned long code = std::strtoul(text.substr(pos, 4).c_str(), nullptr, 16);
-        pos += 4;
-        // Для проверки путей важны только символы ASCII; остальное — заглушка.
-        out += code < 0x80 ? static_cast<char>(code) : '?';
-        break;
+    return nullptr;
+  }
+};
+
+class JsonParser {
+ public:
+  explicit JsonParser(const std::string& s) : s_(s) {}
+
+  bool Parse(Json& out) {
+    if (!Value(out, 0)) return false;
+    Space();
+    return pos_ == s_.size();
+  }
+
+ private:
+  void Space() {
+    while (pos_ < s_.size() && (s_[pos_] == ' ' || s_[pos_] == '\t' || s_[pos_] == '\n' || s_[pos_] == '\r')) pos_++;
+  }
+
+  bool Peek(char c) const { return pos_ < s_.size() && s_[pos_] == c; }
+
+  bool Hex4(unsigned& code) {
+    if (pos_ + 4 > s_.size()) return false;
+    code = 0;
+    for (int i = 0; i < 4; i++) {
+      const char c = s_[pos_++];
+      code <<= 4;
+      if (c >= '0' && c <= '9') {
+        code |= static_cast<unsigned>(c - '0');
+      } else if (c >= 'a' && c <= 'f') {
+        code |= static_cast<unsigned>(c - 'a' + 10);
+      } else if (c >= 'A' && c <= 'F') {
+        code |= static_cast<unsigned>(c - 'A' + 10);
+      } else {
+        return false;
       }
-      default: return false;
     }
+    return true;
+  }
+
+  static void Utf8(unsigned code, std::string& out) {
+    if (code < 0x80) {
+      out += static_cast<char>(code);
+    } else if (code < 0x800) {
+      out += static_cast<char>(0xC0 | (code >> 6));
+      out += static_cast<char>(0x80 | (code & 0x3F));
+    } else if (code < 0x10000) {
+      out += static_cast<char>(0xE0 | (code >> 12));
+      out += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+      out += static_cast<char>(0x80 | (code & 0x3F));
+    } else {
+      out += static_cast<char>(0xF0 | (code >> 18));
+      out += static_cast<char>(0x80 | ((code >> 12) & 0x3F));
+      out += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+      out += static_cast<char>(0x80 | (code & 0x3F));
+    }
+  }
+
+  // Строка с позиции открывающей кавычки.
+  bool String(std::string& out) {
+    pos_++;
+    out.clear();
+    while (pos_ < s_.size()) {
+      const unsigned char c = static_cast<unsigned char>(s_[pos_++]);
+      if (c == '"') return true;
+      if (c < 0x20) return false;
+      if (c != '\\') {
+        out += static_cast<char>(c);
+        continue;
+      }
+      if (pos_ >= s_.size()) return false;
+      const char e = s_[pos_++];
+      switch (e) {
+        case '"': case '\\': case '/': out += e; break;
+        case 'b': out += '\b'; break;
+        case 'f': out += '\f'; break;
+        case 'n': out += '\n'; break;
+        case 'r': out += '\r'; break;
+        case 't': out += '\t'; break;
+        case 'u': {
+          unsigned code = 0;
+          if (!Hex4(code)) return false;
+          if (code >= 0xD800 && code < 0xDC00) {
+            unsigned low = 0;
+            if (pos_ + 2 > s_.size() || s_[pos_] != '\\' || s_[pos_ + 1] != 'u') return false;
+            pos_ += 2;
+            if (!Hex4(low) || low < 0xDC00 || low > 0xDFFF) return false;
+            code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+          } else if (code >= 0xDC00 && code <= 0xDFFF) {
+            return false;
+          }
+          Utf8(code, out);
+          break;
+        }
+        default: return false;
+      }
+    }
+    return false;
+  }
+
+  bool Value(Json& v, int depth) {
+    if (depth > 64) return false;
+    Space();
+    if (pos_ >= s_.size()) return false;
+    const char c = s_[pos_];
+    if (c == '{') {
+      v.type = Json::kObject;
+      pos_++;
+      Space();
+      if (Peek('}')) {
+        pos_++;
+        return true;
+      }
+      while (true) {
+        Space();
+        if (!Peek('"')) return false;
+        std::string key;
+        if (!String(key)) return false;
+        Space();
+        if (!Peek(':')) return false;
+        pos_++;
+        Json member;
+        if (!Value(member, depth + 1)) return false;
+        bool replaced = false;
+        for (auto& m : v.members) {
+          if (m.first == key) {
+            m.second = std::move(member);
+            replaced = true;
+            break;
+          }
+        }
+        if (!replaced) v.members.emplace_back(std::move(key), std::move(member));
+        Space();
+        if (Peek(',')) {
+          pos_++;
+          continue;
+        }
+        if (Peek('}')) {
+          pos_++;
+          return true;
+        }
+        return false;
+      }
+    }
+    if (c == '[') {
+      v.type = Json::kArray;
+      pos_++;
+      Space();
+      if (Peek(']')) {
+        pos_++;
+        return true;
+      }
+      while (true) {
+        Json item;
+        if (!Value(item, depth + 1)) return false;
+        v.items.push_back(std::move(item));
+        Space();
+        if (Peek(',')) {
+          pos_++;
+          continue;
+        }
+        if (Peek(']')) {
+          pos_++;
+          return true;
+        }
+        return false;
+      }
+    }
+    if (c == '"') {
+      v.type = Json::kString;
+      return String(v.text);
+    }
+    // Число, true, false или null — как есть, но только эти виды.
+    const size_t start = pos_;
+    while (pos_ < s_.size() && (std::isalnum(static_cast<unsigned char>(s_[pos_])) || s_[pos_] == '-' ||
+                                s_[pos_] == '+' || s_[pos_] == '.')) {
+      pos_++;
+    }
+    v.type = Json::kRaw;
+    v.text = s_.substr(start, pos_ - start);
+    if (v.text == "true" || v.text == "false" || v.text == "null") return true;
+    if (v.text.empty() || !(v.text[0] == '-' || (v.text[0] >= '0' && v.text[0] <= '9'))) return false;
+    for (char ch : v.text) {
+      if (!((ch >= '0' && ch <= '9') || ch == '-' || ch == '+' || ch == '.' || ch == 'e' || ch == 'E')) return false;
+    }
+    return true;
+  }
+
+  const std::string& s_;
+  size_t pos_ = 0;
+};
+
+void JsonQuote(const std::string& s, std::string& out) {
+  out += '"';
+  for (char ch : s) {
+    const unsigned char c = static_cast<unsigned char>(ch);
+    if (c == '"') {
+      out += "\\\"";
+    } else if (c == '\\') {
+      out += "\\\\";
+    } else if (c < 0x20) {
+      char buf[8];
+      sprintf_s(buf, "\\u%04X", c);
+      out += buf;
+    } else {
+      out += ch;
+    }
+  }
+  out += '"';
+}
+
+void JsonWrite(const Json& v, std::string& out) {
+  switch (v.type) {
+    case Json::kObject:
+      out += '{';
+      for (size_t i = 0; i < v.members.size(); i++) {
+        if (i > 0) out += ',';
+        JsonQuote(v.members[i].first, out);
+        out += ':';
+        JsonWrite(v.members[i].second, out);
+      }
+      out += '}';
+      break;
+    case Json::kArray:
+      out += '[';
+      for (size_t i = 0; i < v.items.size(); i++) {
+        if (i > 0) out += ',';
+        JsonWrite(v.items[i], out);
+      }
+      out += ']';
+      break;
+    case Json::kString:
+      JsonQuote(v.text, out);
+      break;
+    case Json::kRaw:
+      out += v.text;
+      break;
+  }
+}
+
+// ---------- очистка и проверка конфига ----------
+
+// Поля, через которые ядро пишет или читает файлы на диске: служба их удаляет из конфига. Сама программа
+// их не пишет (журнал ядра идёт на стандартный вывод), поэтому для её конфигов это ничего не меняет.
+//  Xray: log.access, log.error, certificateFile и keyFile у сертификатов TLS;
+//  sing-box: log.output, experimental.cache_file, clash_api.external_ui*, пути сертификатов и ключей,
+//  acme.data_directory, а у rule_set — путь и списки вида local (файлы на диске).
+bool FileKey(const std::string& key, const std::string& under) {
+  if (under == "log" && (key == "access" || key == "error" || key == "output")) return true;
+  if (under == "rule_set" && key == "path") return true;
+  static const char* const kKeys[] = {
+      "certificateFile", "keyFile", "certificate_path", "key_path", "client_certificate_path", "client_key_path",
+      "cache_file", "external_ui", "external_ui_download_url", "external_ui_download_detour", "data_directory",
+  };
+  for (const char* k : kKeys) {
+    if (key == k) return true;
   }
   return false;
 }
 
-// Причина отказа или пустая строка, если конфиг можно отдать ядру. Проверяются все строки JSON с
-// учётом ключа, под которым они стоят:
+void Strip(Json& v, const std::string& key) {
+  if (v.type == Json::kArray) {
+    if (key == "rule_set") {
+      v.items.erase(std::remove_if(v.items.begin(), v.items.end(),
+                                   [](const Json& item) {
+                                     const Json* type = item.Member("type");
+                                     return type != nullptr && type->type == Json::kString && type->text == "local";
+                                   }),
+                    v.items.end());
+    }
+    for (auto& item : v.items) Strip(item, key);
+  } else if (v.type == Json::kObject) {
+    v.members.erase(std::remove_if(v.members.begin(), v.members.end(),
+                                   [&key](const std::pair<std::string, Json>& m) { return FileKey(m.first, key); }),
+                    v.members.end());
+    for (auto& m : v.members) Strip(m.second, m.first);
+  }
+}
+
+// Причина отказа или пустая строка. Оставшиеся после очистки строки проверяются ещё раз — с учётом
+// ключа, под которым они стоят ([key]), и ключа, под которым стоит их объект ([parent]):
 //  - process (правила Xray по программам), process_path, process_path_regex (то же у sing-box) —
 //    пути к exe, с которыми сравнивается программа соединения; по ним ничего не пишется и не читается;
 //  - path у транспорта и DNS-сервера (в объекте под ключом wsSettings, httpupgradeSettings,
@@ -180,63 +448,57 @@ bool ReadJsonString(const std::string& text, size_t& pos, std::string& out) {
 //    списке servers) и serviceName у gRPC (grpcSettings) — адрес на сервере, «/ws», «/dns-query»: им можно
 //    начинаться с «/» (но не с «\»); исключение — DNS-сервер sing-box вида hosts, у него path — файлы на диске;
 //  - остальное не должно быть путём за пределы рабочей папки.
-std::string ConfigProblem(const std::string& text) {
-  struct Level {
-    bool object;
-    std::string key;     // Текущий ключ (у объекта) или ключ, под которым стоит список.
-    std::string parent;  // Ключ, под которым стоит сам этот объект или список.
-    bool expect_key;
-    bool hosts = false;   // Объект — DNS-сервер sing-box вида hosts ("type": "hosts").
-    bool rooted = false;  // В объекте есть путь, начинающийся с «/».
-  };
-  std::vector<Level> stack;
-  size_t pos = 0;
-  std::string s;
-  while (pos < text.size()) {
-    const char c = text[pos++];
-    if (c == '{' || c == '[') {
-      const std::string under = stack.empty() ? "" : stack.back().key;
-      const std::string parent = stack.empty() ? "" : stack.back().parent;
-      stack.push_back({c == '{', c == '{' ? "" : under, c == '{' ? under : parent, c == '{'});
-      if (stack.size() > 64) return "конфиг слишком глубокий";
-    } else if (c == '}' || c == ']') {
-      if (stack.empty()) return "конфиг не разобран";
-      // У DNS-сервера sing-box вида hosts path — это файлы hosts на диске, а не адрес на сервере:
-      // «/…» здесь означал бы корень диска.
-      if (stack.back().hosts && stack.back().rooted) return "в конфиге путь к файлу hosts за пределами папки ядра";
-      stack.pop_back();
-    } else if (c == ',') {
-      if (!stack.empty() && stack.back().object) stack.back().expect_key = true;
-    } else if (c == '"') {
-      if (!ReadJsonString(text, pos, s)) return "конфиг не разобран";
-      if (!stack.empty() && stack.back().object && stack.back().expect_key) {
-        stack.back().key = s;
-        stack.back().expect_key = false;
-        continue;
-      }
-      const std::string key = stack.empty() ? "" : stack.back().key;
-      const std::string parent = stack.empty() ? "" : stack.back().parent;
-      if (key == "process" || key == "process_path" || key == "process_path_regex") continue;
-      if (key == "type" && s == "hosts" && stack.back().object) stack.back().hosts = true;
-      const bool route_path = (key == "path" && (parent == "wsSettings" || parent == "httpupgradeSettings" ||
-                                                 parent == "xhttpSettings" || parent == "splithttpSettings" ||
-                                                 parent == "httpSettings" || parent == "request" ||
-                                                 parent == "transport" || parent == "servers")) ||
-                              // Xray принимает и имя сервиса gRPC в виде своего пути: «/svc/name».
-                              (key == "serviceName" && parent == "grpcSettings");
-      if (Escapes(s, route_path)) return "в конфиге путь к файлу за пределами папки ядра: " + key + " = " + s;
-      if (route_path && !s.empty() && s[0] == '/') {
-        // Отметка у ближайшего объекта (строка может стоять в списке внутри него).
-        for (auto it = stack.rbegin(); it != stack.rend(); ++it) {
-          if (it->object) {
-            it->rooted = true;
-            break;
-          }
+std::string CheckValue(const Json& v, const std::string& key, const std::string& parent) {
+  if (v.type == Json::kString) {
+    if (key == "process" || key == "process_path" || key == "process_path_regex") return "";
+    const bool route_path = (key == "path" && (parent == "wsSettings" || parent == "httpupgradeSettings" ||
+                                               parent == "xhttpSettings" || parent == "splithttpSettings" ||
+                                               parent == "httpSettings" || parent == "request" ||
+                                               parent == "transport" || parent == "servers")) ||
+                            // Xray принимает и имя сервиса gRPC в виде своего пути: «/svc/name».
+                            (key == "serviceName" && parent == "grpcSettings");
+    if (Escapes(v.text, route_path)) return "в конфиге путь к файлу за пределами папки ядра: " + key + " = " + v.text;
+    return "";
+  }
+  if (v.type == Json::kArray) {
+    for (const auto& item : v.items) {
+      std::string problem = CheckValue(item, key, parent);
+      if (!problem.empty()) return problem;
+    }
+    return "";
+  }
+  if (v.type == Json::kObject) {
+    // У DNS-сервера sing-box вида hosts path — файлы hosts на диске: «/…» здесь означал бы корень диска.
+    const Json* type = v.Member("type");
+    const Json* path = v.Member("path");
+    if (type != nullptr && type->type == Json::kString && type->text == "hosts" && path != nullptr) {
+      std::vector<const Json*> paths;
+      if (path->type == Json::kString) paths.push_back(path);
+      for (const auto& item : path->items) paths.push_back(&item);
+      for (const Json* p : paths) {
+        if (p->type == Json::kString && !p->text.empty() && IsPathSep(p->text[0])) {
+          return "в конфиге путь к файлу hosts за пределами папки ядра: " + p->text;
         }
       }
     }
+    for (const auto& m : v.members) {
+      std::string problem = CheckValue(m.second, m.first, key);
+      if (!problem.empty()) return problem;
+    }
   }
-  return stack.empty() ? "" : "конфиг не разобран";
+  return "";
+}
+
+// Очищенный конфиг в [out] и пустая строка — или причина отказа.
+std::string CleanConfig(const std::string& text, std::string& out) {
+  Json root;
+  if (!JsonParser(text).Parse(root)) return "конфиг не разобран (нужен строгий JSON)";
+  Strip(root, "");
+  std::string problem = CheckValue(root, "", "");
+  if (!problem.empty()) return problem;
+  out.clear();
+  JsonWrite(root, out);
+  return "";
 }
 
 // ---------- канал ----------
@@ -351,7 +613,6 @@ void RunCore(HANDLE pipe, const std::string& request) {
   }
   const std::string core = request.substr(a + 1, b - a - 1);
   const std::wstring assets = Wide(request.substr(b + 1, c - b - 1));
-  const std::string config = request.substr(c + 1);
   const wchar_t* exe_name = core == "xray" ? L"skipit-xray.exe" : core == "sing-box" ? L"skipit-sing-box.exe" : nullptr;
   if (exe_name == nullptr) {
     PipeWrite(pipe, "error неизвестное ядро");
@@ -361,7 +622,8 @@ void RunCore(HANDLE pipe, const std::string& request) {
     PipeWrite(pipe, "error неверная папка гео-баз");
     return;
   }
-  const std::string problem = ConfigProblem(config);
+  std::string config;
+  const std::string problem = CleanConfig(request.substr(c + 1), config);
   if (!problem.empty()) {
     PipeWrite(pipe, "error " + problem);
     return;
@@ -786,8 +1048,9 @@ int StopOrUninstall(bool uninstall) {
   return ok ? 0 : 3;
 }
 
-// Проверка конфига из файла (для тестов): печатает «ok» или причину отказа.
-int CheckConfig(const std::wstring& path) {
+// Проверка конфига из файла (для тестов): печатает «ok» или причину отказа; с [print_clean] вместо «ok» —
+// очищенный конфиг, который ушёл бы ядру.
+int CheckConfig(const std::wstring& path, bool print_clean) {
   HANDLE file = ::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
   if (file == INVALID_HANDLE_VALUE) return 2;
   std::string text;
@@ -795,8 +1058,9 @@ int CheckConfig(const std::wstring& path) {
   DWORD n = 0;
   while (::ReadFile(file, buf, sizeof(buf), &n, nullptr) && n > 0) text.append(buf, n);
   ::CloseHandle(file);
-  const std::string problem = ConfigProblem(text);
-  const std::string out = (problem.empty() ? "ok" : problem) + "\n";
+  std::string clean;
+  const std::string problem = CleanConfig(text, clean);
+  const std::string out = (problem.empty() ? (print_clean ? clean : "ok") : problem) + "\n";
   DWORD written = 0;
   ::WriteFile(::GetStdHandle(STD_OUTPUT_HANDLE), out.data(), static_cast<DWORD>(out.size()), &written, nullptr);
   return problem.empty() ? 0 : 1;
@@ -806,7 +1070,9 @@ int CheckConfig(const std::wstring& path) {
 
 int wmain(int argc, wchar_t** argv) {
   const std::wstring check = Arg(argc, argv, L"--check-config");
-  if (!check.empty()) return CheckConfig(check);
+  if (!check.empty()) return CheckConfig(check, false);
+  const std::wstring clean = Arg(argc, argv, L"--clean-config");
+  if (!clean.empty()) return CheckConfig(clean, true);
   g_name = Arg(argc, argv, L"--name");
   if (!NameOk(g_name)) return 10;
   if (HasArg(argc, argv, L"--uninstall")) return StopOrUninstall(true);
