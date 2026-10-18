@@ -1989,7 +1989,10 @@ class AppState extends ChangeNotifier {
       } else {
         await KillSwitch.release();
       }
-      if (viaService && xrayTun) {
+      // Без прав администратора через службу идут оба ядра, даже если адаптер держит sing-box: иначе Xray
+      // с правами пользователя не узнаёт программу соединений, которые ему передаёт sing-box (у того права
+      // системы), — «Access is denied», и правила по программам не срабатывают.
+      if (viaService) {
         await _xray.startViaService('xray', assets: AppPaths.geoDir.path, input: configText);
       } else {
         await _xray.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'],
