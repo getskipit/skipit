@@ -1844,7 +1844,13 @@ class AppState extends ChangeNotifier {
         throw CoreException('Запущен $zapret — с ним VPN не подключается: он вмешивается в соединения, '
             'в том числе с VPN-сервером. Закройте $zapret и подключитесь снова.');
       }
-      if (usesTun && !isAdmin) throw NeedAdminException();
+      // Без прав администратора ядро с адаптером запускает служба SkipIt. Kill Switch ей ещё не передан —
+      // с ним по-прежнему нужны права.
+      final viaService = usesTun && !isAdmin;
+      if (viaService) {
+        serviceVersion = await ServiceClient.hello();
+        if (serviceVersion != ServiceClient.protocol || settings.killSwitch) throw NeedAdminException();
+      }
 
       // Два VPN с TUN одновременно дерутся за маршруты — сеть ломается до перезагрузки.
       if (usesTun && !ignoreOtherVpn) {
@@ -1983,8 +1989,12 @@ class AppState extends ChangeNotifier {
       } else {
         await KillSwitch.release();
       }
-      await _xray.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'],
-          env: {'XRAY_LOCATION_ASSET': AppPaths.geoDir.path}, input: configText);
+      if (viaService && xrayTun) {
+        await _xray.startViaService('xray', assets: AppPaths.geoDir.path, input: configText);
+      } else {
+        await _xray.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'],
+            env: {'XRAY_LOCATION_ASSET': AppPaths.geoDir.path}, input: configText);
+      }
       settings.lastXrayPid = _xray.pid;
       await saveNow();
 
@@ -2035,7 +2045,11 @@ class AppState extends ChangeNotifier {
         _reportSingbox = tun;
         final logStart = log.lines.length;
         _checkCancel();
-        await _singbox.start(AppPaths.singboxExe, ['run', '-c', 'stdin'], input: tunText);
+        if (viaService) {
+          await _singbox.startViaService('sing-box', input: tunText);
+        } else {
+          await _singbox.start(AppPaths.singboxExe, ['run', '-c', 'stdin'], input: tunText);
+        }
         settings.lastSingboxPid = _singbox.pid;
         // «Подключено» сообщаем, только когда трафик действительно пошёл через наш адаптер. Обычно это
         // доли секунды. Если Windows не может включить адаптер, sing-box через 10 секунд пишет об этом

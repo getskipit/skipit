@@ -3,8 +3,9 @@
 #   powershell -ExecutionPolicy Bypass -File tools\dev-service.ps1            # поставить или обновить
 #   powershell -ExecutionPolicy Bypass -File tools\dev-service.ps1 -Uninstall # снять
 #
-# Файл службы копируется в Program Files: служба работает с правами системы, и её exe не должен
-# лежать в папке, куда может писать кто угодно (build\dev). Команды она принимает только от
+# Файл службы и ядра (core\) копируются в Program Files: служба работает с правами системы и
+# запускает ядра из своей папки — они не должны лежать там, куда может писать кто угодно
+# (build\dev). Команды она принимает только от
 # build\dev\SkipIt.exe — эта папка открыта на запись, поэтому такая служба годится только на машине
 # разработчика. После правок в windows\service — собрать тестовую копию (tools\dev.ps1) и запустить
 # этот скрипт снова.
@@ -40,6 +41,8 @@ $client = Join-Path $root 'build\dev\SkipIt.exe'
 if (-not (Test-Path $source)) { throw "Нет $source — сначала соберите тестовую копию (tools\dev.ps1)" }
 New-Item -ItemType Directory -Force $dest | Out-Null
 Copy-Item $source $exe -Force
+New-Item -ItemType Directory -Force (Join-Path $dest 'core') | Out-Null
+Copy-Item (Join-Path $root 'build\dev\core\skipit-*.exe'), (Join-Path $root 'build\dev\core\wintun.dll') (Join-Path $dest 'core') -Force
 & $exe --install --name $name --client $client
 if ($LASTEXITCODE -ne 0) { throw "Служба не поставилась (код $LASTEXITCODE)" }
 Write-Host "Служба $name работает и слушается только $client"

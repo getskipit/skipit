@@ -90,6 +90,8 @@ Root: HKCU; Subkey: "Software\SkipIt"; ValueType: none; Flags: uninsdeletekey
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\core"
+; Рабочая папка ядер, запущенных службой.
+Type: filesandordirs; Name: "{app}\work"
 ; Папка, куда программа скачивает установщик обновления.
 Type: filesandordirs; Name: "{app}\update"
 ; Удаление — как будто программы не было: подписки, серверы, настройки (вместе с HWID), журналы и гео-базы.

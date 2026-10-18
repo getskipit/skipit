@@ -2,35 +2,59 @@
 // администратора (окно UAC при каждом запуске). Сама ничего не решает — выполняет команды
 // программы, которые приходят по именованному каналу.
 //
-// Безопасность. Служба работает от имени системы, поэтому команды принимаются только от одного
-// файла — SkipIt.exe, путь к которому записан в параметры службы при установке (их может менять
-// только администратор; установщик кладёт программу в Program Files, куда без прав не записать).
-// Канал создаётся первым экземпляром (FILE_FLAG_FIRST_PIPE_INSTANCE): если имя уже занял кто-то
-// другой, служба не запускается. Программа со своей стороны сверяет, что на том конце канала
-// именно процесс службы (см. lib\core\service_client.dart).
+// Безопасность. Служба работает от имени системы, поэтому:
+//  - команды принимаются только от одного файла — SkipIt.exe, путь к которому записан в параметры
+//    службы при установке (их может менять только администратор; установщик кладёт программу в
+//    Program Files, куда без прав не записать);
+//  - пользователи могут только читать и писать в канал, но не создавать его экземпляры: иначе можно
+//    было бы перехватывать подключения программы. Программа со своей стороны сверяет, что на том
+//    конце канала именно процесс службы (см. lib\core\service_client.dart);
+//  - присланный конфиг ядра считается враждебным: ядро исполнит его с правами системы, а в конфигах
+//    Xray и sing-box есть пути к файлам (журналы, кэш, сертификаты). Любой путь, который может уйти
+//    за рабочую папку ядра, отклоняется (см. ConfigProblem);
+//  - ядро запускается только из папки core рядом со службой, с рабочей папкой work там же
+//    (в Program Files: туда без прав не записать), и живёт в задании Windows — закрылась служба,
+//    закрывается и ядро. Отключилась программа — ядро тоже останавливается.
 //
 //   skipit-service.exe --install --name SkipIt --client "C:\Program Files\SkipIt\SkipIt.exe"
 //   skipit-service.exe --stop --name SkipIt
 //   skipit-service.exe --uninstall --name SkipIt
+//   skipit-service.exe --check-config <файл>   (проверка конфига для тестов: «ok» или причина отказа)
 // Запуск без этих ключей делает Windows (диспетчер служб): --name <имя> --client <путь>.
+//
+// Протокол — сообщения канала в режиме сообщений:
+//   «hello»                          → «skipit-service 2»
+//   «start\n<ядро>\n<папка гео>\n<конфиг>» (ядро — xray или sing-box) → «started <pid>» или «error <текст>»,
+//       затем по тому же подключению: «o<кусок вывода ядра>» … «x<код выхода>».
+//       Программа закрыла это подключение — ядро останавливается.
+//   «stop <pid>»                     → «ok»: остановить ядро, запущенное этой службой.
 
 #include <windows.h>
 #include <sddl.h>
 
+#include <cstdlib>
 #include <iterator>
+#include <map>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
 
 // Версия протокола между программой и службой: растёт, когда меняются команды.
-constexpr char kProtocol[] = "skipit-service 1";
+constexpr char kProtocol[] = "skipit-service 2";
+constexpr size_t kMaxMessage = 16 * 1024 * 1024;
 
 std::wstring g_name;
 std::wstring g_client;
+std::wstring g_dir;  // Папка службы: в ней core\ и work\.
 SERVICE_STATUS_HANDLE g_status_handle = nullptr;
 SERVICE_STATUS g_status{};
 HANDLE g_stop_event = nullptr;
+HANDLE g_job = nullptr;
+std::mutex g_cores_mutex;
+std::map<DWORD, HANDLE> g_cores;  // pid → процесс ядра, запущенного службой.
 
 std::wstring PipeName(const std::wstring& name) { return L"\\\\.\\pipe\\" + name; }
 
@@ -57,6 +81,186 @@ bool HasArg(int argc, wchar_t** argv, const wchar_t* key) {
   return false;
 }
 
+std::wstring Wide(const std::string& s) {
+  if (s.empty()) return L"";
+  const int n = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), static_cast<int>(s.size()), nullptr, 0);
+  if (n <= 0) return L"";
+  std::wstring w(static_cast<size_t>(n), L'\0');
+  ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), static_cast<int>(s.size()), w.data(), n);
+  return w;
+}
+
+std::wstring ExeDir() {
+  wchar_t exe[MAX_PATH * 2];
+  const DWORD n = ::GetModuleFileNameW(nullptr, exe, static_cast<DWORD>(std::size(exe)));
+  if (n == 0 || n >= std::size(exe)) return L"";
+  std::wstring path(exe, n);
+  return path.substr(0, path.find_last_of(L'\\'));
+}
+
+// ---------- проверка конфига ----------
+
+bool IsPathSep(char c) { return c == '/' || c == '\\'; }
+
+// Диск с позиции [i]: «C:», «C:\…», «C:/…» и «C:файл» (относительно текущей папки диска).
+// Адрес IPv6 вида «a::1» диском не считается.
+bool DriveAt(const std::string& s, size_t i) {
+  return i + 1 < s.size() && ((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z')) && s[i + 1] == ':' &&
+         (i + 2 == s.size() || s[i + 2] != ':');
+}
+
+// Строка, которая как путь к файлу может выйти за рабочую папку ядра: диск — в начале или после «ext:»
+// (внешний файл гео-базы Xray), сетевой путь («\\сервер»), корень текущего диска («/x», «\x») или
+// переход вверх («..»). Адреса вида «https://…» путём не считаются: в них за буквой и двоеточием
+// идёт не начало строки.
+bool Escapes(const std::string& s, bool leading_slash_ok) {
+  if (DriveAt(s, 0)) return true;
+  if (s.rfind("ext:", 0) == 0 && DriveAt(s, 4)) return true;
+  if (s.size() >= 2 && IsPathSep(s[0]) && IsPathSep(s[1])) return true;
+  if (!leading_slash_ok && !s.empty() && IsPathSep(s[0])) return true;
+  for (size_t i = 0; i + 1 < s.size(); i++) {
+    if (s[i] == '.' && s[i + 1] == '.' &&
+        (i == 0 || IsPathSep(s[i - 1])) && (i + 2 == s.size() || IsPathSep(s[i + 2]))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Разбор строки JSON с позиции после открывающей кавычки; pos — после закрывающей.
+bool ReadJsonString(const std::string& text, size_t& pos, std::string& out) {
+  out.clear();
+  while (pos < text.size()) {
+    const char c = text[pos++];
+    if (c == '"') return true;
+    if (c != '\\') {
+      out += c;
+      continue;
+    }
+    if (pos >= text.size()) return false;
+    const char e = text[pos++];
+    switch (e) {
+      case '"': case '\\': case '/': out += e; break;
+      case 'b': out += '\b'; break;
+      case 'f': out += '\f'; break;
+      case 'n': out += '\n'; break;
+      case 'r': out += '\r'; break;
+      case 't': out += '\t'; break;
+      case 'u': {
+        if (pos + 4 > text.size()) return false;
+        const unsigned long code = std::strtoul(text.substr(pos, 4).c_str(), nullptr, 16);
+        pos += 4;
+        // Для проверки путей важны только символы ASCII; остальное — заглушка.
+        out += code < 0x80 ? static_cast<char>(code) : '?';
+        break;
+      }
+      default: return false;
+    }
+  }
+  return false;
+}
+
+// Причина отказа или пустая строка, если конфиг можно отдать ядру. Проверяются все строки JSON с
+// учётом ключа, под которым они стоят:
+//  - process (правила Xray по программам), process_path, process_path_regex (то же у sing-box) —
+//    пути к exe, с которыми сравнивается программа соединения; по ним ничего не пишется и не читается;
+//  - path у транспорта и DNS-сервера (в объекте под ключом wsSettings, httpupgradeSettings,
+//    xhttpSettings, splithttpSettings, httpSettings, request — HTTP-заголовок TCP, transport или в
+//    списке servers) — адрес на сервере, «/ws», «/dns-query»;
+//  - остальное не должно быть путём за пределы рабочей папки.
+std::string ConfigProblem(const std::string& text) {
+  struct Level {
+    bool object;
+    std::string key;     // Текущий ключ (у объекта) или ключ, под которым стоит список.
+    std::string parent;  // Ключ, под которым стоит сам этот объект или список.
+    bool expect_key;
+  };
+  std::vector<Level> stack;
+  size_t pos = 0;
+  std::string s;
+  while (pos < text.size()) {
+    const char c = text[pos++];
+    if (c == '{' || c == '[') {
+      const std::string under = stack.empty() ? "" : stack.back().key;
+      const std::string parent = stack.empty() ? "" : stack.back().parent;
+      stack.push_back({c == '{', c == '{' ? "" : under, c == '{' ? under : parent, c == '{'});
+      if (stack.size() > 64) return "конфиг слишком глубокий";
+    } else if (c == '}' || c == ']') {
+      if (stack.empty()) return "конфиг не разобран";
+      stack.pop_back();
+    } else if (c == ',') {
+      if (!stack.empty() && stack.back().object) stack.back().expect_key = true;
+    } else if (c == '"') {
+      if (!ReadJsonString(text, pos, s)) return "конфиг не разобран";
+      if (!stack.empty() && stack.back().object && stack.back().expect_key) {
+        stack.back().key = s;
+        stack.back().expect_key = false;
+        continue;
+      }
+      const std::string key = stack.empty() ? "" : stack.back().key;
+      const std::string parent = stack.empty() ? "" : stack.back().parent;
+      if (key == "process" || key == "process_path" || key == "process_path_regex") continue;
+      const bool route_path = key == "path" && (parent == "wsSettings" || parent == "httpupgradeSettings" ||
+                                                parent == "xhttpSettings" || parent == "splithttpSettings" ||
+                                                parent == "httpSettings" || parent == "request" ||
+                                                parent == "transport" || parent == "servers");
+      if (Escapes(s, route_path)) return "в конфиге путь к файлу за пределами папки ядра: " + key + " = " + s;
+    }
+  }
+  return stack.empty() ? "" : "конфиг не разобран";
+}
+
+// ---------- канал ----------
+
+// Запись одного сообщения (ручка канала открыта для перекрывающегося ввода-вывода).
+bool PipeWrite(HANDLE pipe, const std::string& data) {
+  OVERLAPPED ov{};
+  ov.hEvent = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (ov.hEvent == nullptr) return false;
+  DWORD n = 0;
+  bool ok = ::WriteFile(pipe, data.data(), static_cast<DWORD>(data.size()), nullptr, &ov) != 0 ||
+            ::GetLastError() == ERROR_IO_PENDING;
+  ok = ok && ::GetOverlappedResult(pipe, &ov, &n, TRUE) && n == data.size();
+  ::CloseHandle(ov.hEvent);
+  return ok;
+}
+
+// Чтение одного сообщения целиком. 1 — прочитано, 0 — программа отключилась (или сбой),
+// 2 — раньше сработал [also] (например, ядро завершилось).
+int PipeRead(HANDLE pipe, std::string& out, HANDLE also = nullptr) {
+  out.clear();
+  std::vector<char> buf(64 * 1024);
+  while (true) {
+    OVERLAPPED ov{};
+    ov.hEvent = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (ov.hEvent == nullptr) return 0;
+    if (!::ReadFile(pipe, buf.data(), static_cast<DWORD>(buf.size()), nullptr, &ov)) {
+      const DWORD err = ::GetLastError();
+      if (err != ERROR_IO_PENDING && err != ERROR_MORE_DATA) {
+        ::CloseHandle(ov.hEvent);
+        return 0;
+      }
+    }
+    if (also != nullptr) {
+      HANDLE waits[] = {ov.hEvent, also};
+      if (::WaitForMultipleObjects(2, waits, FALSE, INFINITE) != WAIT_OBJECT_0) {
+        ::CancelIoEx(pipe, &ov);
+        DWORD unused = 0;
+        ::GetOverlappedResult(pipe, &ov, &unused, TRUE);
+        ::CloseHandle(ov.hEvent);
+        return 2;
+      }
+    }
+    DWORD n = 0;
+    const bool ok = ::GetOverlappedResult(pipe, &ov, &n, TRUE) != 0;
+    const DWORD err = ok ? 0 : ::GetLastError();
+    ::CloseHandle(ov.hEvent);
+    out.append(buf.data(), n);
+    if (ok) return 1;
+    if (err != ERROR_MORE_DATA || out.size() > kMaxMessage) return 0;
+  }
+}
+
 // Полный путь к exe процесса на том конце канала.
 std::wstring ClientPath(HANDLE pipe) {
   ULONG pid = 0;
@@ -70,30 +274,195 @@ std::wstring ClientPath(HANDLE pipe) {
   return ok ? std::wstring(path, size) : L"";
 }
 
-// Ответ на одну команду. Пока команда одна — «hello»: программа узнаёт, что служба на месте.
-std::string Handle(const std::string& request) {
-  if (request == "hello") return kProtocol;
-  return "error unknown command";
+// ---------- ядра ----------
+
+// Рабочая папка ядра: относительные пути из конфига (если ядро что-то пишет) попадают сюда.
+std::wstring WorkDir() {
+  const std::wstring dir = g_dir + L"\\work";
+  ::CreateDirectoryW(dir.c_str(), nullptr);
+  return dir;
+}
+
+// Окружение службы плюс XRAY_LOCATION_ASSET (папка гео-баз программы) для Xray.
+std::vector<wchar_t> Environment(const std::wstring& assets) {
+  std::vector<wchar_t> env;
+  wchar_t* block = ::GetEnvironmentStringsW();
+  if (block != nullptr) {
+    for (const wchar_t* p = block; *p != L'\0'; p += wcslen(p) + 1) {
+      if (_wcsnicmp(p, L"XRAY_LOCATION_ASSET=", 20) == 0) continue;
+      env.insert(env.end(), p, p + wcslen(p) + 1);
+    }
+    ::FreeEnvironmentStringsW(block);
+  }
+  if (!assets.empty()) {
+    const std::wstring var = L"XRAY_LOCATION_ASSET=" + assets;
+    env.insert(env.end(), var.c_str(), var.c_str() + var.size() + 1);
+  }
+  env.push_back(L'\0');
+  return env;
+}
+
+// Папка гео-баз — только существующая папка, абсолютный путь без «..».
+bool AssetsOk(const std::wstring& dir) {
+  if (dir.empty()) return true;
+  if (dir.size() < 3 || dir[1] != L':' || dir[2] != L'\\' || dir.find(L"..") != std::wstring::npos) return false;
+  const DWORD attrs = ::GetFileAttributesW(dir.c_str());
+  return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) &&
+         !(attrs & FILE_ATTRIBUTE_REPARSE_POINT);
+}
+
+void RunCore(HANDLE pipe, const std::string& request) {
+  // «start\n<ядро>\n<папка гео>\n<конфиг>»
+  const size_t a = request.find('\n');
+  const size_t b = a == std::string::npos ? a : request.find('\n', a + 1);
+  const size_t c = b == std::string::npos ? b : request.find('\n', b + 1);
+  if (c == std::string::npos) {
+    PipeWrite(pipe, "error неверная команда");
+    return;
+  }
+  const std::string core = request.substr(a + 1, b - a - 1);
+  const std::wstring assets = Wide(request.substr(b + 1, c - b - 1));
+  const std::string config = request.substr(c + 1);
+  const wchar_t* exe_name = core == "xray" ? L"skipit-xray.exe" : core == "sing-box" ? L"skipit-sing-box.exe" : nullptr;
+  if (exe_name == nullptr) {
+    PipeWrite(pipe, "error неизвестное ядро");
+    return;
+  }
+  if (!AssetsOk(assets)) {
+    PipeWrite(pipe, "error неверная папка гео-баз");
+    return;
+  }
+  const std::string problem = ConfigProblem(config);
+  if (!problem.empty()) {
+    PipeWrite(pipe, "error " + problem);
+    return;
+  }
+
+  const std::wstring exe = g_dir + L"\\core\\" + exe_name;
+  std::wstring command = L"\"" + exe + L"\" run -c " + (core == "xray" ? L"stdin:" : L"stdin");
+  SECURITY_ATTRIBUTES inherit{sizeof(inherit), nullptr, TRUE};
+  HANDLE out_read = nullptr, out_write = nullptr, in_read = nullptr, in_write = nullptr;
+  if (!::CreatePipe(&out_read, &out_write, &inherit, 0) || !::CreatePipe(&in_read, &in_write, &inherit, 0)) {
+    PipeWrite(pipe, "error не удалось создать канал ядра");
+    return;
+  }
+  ::SetHandleInformation(out_read, HANDLE_FLAG_INHERIT, 0);
+  ::SetHandleInformation(in_write, HANDLE_FLAG_INHERIT, 0);
+  // Ядру достаются только его ввод и вывод, а не все наследуемые ручки службы.
+  HANDLE handles[] = {in_read, out_write};
+  SIZE_T size = 0;
+  ::InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
+  std::vector<char> attr_buf(size);
+  auto attrs = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attr_buf.data());
+  ::InitializeProcThreadAttributeList(attrs, 1, 0, &size);
+  ::UpdateProcThreadAttribute(attrs, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles, sizeof(handles), nullptr, nullptr);
+  STARTUPINFOEXW si{};
+  si.StartupInfo.cb = sizeof(si);
+  si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  si.StartupInfo.hStdInput = in_read;
+  si.StartupInfo.hStdOutput = out_write;
+  si.StartupInfo.hStdError = out_write;
+  si.lpAttributeList = attrs;
+  std::vector<wchar_t> env = Environment(core == "xray" ? assets : L"");
+  const std::wstring work = WorkDir();
+  PROCESS_INFORMATION pi{};
+  const bool created = ::CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, TRUE,
+                                        CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED |
+                                            EXTENDED_STARTUPINFO_PRESENT,
+                                        env.data(), work.c_str(), &si.StartupInfo, &pi) != 0;
+  const DWORD create_error = ::GetLastError();
+  ::DeleteProcThreadAttributeList(attrs);
+  ::CloseHandle(in_read);
+  ::CloseHandle(out_write);
+  if (!created) {
+    ::CloseHandle(out_read);
+    ::CloseHandle(in_write);
+    PipeWrite(pipe, "error не удалось запустить ядро (код " + std::to_string(create_error) + ")");
+    return;
+  }
+  ::AssignProcessToJobObject(g_job, pi.hProcess);
+  ::ResumeThread(pi.hThread);
+  ::CloseHandle(pi.hThread);
+  {
+    std::lock_guard<std::mutex> lock(g_cores_mutex);
+    g_cores[pi.dwProcessId] = pi.hProcess;
+  }
+  PipeWrite(pipe, "started " + std::to_string(pi.dwProcessId));
+
+  // Конфиг — на стандартный вход ядра (на диск он не пишется), затем вход закрывается.
+  std::thread input([in_write, config] {
+    DWORD written = 0;
+    ::WriteFile(in_write, config.data(), static_cast<DWORD>(config.size()), &written, nullptr);
+    ::CloseHandle(in_write);
+  });
+  // Вывод ядра — программе; не удалось отправить (программа отключилась) — ядро останавливается.
+  HANDLE process = pi.hProcess;
+  std::thread output([out_read, pipe, process] {
+    std::vector<char> buf(32 * 1024);
+    DWORD n = 0;
+    while (::ReadFile(out_read, buf.data(), static_cast<DWORD>(buf.size()), &n, nullptr) && n > 0) {
+      if (!PipeWrite(pipe, "o" + std::string(buf.data(), n))) {
+        ::TerminateProcess(process, 1);
+        break;
+      }
+    }
+    ::CloseHandle(out_read);
+  });
+  // Ждём, пока ядро не завершится или программа не отключится.
+  std::string message;
+  while (true) {
+    const int r = PipeRead(pipe, message, process);
+    if (r == 2) break;
+    if (r == 0) {
+      ::TerminateProcess(process, 1);
+      break;
+    }
+  }
+  ::WaitForSingleObject(process, INFINITE);
+  input.join();
+  output.join();
+  DWORD code = 0;
+  ::GetExitCodeProcess(process, &code);
+  {
+    std::lock_guard<std::mutex> lock(g_cores_mutex);
+    g_cores.erase(pi.dwProcessId);
+  }
+  ::CloseHandle(process);
+  PipeWrite(pipe, "x" + std::to_string(code));
+}
+
+void StopCore(HANDLE pipe, const std::string& request) {
+  const DWORD pid = std::strtoul(request.c_str() + 5, nullptr, 10);
+  std::lock_guard<std::mutex> lock(g_cores_mutex);
+  const auto it = g_cores.find(pid);
+  if (it != g_cores.end()) ::TerminateProcess(it->second, 1);
+  PipeWrite(pipe, "ok");
 }
 
 void Serve(HANDLE pipe) {
   const std::wstring client = ClientPath(pipe);
   if (client.empty() || _wcsicmp(client.c_str(), g_client.c_str()) != 0) return;
-  std::vector<char> buffer(64 * 1024);
-  while (true) {
-    DWORD read = 0;
-    if (!::ReadFile(pipe, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) || read == 0) return;
-    const std::string reply = Handle(std::string(buffer.data(), read));
-    DWORD written = 0;
-    if (!::WriteFile(pipe, reply.data(), static_cast<DWORD>(reply.size()), &written, nullptr)) return;
+  std::string request;
+  while (PipeRead(pipe, request) == 1) {
+    if (request == "hello") {
+      if (!PipeWrite(pipe, kProtocol)) return;
+    } else if (request.rfind("start\n", 0) == 0) {
+      RunCore(pipe, request);
+      return;  // Подключение запуска ядра живёт, пока живёт ядро.
+    } else if (request.rfind("stop ", 0) == 0) {
+      StopCore(pipe, request);
+    } else if (!PipeWrite(pipe, "error неизвестная команда")) {
+      return;
+    }
   }
 }
 
-// Канал: система и администраторы — полный доступ, вошедшие в Windows пользователи — чтение и запись.
-// Кто именно подключился, проверяет Serve() по пути к exe.
+// Канал: система и администраторы — полный доступ, вошедшие в Windows пользователи — только чтение,
+// запись данных и смена режима канала (0x12018B: без права создавать свои экземпляры канала, иначе
+// ими можно было бы перехватывать подключения программы). Кто подключился, проверяет Serve().
 HANDLE CreatePipe(bool first) {
   PSECURITY_DESCRIPTOR sd = nullptr;
-  if (!::ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)",
+  if (!::ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12018B;;;IU)",
                                                              SDDL_REVISION_1, &sd, nullptr)) {
     return INVALID_HANDLE_VALUE;
   }
@@ -180,6 +549,11 @@ void WINAPI ServiceMain(DWORD, LPWSTR*) {
   g_status_handle = ::RegisterServiceCtrlHandlerExW(g_name.c_str(), Control, nullptr);
   if (g_status_handle == nullptr) return;
   g_stop_event = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  // Задание Windows: закрылась служба (остановили, упала) — закрываются и все её ядра.
+  g_job = ::CreateJobObjectW(nullptr, nullptr);
+  JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+  limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+  ::SetInformationJobObject(g_job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
   SetState(SERVICE_RUNNING);
   Listen();
   SetState(SERVICE_STOPPED);
@@ -252,9 +626,27 @@ int StopOrUninstall(bool uninstall) {
   return ok ? 0 : 3;
 }
 
+// Проверка конфига из файла (для тестов): печатает «ok» или причину отказа.
+int CheckConfig(const std::wstring& path) {
+  HANDLE file = ::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+  if (file == INVALID_HANDLE_VALUE) return 2;
+  std::string text;
+  char buf[64 * 1024];
+  DWORD n = 0;
+  while (::ReadFile(file, buf, sizeof(buf), &n, nullptr) && n > 0) text.append(buf, n);
+  ::CloseHandle(file);
+  const std::string problem = ConfigProblem(text);
+  const std::string out = (problem.empty() ? "ok" : problem) + "\n";
+  DWORD written = 0;
+  ::WriteFile(::GetStdHandle(STD_OUTPUT_HANDLE), out.data(), static_cast<DWORD>(out.size()), &written, nullptr);
+  return problem.empty() ? 0 : 1;
+}
+
 }  // namespace
 
 int wmain(int argc, wchar_t** argv) {
+  const std::wstring check = Arg(argc, argv, L"--check-config");
+  if (!check.empty()) return CheckConfig(check);
   g_name = Arg(argc, argv, L"--name");
   if (!NameOk(g_name)) return 10;
   if (HasArg(argc, argv, L"--uninstall")) return StopOrUninstall(true);
@@ -263,6 +655,7 @@ int wmain(int argc, wchar_t** argv) {
   if (g_client.empty()) return 11;
   if (HasArg(argc, argv, L"--install")) return Install(g_client);
 
+  g_dir = ExeDir();
   SERVICE_TABLE_ENTRYW table[] = {{g_name.data(), ServiceMain}, {nullptr, nullptr}};
   return ::StartServiceCtrlDispatcherW(table) ? 0 : 12;
 }

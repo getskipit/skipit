@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'log_store.dart';
 import 'paths.dart';
+import 'service_client.dart';
 import 'util.dart';
 
 export 'log_store.dart';
@@ -46,8 +47,12 @@ class CoreProcess {
     log.add(name, line);
   }
 
-  bool get running => _process != null;
-  int? get pid => _process?.pid;
+  /// Ядро, запущенное службой SkipIt (см. [startViaService]).
+  ServiceCore? _remote;
+  Completer<void>? _remoteExit;
+
+  bool get running => _process != null || _remote != null;
+  int? get pid => _process?.pid ?? _remote?.pid;
 
   /// [input] — текст, который ядро прочитает со стандартного входа (конфиг: так он не лежит на диске).
   Future<void> start(String exe, List<String> args, {Map<String, String>? env, String? input}) async {
@@ -80,7 +85,48 @@ class CoreProcess {
     }));
   }
 
+  /// То же, что [start], но ядро [core] («xray» или «sing-box») запускает служба SkipIt с правами
+  /// системы: так режимы с адаптером работают без прав администратора у самой программы.
+  /// [assets] — папка гео-баз для Xray.
+  Future<void> startViaService(String core, {String assets = '', required String input}) async {
+    _stopping = false;
+    final out = StreamController<List<int>>();
+    const decoder = Utf8Decoder(allowMalformed: true);
+    out.stream.transform(decoder).transform(const LineSplitter()).listen(_feed);
+    final exited = Completer<void>();
+    ServiceCore? remote;
+    try {
+      remote = await ServiceCore.start(
+        core: core,
+        assets: assets,
+        config: input,
+        onOutput: out.add,
+        onExit: (code) {
+          out.close();
+          exited.complete();
+          if (remote == null || !identical(_remote, remote)) return;
+          _remote = null;
+          log.add(name, '[$name завершился с кодом $code]');
+          if (!_stopping) onUnexpectedExit?.call(code);
+        },
+      );
+    } on ServiceException catch (e) {
+      await out.close();
+      throw CoreException('Служба SkipIt не запустила $name: $e');
+    }
+    _remote = remote;
+    _remoteExit = exited;
+  }
+
   Future<void> stop() async {
+    final r = _remote;
+    if (r != null) {
+      _stopping = true;
+      _remote = null;
+      await r.stop();
+      await _remoteExit?.future.timeout(const Duration(seconds: 3), onTimeout: () {});
+      return;
+    }
     final p = _process;
     if (p == null) return;
     _stopping = true;
