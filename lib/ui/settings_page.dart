@@ -290,10 +290,14 @@ class _SettingsPageState extends State<SettingsPage> {
               s.reduceMotion, (v) => s.reduceMotion = v),
           _Row(
             title: 'Права администратора',
-            subtitle: state.isAdmin ? 'Есть — режим TUN доступен' : 'Нет — для режима TUN нужен перезапуск',
-            // Без прав TUN не включится — подпись красная, чтобы это было видно сразу.
-            subtitleColor: state.isAdmin ? null : C.red,
-            trailing: state.isAdmin
+            subtitle: state.isAdmin
+                ? 'Есть — режим TUN доступен'
+                : state.serviceReady
+                    ? 'Не нужны — режимы TUN и «Смешанный» и Kill Switch работают через службу SkipIt'
+                    : 'Нет — для режима TUN нужен перезапуск',
+            // Без прав и без службы TUN не включится — подпись красная, чтобы это было видно сразу.
+            subtitleColor: state.isAdmin || state.serviceReady ? null : C.red,
+            trailing: state.isAdmin || state.serviceReady
                 ? Icon(Icons.verified_user_rounded, color: C.green)
                 : GhostButton(
                     label: 'Перезапустить',
@@ -307,9 +311,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
           ),
-          toggle('Запускать от имени администратора',
-              'Нужно для режимов TUN и «Смешанный». При запуске Windows спросит разрешение', s.runAsAdmin,
-              (v) => s.runAsAdmin = v),
+          // Со службой права не нужны, и запуск их не просит — переключатель ни на что не влияет.
+          if (!state.serviceReady)
+            toggle('Запускать от имени администратора',
+                'Нужно для режимов TUN и «Смешанный». При запуске Windows спросит разрешение', s.runAsAdmin,
+                (v) => s.runAsAdmin = v),
           toggle('Запускать вместе с Windows', 'Запускать приложение при входе в Windows', state.autostart,
               (v) => state.setAutostart(v)),
           toggle('Сворачивать в трей при закрытии', 'Крестик прячет окно в трей, VPN продолжает работать. Выход — через меню значка в трее',

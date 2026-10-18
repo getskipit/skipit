@@ -38,6 +38,20 @@ bool RunAsAdminSetting(const wchar_t* app_name) {
   return text.compare(pos, 5, "false") != 0;
 }
 
+// Служба SkipIt установлена и работает: режимы с адаптером и Kill Switch идут через неё, и права
+// администратора самой программе не нужны (см. windows\service\service.cpp).
+bool ServiceRunning(const wchar_t* name) {
+  SC_HANDLE scm = ::OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+  if (scm == nullptr) return false;
+  SC_HANDLE service = ::OpenServiceW(scm, name, SERVICE_QUERY_STATUS);
+  SERVICE_STATUS status{};
+  const bool running =
+      service != nullptr && ::QueryServiceStatus(service, &status) && status.dwCurrentState == SERVICE_RUNNING;
+  if (service != nullptr) ::CloseServiceHandle(service);
+  ::CloseServiceHandle(scm);
+  return running;
+}
+
 // Права администратора просим сразу, ещё до запуска Flutter: раньше это делал Dart после загрузки
 // (через PowerShell), и программа загружалась дважды — около секунды лишнего ожидания при каждом
 // запуске. true — этой копии нужно выйти: запущена копия с правами или в окне Windows ответили «Нет»
@@ -52,6 +66,11 @@ bool RelaunchElevatedEarly(std::vector<std::string>& args, int show_command) {
   // Программа уже открыта — аргументы ей передаст сама новая копия (main.dart), права не нужны.
   if (::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", app_name)) return false;
   if (!RunAsAdminSetting(app_name)) return false;
+  // Есть служба — права не нужны; --no-elevate, чтобы и Dart не просил их (AppState.needsElevation).
+  if (ServiceRunning(IsDevBuild() ? L"SkipItDev" : L"SkipIt")) {
+    args.push_back("--no-elevate");
+    return false;
+  }
 
   wchar_t exe[MAX_PATH];
   const DWORD n = ::GetModuleFileNameW(nullptr, exe, MAX_PATH);

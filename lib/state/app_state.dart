@@ -595,8 +595,12 @@ class AppState extends ChangeNotifier {
   final isAdmin = WinSys.isAdmin();
 
   /// Ответ службы SkipIt при запуске («skipit-service 1») или null — службы нет или она не отвечает.
-  /// Пока только для журнала и отчёта: подключение служба ещё не ведёт.
+  /// Проверяется при запуске и перед каждым подключением без прав администратора.
   String? serviceVersion;
+
+  /// Служба SkipIt на месте и понимает эту версию программы: режимы с адаптером и Kill Switch работают
+  /// без прав администратора, и запрашивать их при запуске не нужно.
+  bool get serviceReady => serviceVersion == ServiceClient.protocol;
 
   Timer? _statsTimer;
 
@@ -671,6 +675,7 @@ class AppState extends ChangeNotifier {
     unawaited(step('служба', () async {
       serviceVersion = await ServiceClient.hello();
       log.add('app', serviceVersion == null ? 'Служба SkipIt не отвечает' : 'Служба SkipIt на месте: $serviceVersion');
+      notifyListeners();
     }));
     // Тихая проверка обновлений через несколько секунд после запуска и потом раз в шесть часов:
     // программу держат открытой сутками, и без повтора о новой версии узнавали бы только после перезапуска.
