@@ -79,15 +79,13 @@ Future<void> main(List<String> rawArgs) async {
 
   final state = AppState();
   await state.load();
-  // «Запускать от имени администратора»: перезапускаемся с правами ещё до показа окна.
-  // Если в окне Windows ответили «Нет», работаем дальше без прав (TUN будет недоступен).
+  // «Запускать от имени администратора»: обычно права просит оболочка на C++ ещё до запуска Flutter
+  // (windows\runner\main.cpp), здесь — запасной путь. Ответили «Нет» — программа не открывается.
   if (state.needsElevation(args)) {
     await server?.close();
-    if (await WinSys.relaunchAsAdmin(args)) {
-      await Tray.quit();
-      exit(0);
-    }
-    server = await _acquireSingleInstance([...args, '--no-elevate']);
+    await WinSys.relaunchAsAdmin(args);
+    await Tray.quit();
+    exit(0);
   }
   server?.listen((socket) async {
     try {

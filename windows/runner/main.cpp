@@ -40,8 +40,9 @@ bool RunAsAdminSetting(const wchar_t* app_name) {
 
 // Права администратора просим сразу, ещё до запуска Flutter: раньше это делал Dart после загрузки
 // (через PowerShell), и программа загружалась дважды — около секунды лишнего ожидания при каждом
-// запуске. true — копия с правами запущена, этой нужно выйти. Если права не дали, к аргументам
-// добавляется --no-elevate, и Dart второй раз не спрашивает (см. AppState.needsElevation).
+// запуске. true — этой копии нужно выйти: запущена копия с правами или в окне Windows ответили «Нет»
+// (тогда программа не открывается вовсе). Если запросить права не удалось по другой причине, к
+// аргументам добавляется --no-elevate: программа работает без прав, и Dart второй раз не спрашивает.
 bool RelaunchElevatedEarly(std::vector<std::string>& args, int show_command) {
   for (const auto& a : args) {
     if (a == "--elevated" || a == "--no-elevate" || a == "--quit") return false;
@@ -75,7 +76,7 @@ bool RelaunchElevatedEarly(std::vector<std::string>& args, int show_command) {
   info.lpFile = exe;
   info.lpParameters = params.c_str();
   info.nShow = show_command;
-  if (::ShellExecuteExW(&info)) return true;
+  if (::ShellExecuteExW(&info) || ::GetLastError() == ERROR_CANCELLED) return true;
   args.push_back("--no-elevate");
   return false;
 }
