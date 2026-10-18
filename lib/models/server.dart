@@ -59,10 +59,9 @@ class ServerProfile {
     final stream = outbound['streamSettings'];
     if (stream is! Map) return '';
     final parts = <String>[];
+    // «raw» — новое имя TCP в Xray; без network ядро тоже идёт по TCP. Пишем привычное «tcp».
     final network = stream['network'];
-    if (network is String && network.isNotEmpty && network != 'raw' && network != 'tcp') {
-      parts.add(network);
-    }
+    parts.add(network is String && network.isNotEmpty && network != 'raw' ? network : 'tcp');
     final security = stream['security'];
     if (security is String && security.isNotEmpty && security != 'none') {
       parts.add(security);
