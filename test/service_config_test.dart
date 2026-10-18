@@ -36,6 +36,8 @@ void main() {
     'vless://$uuid@example.com:443?type=ws&security=tls&sni=example.com&path=%2Fws&ech=cloudflare-ech.com%2Bhttps%3A%2F%2F1.1.1.1%2Fdns-query#a',
     'vless://$uuid@example.com:443?type=h2&security=tls&sni=example.com&path=%2Fh2#a',
     'trojan://password@example.com:443?type=grpc&security=tls&sni=example.com&serviceName=t#a',
+    // gRPC без serviceName: имя сервиса берётся из path и начинается с «/».
+    'vless://$uuid@example.com:443?type=grpc&security=tls&sni=example.com&path=%2Fgrpc#a',
     'hysteria2://password@example.com:443?sni=example.com#a',
   ];
   final apps = AppRules(mode: AppRoutingMode.allExcept, entries: [
@@ -68,6 +70,11 @@ void main() {
       {'routing': {'rules': [{'domain': [r'ext:C:\x.dat:tag'], 'outboundTag': 'direct'}]}},
       {'experimental': {'cache_file': {'enabled': true, 'path': '/cache.db'}}},
       {'route': {'rule_set': [{'type': 'local', 'path': r'\x.srs'}]}},
+      // У DNS-сервера sing-box вида hosts path — файлы на диске, корень диска сюда нельзя (в любом порядке ключей).
+      {'dns': {'servers': [{'type': 'hosts', 'path': ['/Windows/System32/drivers/etc/hosts']}]}},
+      {'dns': {'servers': [{'path': ['/x'], 'type': 'hosts'}]}},
+      {'log': {'output': r'\??\C:\x.log'}},
+      {'outbounds': [{'streamSettings': {'wsSettings': {'path': r'\x'}}}]},
       // Экранирование JSON не помогает обойти проверку.
       '{"log":{"error":"C:\\u005cx.log"}}',
     ]) {
@@ -78,7 +85,8 @@ void main() {
   test('законные строки, похожие на пути, служба пропускает', () async {
     expect(
         await check({
-          'dns': {'servers': ['https://1.1.1.1/dns-query', 'tcp+local://8.8.8.8']},
+          'dns': {'servers': ['https://1.1.1.1/dns-query', 'tcp+local://8.8.8.8', {'type': 'https', 'path': '/dns-query'}, {'type': 'hosts', 'path': ['hosts.txt']}]},
+          'outbounds': [{'streamSettings': {'grpcSettings': {'serviceName': '/svc/name'}}}],
           'routing': {'rules': [{'ip': ['fd00::/8', 'a::1'], 'domain': ['regexp:^api\\.', 'ext:custom.dat:tag']}]},
           'route': {'rules': [{'process_path': [r'C:\Games\game.exe'], 'outbound': 'direct'}]},
           'log': {'error': 'core.log'},

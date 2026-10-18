@@ -127,7 +127,8 @@ bool Escapes(const std::string& s, bool leading_slash_ok) {
   if (DriveAt(s, 0)) return true;
   if (s.rfind("ext:", 0) == 0 && DriveAt(s, 4)) return true;
   if (s.size() >= 2 && IsPathSep(s[0]) && IsPathSep(s[1])) return true;
-  if (!leading_slash_ok && !s.empty() && IsPathSep(s[0])) return true;
+  // Ведущий «\» (корень диска, «\??\…») — всегда путь к файлу; ведущий «/» — только там, где это адрес на сервере.
+  if (!s.empty() && (s[0] == '\\' || (s[0] == '/' && !leading_slash_ok))) return true;
   for (size_t i = 0; i + 1 < s.size(); i++) {
     if (s[i] == '.' && s[i + 1] == '.' &&
         (i == 0 || IsPathSep(s[i - 1])) && (i + 2 == s.size() || IsPathSep(s[i + 2]))) {
@@ -176,7 +177,8 @@ bool ReadJsonString(const std::string& text, size_t& pos, std::string& out) {
 //    пути к exe, с которыми сравнивается программа соединения; по ним ничего не пишется и не читается;
 //  - path у транспорта и DNS-сервера (в объекте под ключом wsSettings, httpupgradeSettings,
 //    xhttpSettings, splithttpSettings, httpSettings, request — HTTP-заголовок TCP, transport или в
-//    списке servers) — адрес на сервере, «/ws», «/dns-query»;
+//    списке servers) и serviceName у gRPC (grpcSettings) — адрес на сервере, «/ws», «/dns-query»: им можно
+//    начинаться с «/» (но не с «\»); исключение — DNS-сервер sing-box вида hosts, у него path — файлы на диске;
 //  - остальное не должно быть путём за пределы рабочей папки.
 std::string ConfigProblem(const std::string& text) {
   struct Level {
@@ -184,6 +186,8 @@ std::string ConfigProblem(const std::string& text) {
     std::string key;     // Текущий ключ (у объекта) или ключ, под которым стоит список.
     std::string parent;  // Ключ, под которым стоит сам этот объект или список.
     bool expect_key;
+    bool hosts = false;   // Объект — DNS-сервер sing-box вида hosts ("type": "hosts").
+    bool rooted = false;  // В объекте есть путь, начинающийся с «/».
   };
   std::vector<Level> stack;
   size_t pos = 0;
@@ -197,6 +201,9 @@ std::string ConfigProblem(const std::string& text) {
       if (stack.size() > 64) return "конфиг слишком глубокий";
     } else if (c == '}' || c == ']') {
       if (stack.empty()) return "конфиг не разобран";
+      // У DNS-сервера sing-box вида hosts path — это файлы hosts на диске, а не адрес на сервере:
+      // «/…» здесь означал бы корень диска.
+      if (stack.back().hosts && stack.back().rooted) return "в конфиге путь к файлу hosts за пределами папки ядра";
       stack.pop_back();
     } else if (c == ',') {
       if (!stack.empty() && stack.back().object) stack.back().expect_key = true;
@@ -210,11 +217,23 @@ std::string ConfigProblem(const std::string& text) {
       const std::string key = stack.empty() ? "" : stack.back().key;
       const std::string parent = stack.empty() ? "" : stack.back().parent;
       if (key == "process" || key == "process_path" || key == "process_path_regex") continue;
-      const bool route_path = key == "path" && (parent == "wsSettings" || parent == "httpupgradeSettings" ||
-                                                parent == "xhttpSettings" || parent == "splithttpSettings" ||
-                                                parent == "httpSettings" || parent == "request" ||
-                                                parent == "transport" || parent == "servers");
+      if (key == "type" && s == "hosts" && stack.back().object) stack.back().hosts = true;
+      const bool route_path = (key == "path" && (parent == "wsSettings" || parent == "httpupgradeSettings" ||
+                                                 parent == "xhttpSettings" || parent == "splithttpSettings" ||
+                                                 parent == "httpSettings" || parent == "request" ||
+                                                 parent == "transport" || parent == "servers")) ||
+                              // Xray принимает и имя сервиса gRPC в виде своего пути: «/svc/name».
+                              (key == "serviceName" && parent == "grpcSettings");
       if (Escapes(s, route_path)) return "в конфиге путь к файлу за пределами папки ядра: " + key + " = " + s;
+      if (route_path && !s.empty() && s[0] == '/') {
+        // Отметка у ближайшего объекта (строка может стоять в списке внутри него).
+        for (auto it = stack.rbegin(); it != stack.rend(); ++it) {
+          if (it->object) {
+            it->rooted = true;
+            break;
+          }
+        }
+      }
     }
   }
   return stack.empty() ? "" : "конфиг не разобран";
