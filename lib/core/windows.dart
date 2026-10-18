@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'paths.dart';
+import 'service_client.dart';
 
 const _internetSettingsKey =
     r'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings';
@@ -459,9 +460,15 @@ class WinSys {
       "\$own = @(${tunNames.map((n) => "'${n.replaceAll("'", "''")}'").join(',')}) | ForEach-Object { "
       r"('SWD\WINTUN\{' + ([Guid]::new($md5.ComputeHash([Text.Encoding]::UTF8.GetBytes('wintun' + $_)))).ToString() + '}').ToUpper() }; ";
 
-  static Future<void> _runTunCleanup(String script) async {
-    // Удалять устройства может только администратор; без прав TUN всё равно не используется.
-    if (!isAdmin()) return;
+  static Future<void> _runTunCleanup(String script, String serviceCommand) async {
+    // Удалять устройства может только администратор. Без прав то же самое делает служба SkipIt своим
+    // зашитым скриптом (программа присылает только команду); службы нет — TUN всё равно недоступен.
+    if (!isAdmin()) {
+      try {
+        await ServiceClient.command(serviceCommand).timeout(const Duration(seconds: 25));
+      } catch (_) {}
+      return;
+    }
     try {
       await Process.run(AppPaths.powershell, ['-NoProfile', '-NonInteractive', '-Command', _ownTunIds + script])
           .timeout(const Duration(seconds: 20));
@@ -471,7 +478,7 @@ class WinSys {
   /// Убирает собственные зависшие адаптеры SkipIt, оставшиеся после сбоя. Чужие не трогает.
   /// Вызывать, только когда наш sing-box не запущен: работающий адаптер тоже был бы удалён.
   static Future<void> removeOwnTunAdapters() =>
-      _runTunCleanup(r"foreach ($id in $own) { pnputil /remove-device $id 2>$null | Out-Null }");
+      _runTunCleanup(r"foreach ($id in $own) { pnputil /remove-device $id 2>$null | Out-Null }", 'cleanup own');
 
   /// Убирает адаптеры, оставшиеся от закрытых VPN-клиентов: туннельные устройства, которые сейчас
   /// не работают. Действующие адаптеры (например, включённый WireGuard) и свои собственные не трогает.
@@ -479,7 +486,7 @@ class WinSys {
   static Future<void> removeStaleForeignTunAdapters() => _runTunCleanup(
       r"Get-PnpDevice -Class Net -ErrorAction SilentlyContinue | "
       r"Where-Object { $_.InstanceId -like 'SWD\WINTUN\*' -and $_.Status -ne 'OK' -and $own -notcontains $_.InstanceId.ToUpper() } | "
-      r"ForEach-Object { pnputil /remove-device $_.InstanceId 2>$null | Out-Null }");
+      r"ForEach-Object { pnputil /remove-device $_.InstanceId 2>$null | Out-Null }", 'cleanup stale');
 
   /// Виртуальный адаптер, который сейчас забирает весь трафик (наш, второй копии программы или чужого
   /// VPN): имя такого адаптера или null. На соединение через него отвечает он сам, а не сервер.

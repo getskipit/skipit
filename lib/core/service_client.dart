@@ -17,9 +17,9 @@ class ServiceClient {
   static String get name => AppPaths.isDev ? 'SkipItDev' : 'SkipIt';
 
   /// Версия протокола, с которой умеет работать программа.
-  static const protocol = 'skipit-service 2';
+  static const protocol = 'skipit-service 3';
 
-  /// Версия протокола службы («skipit-service 2») или null, если служба не установлена, не запущена
+  /// Версия протокола службы («skipit-service 3») или null, если служба не установлена, не запущена
   /// или не отвечает.
   static Future<String?> hello({String? serviceName}) {
     final target = serviceName ?? name;
@@ -27,9 +27,52 @@ class ServiceClient {
   }
 
   /// Остановить ядро, которое запустила служба.
-  static Future<void> stop(int pid) {
+  static Future<void> stop(int pid) => command('stop $pid');
+
+  /// Одна команда службе — её ответ или null.
+  static Future<String?> command(String request) {
     final target = name;
-    return Isolate.run(() => _request(target, 'stop $pid'));
+    return Isolate.run(() => _request(target, request));
+  }
+
+  /// Команда, после которой служба держит подключение (Kill Switch): первый ответ приходит сразу,
+  /// а подключение остаётся открытым в фоновом потоке, пока служба его не отпустит или программа не
+  /// закроется. null — службы нет или она не ответила.
+  static Future<String?> hold(String request) async {
+    final port = ReceivePort();
+    final first = Completer<String?>();
+    port.listen((m) {
+      if (!first.isCompleted) {
+        first.complete(m as String?);
+        if (m != 'ok') port.close();
+      } else {
+        port.close();
+      }
+    });
+    await Isolate.spawn(_hold, [port.sendPort, name, request]);
+    return first.future;
+  }
+
+  static void _hold(List args) {
+    final out = args[0] as SendPort;
+    final pipe = _Pipe.connect(args[1] as String);
+    if (pipe == null) {
+      out.send(null);
+      return;
+    }
+    try {
+      if (!pipe.write(utf8.encode(args[2] as String))) {
+        out.send(null);
+        return;
+      }
+      final reply = pipe.read();
+      out.send(reply == null ? null : utf8.decode(reply, allowMalformed: true));
+      // Ждём, пока служба не отпустит подключение («released») или оно не оборвётся.
+      if (reply != null) pipe.read();
+      out.send('end');
+    } finally {
+      pipe.close();
+    }
   }
 
   /// Одна команда — один ответ. null — ответа нет (службы нет, она чужая или отказала).

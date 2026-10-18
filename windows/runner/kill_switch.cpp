@@ -209,7 +209,7 @@ std::wstring AddLayer(const Context& c, bool v6, bool inbound, const std::vector
 }  // namespace
 
 std::wstring KillSwitchEngage(const std::vector<std::wstring>& apps, const std::wstring& tun_v4,
-                              const std::wstring& tun_v6) {
+                              const std::wstring& tun_v6, const std::wstring& self_path) {
   KillSwitchRelease();
 
   wchar_t name[] = L"SkipIt kill switch";
@@ -251,8 +251,10 @@ std::wstring KillSwitchEngage(const std::vector<std::wstring>& apps, const std::
     // Сама программа (для проверки задержки). Не удалось узнать — обходимся без этого разрешения.
     FWP_BYTE_BLOB* self = nullptr;
     wchar_t own_path[MAX_PATH];
-    const DWORD own_length = GetModuleFileNameW(nullptr, own_path, MAX_PATH);
-    if (own_length > 0 && own_length < MAX_PATH && FwpmGetAppIdFromFileName0(own_path, &self) != ERROR_SUCCESS) {
+    const DWORD own_length = self_path.empty() ? GetModuleFileNameW(nullptr, own_path, MAX_PATH) : 0;
+    const wchar_t* program = self_path.empty() ? own_path : self_path.c_str();
+    if ((!self_path.empty() || (own_length > 0 && own_length < MAX_PATH)) &&
+        FwpmGetAppIdFromFileName0(program, &self) != ERROR_SUCCESS) {
       self = nullptr;
     }
     for (const bool inbound : {false, true}) {

@@ -28,9 +28,19 @@
 //       затем по тому же подключению: «o<кусок вывода ядра>» … «x<код выхода>».
 //       Программа закрыла это подключение — ядро останавливается.
 //   «stop <pid>»                     → «ok»: остановить ядро, запущенное этой службой.
+//   «ks engage\n<адрес v4>\n<адрес v6>» → «ok» или «error <текст>»: Kill Switch (windows\runner\kill_switch.cpp).
+//       Выпускаются ядра из папки службы и исходящий TCP самой программы. Фильтры держатся, пока открыто
+//       это подключение (как и раньше: закрылась программа — Windows убирает фильтры); после «ks release»
+//       по нему приходит «released».
+//   «ks release»                     → «ok <ответ Windows> <фильтров осталось>».
+//   «ks status»                      → «<1|0 — фильтры стоят> <фильтров в Windows>».
+//   «cleanup own» / «cleanup stale»  → «ok»: убрать свои зависшие адаптеры или неработающие чужие
+//       (Wintun). Скрипт зашит в службу, программа присылает только команду.
 
 #include <windows.h>
 #include <sddl.h>
+
+#include "kill_switch.h"
 
 #include <cstdlib>
 #include <iterator>
@@ -43,7 +53,7 @@
 namespace {
 
 // Версия протокола между программой и службой: растёт, когда меняются команды.
-constexpr char kProtocol[] = "skipit-service 2";
+constexpr char kProtocol[] = "skipit-service 3";
 constexpr size_t kMaxMessage = 16 * 1024 * 1024;
 
 std::wstring g_name;
@@ -439,6 +449,128 @@ void StopCore(HANDLE pipe, const std::string& request) {
   PipeWrite(pipe, "ok");
 }
 
+// ---------- Kill Switch ----------
+
+std::mutex g_ks_mutex;
+HANDLE g_ks_holder = nullptr;  // Событие подключения, которое держит фильтры: сработало — фильтры сняты.
+
+// Адрес адаптера: только цифры, буквы a–f, точки и двоеточия.
+bool AddressOk(const std::string& s) {
+  if (s.empty() || s.size() > 45) return false;
+  for (char c : s) {
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') || c == '.' || c == ':')) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void KsHold(HANDLE pipe, const std::string& request) {
+  // «ks engage\n<v4>\n<v6>»
+  const size_t a = request.find('\n');
+  const size_t b = a == std::string::npos ? a : request.find('\n', a + 1);
+  if (b == std::string::npos) {
+    PipeWrite(pipe, "error неверная команда");
+    return;
+  }
+  const std::string v4 = request.substr(a + 1, b - a - 1), v6 = request.substr(b + 1);
+  if (!AddressOk(v4) || !AddressOk(v6)) {
+    PipeWrite(pipe, "error неверный адрес адаптера");
+    return;
+  }
+  HANDLE released = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (released == nullptr) return;
+  std::wstring error;
+  {
+    std::lock_guard<std::mutex> lock(g_ks_mutex);
+    error = KillSwitchEngage({g_dir + L"\\core\\skipit-xray.exe", g_dir + L"\\core\\skipit-sing-box.exe"},
+                             Wide(v4), Wide(v6), g_client);
+    if (error.empty()) {
+      // Прежний держатель (если был) больше ничего не держит: KillSwitchEngage сняла его фильтры.
+      if (g_ks_holder != nullptr) ::SetEvent(g_ks_holder);
+      g_ks_holder = released;
+    }
+  }
+  if (!error.empty()) {
+    ::CloseHandle(released);
+    std::string text;  // Текст ошибки — латиница и цифры («open: 0x…»).
+    for (wchar_t c : error) text += c < 0x80 ? static_cast<char>(c) : '?';
+    PipeWrite(pipe, "error " + text);
+    return;
+  }
+  PipeWrite(pipe, "ok");
+  std::string message;
+  int r;
+  while ((r = PipeRead(pipe, message, released)) == 1) {
+  }
+  {
+    std::lock_guard<std::mutex> lock(g_ks_mutex);
+    if (g_ks_holder == released) {
+      // Программа отключилась, не сняв фильтры (закрылась или упала) — снимаем, как сделала бы Windows.
+      KillSwitchRelease();
+      g_ks_holder = nullptr;
+    }
+  }
+  if (r == 2) PipeWrite(pipe, "released");
+  ::CloseHandle(released);
+}
+
+void KsRelease(HANDLE pipe) {
+  unsigned long code;
+  int left;
+  {
+    std::lock_guard<std::mutex> lock(g_ks_mutex);
+    code = KillSwitchRelease();
+    left = KillSwitchCountFilters();
+    if (g_ks_holder != nullptr) {
+      ::SetEvent(g_ks_holder);
+      g_ks_holder = nullptr;
+    }
+  }
+  PipeWrite(pipe, "ok " + std::to_string(code) + " " + std::to_string(left));
+}
+
+void KsStatus(HANDLE pipe) {
+  std::lock_guard<std::mutex> lock(g_ks_mutex);
+  PipeWrite(pipe, std::string(KillSwitchEngaged() ? "1 " : "0 ") + std::to_string(KillSwitchCountFilters()));
+}
+
+// ---------- уборка адаптеров ----------
+
+// Те же скрипты, что делала программа с правами администратора (WinSys.removeOwnTunAdapters и
+// removeStaleForeignTunAdapters). Свои адаптеры: GUID устройства sing-box выводит из имени адаптера
+// (MD5 от «wintun» + имя), имена — как у программы (у тестовой сборки «SkipIt Dev»), с прежними «… 2»–«… 4».
+void Cleanup(HANDLE pipe, bool own) {
+  const std::wstring app = g_name == L"SkipItDev" ? L"SkipIt Dev" : L"SkipIt";
+  std::wstring names = L"'" + app + L"'";
+  for (int i = 2; i <= 4; i++) names += L",'" + app + L" " + std::to_wstring(i) + L"'";
+  std::wstring script =
+      L"$md5 = [Security.Cryptography.MD5]::Create(); $own = @(" + names +
+      L") | ForEach-Object { ('SWD\\WINTUN\\{' + ([Guid]::new($md5.ComputeHash([Text.Encoding]::UTF8.GetBytes("
+      L"'wintun' + $_)))).ToString() + '}').ToUpper() }; ";
+  script += own ? L"foreach ($id in $own) { pnputil /remove-device $id 2>$null | Out-Null }"
+                : L"Get-PnpDevice -Class Net -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -like "
+                  L"'SWD\\WINTUN\\*' -and $_.Status -ne 'OK' -and $own -notcontains $_.InstanceId.ToUpper() } | "
+                  L"ForEach-Object { pnputil /remove-device $_.InstanceId 2>$null | Out-Null }";
+  wchar_t windows[MAX_PATH];
+  const UINT n = ::GetSystemDirectoryW(windows, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) {
+    PipeWrite(pipe, "error нет папки Windows");
+    return;
+  }
+  const std::wstring exe = std::wstring(windows, n) + L"\\WindowsPowerShell\\v1.0\\powershell.exe";
+  std::wstring command = L"\"" + exe + L"\" -NoProfile -NonInteractive -Command \"" + script + L"\"";
+  STARTUPINFOW si{sizeof(si)};
+  PROCESS_INFORMATION pi{};
+  if (::CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
+                       WorkDir().c_str(), &si, &pi)) {
+    if (::WaitForSingleObject(pi.hProcess, 20000) == WAIT_TIMEOUT) ::TerminateProcess(pi.hProcess, 1);
+    ::CloseHandle(pi.hThread);
+    ::CloseHandle(pi.hProcess);
+  }
+  PipeWrite(pipe, "ok");
+}
+
 void Serve(HANDLE pipe) {
   const std::wstring client = ClientPath(pipe);
   if (client.empty() || _wcsicmp(client.c_str(), g_client.c_str()) != 0) return;
@@ -451,6 +583,15 @@ void Serve(HANDLE pipe) {
       return;  // Подключение запуска ядра живёт, пока живёт ядро.
     } else if (request.rfind("stop ", 0) == 0) {
       StopCore(pipe, request);
+    } else if (request.rfind("ks engage\n", 0) == 0) {
+      KsHold(pipe, request);
+      return;  // Подключение держит фильтры, пока не закроется или не придёт «ks release».
+    } else if (request == "ks release") {
+      KsRelease(pipe);
+    } else if (request == "ks status") {
+      KsStatus(pipe);
+    } else if (request == "cleanup own" || request == "cleanup stale") {
+      Cleanup(pipe, request == "cleanup own");
     } else if (!PipeWrite(pipe, "error неизвестная команда")) {
       return;
     }

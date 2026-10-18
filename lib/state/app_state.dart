@@ -1844,12 +1844,11 @@ class AppState extends ChangeNotifier {
         throw CoreException('Запущен $zapret — с ним VPN не подключается: он вмешивается в соединения, '
             'в том числе с VPN-сервером. Закройте $zapret и подключитесь снова.');
       }
-      // Без прав администратора ядро с адаптером запускает служба SkipIt. Kill Switch ей ещё не передан —
-      // с ним по-прежнему нужны права.
+      // Без прав администратора ядра с адаптером, Kill Switch и уборку адаптеров берёт на себя служба SkipIt.
       final viaService = usesTun && !isAdmin;
       if (viaService) {
         serviceVersion = await ServiceClient.hello();
-        if (serviceVersion != ServiceClient.protocol || settings.killSwitch) throw NeedAdminException();
+        if (serviceVersion != ServiceClient.protocol) throw NeedAdminException();
       }
 
       // Два VPN с TUN одновременно дерутся за маршруты — сеть ломается до перезагрузки.
