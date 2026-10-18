@@ -327,6 +327,9 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver {
         supportedLocales: const [Locale('ru')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         theme: buildTheme(),
+        // Свои цвета окна (C) меняются сразу — тема Flutter тоже, иначе её цвет текста 200 мс догонял бы
+        // фон и названия строк на середине перехода сливались с ним.
+        themeAnimationDuration: Duration.zero,
         home: const Shell(),
       ),
     );

@@ -32,6 +32,11 @@ void main() {
     state.settings.theme = AppTheme.light;
     state.openPage(state.pageIndex);
     await tester.pump();
+    // Цвет текста из темы Flutter меняется сразу вместе с фоном, а не догоняет его: иначе на середине
+    // перехода названия строк — белые на уже светлом фоне.
+    await tester.pump(const Duration(milliseconds: 50));
+    Color textColor() => Theme.of(tester.element(find.byType(Scaffold).first)).textTheme.bodyMedium!.color!;
+    expect(textColor(), Palette.light.text);
     await tester.pump(const Duration(milliseconds: 400));
     expect(background(), Palette.light.bg);
     expect(state.pageIndex, AppState.settingsPage);
@@ -40,6 +45,8 @@ void main() {
     state.settings.theme = AppTheme.dark;
     state.openPage(state.pageIndex);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(textColor(), Palette.dark.text);
     await tester.pump(const Duration(milliseconds: 400));
     expect(background(), Palette.dark.bg);
     C.use(Palette.dark);
