@@ -14,6 +14,7 @@ import '../core/net.dart';
 import '../core/paths.dart';
 import '../core/ping.dart';
 import '../core/report.dart';
+import '../core/service_client.dart';
 import '../core/site_check.dart';
 import '../core/speed_test.dart';
 import '../core/singbox_config.dart';
@@ -593,6 +594,10 @@ class AppState extends ChangeNotifier {
   bool autostart = false;
   final isAdmin = WinSys.isAdmin();
 
+  /// Ответ службы SkipIt при запуске («skipit-service 1») или null — службы нет или она не отвечает.
+  /// Пока только для журнала и отчёта: подключение служба ещё не ведёт.
+  String? serviceVersion;
+
   Timer? _statsTimer;
 
   /// Запрос счётчиков трафика у ядер текущего подключения.
@@ -663,6 +668,10 @@ class AppState extends ChangeNotifier {
     await step('ссылки skipit://', WinSys.registerUrlScheme);
     await step('автозапуск', () async => autostart = await WinSys.isAutostartEnabled());
     unawaited(step('версии ядер', detectCoreVersions));
+    unawaited(step('служба', () async {
+      serviceVersion = await ServiceClient.hello();
+      log.add('app', serviceVersion == null ? 'Служба SkipIt не отвечает' : 'Служба SkipIt на месте: $serviceVersion');
+    }));
     // Тихая проверка обновлений через несколько секунд после запуска и потом раз в шесть часов:
     // программу держат открытой сутками, и без повтора о новой версии узнавали бы только после перезапуска.
     Timer(const Duration(seconds: 8), () => step('обновления', () => checkUpdates(silent: true)));
@@ -893,6 +902,7 @@ class AppState extends ChangeNotifier {
         'Ядро TUN': tun ? settings.tunCore.name : null,
         'Стек sing-box': tun && settings.tunCore == TunCore.singbox ? settings.singboxStack : null,
         'Kill Switch': tun ? (settings.killSwitch ? 'включён' : 'выключен') : null,
+        'Служба': serviceVersion ?? 'не отвечает',
         ...(connected ? _reportConn : null) ?? _connFacts(selectedServer, selectedRouting),
         'Страна выхода': exitCountry,
         'Мой DNS': settings.ownDns ? 'включён' : 'выключен',

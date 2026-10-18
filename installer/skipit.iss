@@ -7,6 +7,9 @@
 #endif
 #define AppName "SkipIt"
 #define AppExe "SkipIt.exe"
+; Служба SkipIt (windows\service): работает с правами системы, принимает команды только от {app}\SkipIt.exe.
+#define ServiceExe "skipit-service.exe"
+#define ServiceName "SkipIt"
 #define Release "..\build\windows\x64\runner\Release"
 
 [Setup]
@@ -73,7 +76,11 @@ Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]
+Filename: "{app}\{#ServiceExe}"; Parameters: "--install --name {#ServiceName} --client ""{app}\{#AppExe}"""; Flags: runhidden waituntilterminated
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "{app}\{#ServiceExe}"; Parameters: "--uninstall --name {#ServiceName}"; Flags: runhidden waituntilterminated; RunOnceId: "SkipItService"
 
 [Registry]
 ; Эти ключи создаёт сама программа (автозапуск, ссылки skipit://, положение окна) — убираем при удалении.
@@ -106,9 +113,20 @@ begin
   end;
 end;
 
+// Обновление: служба держит свой exe открытым — останавливаем её до замены файлов. После копирования
+// её снова ставит и запускает строка в [Run].
+procedure StopService();
+var
+  Code: Integer;
+begin
+  if FileExists(ExpandConstant('{app}\{#ServiceExe}')) then
+    Exec(ExpandConstant('{app}\{#ServiceExe}'), '--stop --name {#ServiceName}', '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   QuitRunningApp();
+  StopService();
   Result := '';
 end;
 
