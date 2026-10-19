@@ -527,6 +527,8 @@ class GradientButton extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
+              // Палец, пока кнопка доступна (по умолчанию на Windows — стрелка).
+              mouseCursor: WidgetStateMouseCursor.clickable,
               onTap: onPressed,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

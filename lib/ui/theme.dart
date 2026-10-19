@@ -184,16 +184,21 @@ ThemeData buildTheme() {
       labelStyle: TextStyle(color: C.muted),
       hintStyle: TextStyle(color: C.muted),
     ),
-    textButtonTheme:
-        TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: dark ? C.orangeLight : C.orange)),
+    // Кнопки Flutter на Windows по умолчанию показывают стрелку (палец — только в браузере); у нас, как и у
+    // своих переключателей и списков (Hover), над любой кнопкой — палец.
+    textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+            foregroundColor: dark ? C.orangeLight : C.orange, enabledMouseCursor: SystemMouseCursors.click)),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: C.text,
         side: BorderSide(color: C.border),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        enabledMouseCursor: SystemMouseCursors.click,
       ),
     ),
+    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(enabledMouseCursor: SystemMouseCursors.click)),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(8), border: Border.all(color: C.border)),
       textStyle: TextStyle(color: C.text, fontSize: 12),
