@@ -32,6 +32,14 @@ constexpr size_t kMaxRoutes = 2048;
 // Через сколько миллисекунд заново узнавать, какая программа у номера процесса (номера переиспользуются).
 constexpr ULONGLONG kPidTtl = 10000;
 
+// Маршрут, поставленный службой.
+struct Route {
+  MIB_IPFORWARD_ROW2 row;
+  ULONG net;   // Порядок байт сети.
+  ULONG mask;  // Порядок байт сети.
+  LONGLONG at;  // Когда поставлен: системное время (FILETIME), в нём же время событий.
+};
+
 std::mutex g_mutex;  // Маршруты, просмотренные адреса и файл состояния.
 TRACEHANDLE g_session = 0;
 TRACEHANDLE g_trace = INVALID_PROCESSTRACE_HANDLE;
@@ -39,19 +47,18 @@ std::thread g_thread;
 std::wstring g_session_name;
 std::wstring g_state_file;
 ULONG g_tun = 0;
-std::vector<std::wstring> g_rules;
-std::function<bool(unsigned long)> g_before;
-std::function<void(unsigned long, const std::wstring&)> g_after;
+std::vector<std::wstring> g_rules;       // Для сравнения: прямые слэши, нижний регистр.
+std::vector<std::wstring> g_rule_texts;  // Как прислала программа.
+std::function<bool(const BypassNet&)> g_before;
+std::function<void(unsigned long, const std::wstring&, const std::wstring&)> g_after;
 std::function<void(unsigned long, const std::wstring&)> g_stuck;
-std::vector<MIB_IPFORWARD_ROW2> g_routes;
+std::vector<Route> g_routes;
 std::set<ULONG> g_seen;  // Адреса, по которым уже решено (с маршрутом или без).
-// Адрес с маршрутом → когда поставлен: системное время (FILETIME), в нём же время событий.
-std::unordered_map<ULONG, LONGLONG> g_routed_at;
 
 // Дальше — только поток событий.
 struct Known {
   ULONGLONG at;
-  bool direct;
+  int rule;  // Номер правила, под которое подошла программа; -1 — не из списка.
   std::wstring name;
 };
 std::unordered_map<DWORD, Known> g_pids;
@@ -63,6 +70,8 @@ std::unordered_map<ULONGLONG, int> g_stuck_count;
 constexpr LONGLONG kStuckMargin = 3000000;  // В сотнях наносекунд.
 // Столько пакетов мимо маршрута — уже не случайность, а привязанный к адаптеру сокет.
 constexpr int kStuckPackets = 20;
+
+ULONG Mask(unsigned char prefix) { return prefix == 0 ? 0 : htonl(0xFFFFFFFFUL << (32 - prefix)); }
 
 std::wstring Lower(const std::wstring& s) {
   if (s.empty()) return s;
@@ -80,33 +89,35 @@ std::wstring Normalize(std::wstring s) {
   return Lower(s);
 }
 
-// Совпадение с правилом так же, как у ядер: папка — начало пути, путь — целиком, иначе имя процесса.
-bool Matches(const std::wstring& path) {
+// Номер правила, под которое подошёл путь, или -1. Так же, как у ядер: папка — начало пути, путь — целиком,
+// иначе имя процесса.
+int Match(const std::wstring& path) {
   const size_t slash = path.rfind(L'/');
   const std::wstring base = slash == std::wstring::npos ? path : path.substr(slash + 1);
-  for (const std::wstring& rule : g_rules) {
+  for (size_t i = 0; i < g_rules.size(); i++) {
+    const std::wstring& rule = g_rules[i];
     if (rule.back() == L'/') {
-      if (path.compare(0, rule.size(), rule) == 0) return true;
+      if (path.compare(0, rule.size(), rule) == 0) return static_cast<int>(i);
     } else if (rule.find(L'/') != std::wstring::npos) {
-      if (path == rule) return true;
+      if (path == rule) return static_cast<int>(i);
     } else if (base == rule || base == rule + L".exe") {
-      return true;
+      return static_cast<int>(i);
     }
   }
-  return false;
+  return -1;
 }
 
-// Программа процесса [pid] — из списка «Напрямую»; [name] — имя её exe.
-bool IsDirect(DWORD pid, std::wstring& name) {
-  if (pid <= 4) return false;
+// Правило из списка «Напрямую», под которое подходит программа процесса [pid], или -1; [name] — имя её exe.
+int DirectRule(DWORD pid, std::wstring& name) {
+  if (pid <= 4) return -1;
   const ULONGLONG now = ::GetTickCount64();
   const auto it = g_pids.find(pid);
   if (it != g_pids.end() && now - it->second.at < kPidTtl) {
     name = it->second.name;
-    return it->second.direct;
+    return it->second.rule;
   }
   if (g_pids.size() > 4096) g_pids.clear();
-  Known known{now, false, L""};
+  Known known{now, -1, L""};
   HANDLE process = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
   if (process != nullptr) {
     wchar_t path[MAX_PATH * 2];
@@ -115,13 +126,13 @@ bool IsDirect(DWORD pid, std::wstring& name) {
       const std::wstring full(path, size);
       const size_t slash = full.find_last_of(L"\\/");
       known.name = slash == std::wstring::npos ? full : full.substr(slash + 1);
-      known.direct = Matches(Normalize(full));
+      known.rule = Match(Normalize(full));
     }
     ::CloseHandle(process);
   }
   g_pids[pid] = known;
   name = known.name;
-  return known.direct;
+  return known.rule;
 }
 
 // Адрес не в интернете: локальная сеть, сам компьютер, служебные и групповые адреса.
@@ -131,6 +142,14 @@ bool Local(ULONG net) {
   return top == 0 || top == 10 || top == 127 || (h & 0xFFC00000) == 0x64400000 ||
          (h & 0xFFFF0000) == 0xA9FE0000 || (h & 0xFFF00000) == 0xAC100000 || (h & 0xFFFF0000) == 0xC0A80000 ||
          h >= 0xE0000000;
+}
+
+// Маршрут, под который попадает адрес; nullptr — такого нет. Вызывается под g_mutex.
+const Route* Covering(ULONG address) {
+  for (const Route& r : g_routes) {
+    if ((address & r.mask) == r.net) return &r;
+  }
+  return nullptr;
 }
 
 // Маршрут по умолчанию через настоящую сетевую карту: самый дешёвый, кроме маршрута адаптера VPN.
@@ -170,6 +189,12 @@ bool PhysicalDefault(MIB_IPFORWARD_ROW2& out) {
   return best != ULONG_MAX;
 }
 
+std::string NetText(ULONG net, unsigned char prefix) {
+  const auto* b = reinterpret_cast<const unsigned char*>(&net);
+  return std::to_string(b[0]) + "." + std::to_string(b[1]) + "." + std::to_string(b[2]) + "." +
+         std::to_string(b[3]) + "/" + std::to_string(prefix);
+}
+
 void SaveState() {
   if (g_state_file.empty()) return;
   if (g_routes.empty()) {
@@ -177,12 +202,7 @@ void SaveState() {
     return;
   }
   std::string text;
-  for (const MIB_IPFORWARD_ROW2& row : g_routes) {
-    char address[INET_ADDRSTRLEN] = {};
-    ::InetNtopA(AF_INET, &row.DestinationPrefix.Prefix.Ipv4.sin_addr, address, sizeof(address));
-    text += address;
-    text += '\n';
-  }
+  for (const Route& r : g_routes) text += NetText(r.net, r.row.DestinationPrefix.PrefixLength) + "\n";
   HANDLE file = ::CreateFileW(g_state_file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
   if (file == INVALID_HANDLE_VALUE) return;
   DWORD written = 0;
@@ -190,45 +210,51 @@ void SaveState() {
   ::CloseHandle(file);
 }
 
-// Маршрут к [address] (порядок байт сети) мимо адаптера. Вызывается под g_mutex.
-bool AddRoute(ULONG address) {
+// Маршрут к подсети мимо адаптера. Вызывается под g_mutex.
+bool AddRoute(const BypassNet& net) {
   MIB_IPFORWARD_ROW2 base;
   if (!PhysicalDefault(base)) return false;
+  const ULONG mask = Mask(net.second);
   MIB_IPFORWARD_ROW2 row;
   ::InitializeIpForwardEntry(&row);
   row.InterfaceLuid = base.InterfaceLuid;
   row.InterfaceIndex = base.InterfaceIndex;
   row.DestinationPrefix.Prefix.Ipv4.sin_family = AF_INET;
-  row.DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr = address;
-  row.DestinationPrefix.PrefixLength = 32;
+  row.DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr = net.first & mask;
+  row.DestinationPrefix.PrefixLength = net.second;
   row.NextHop = base.NextHop;
   row.Metric = 0;
   row.Protocol = MIB_IPPROTO_NETMGMT;
   // Такой маршрут уже есть (поставил кто-то другой) — он не наш, и убирать его не нам.
   if (::CreateIpForwardEntry2(&row) != NO_ERROR) return false;
-  g_routes.push_back(row);
   FILETIME now;
   ::GetSystemTimePreciseAsFileTime(&now);
-  g_routed_at[address] = (static_cast<LONGLONG>(now.dwHighDateTime) << 32) | now.dwLowDateTime;
+  g_routes.push_back(
+      {row, net.first & mask, mask, (static_cast<LONGLONG>(now.dwHighDateTime) << 32) | now.dwLowDateTime});
   SaveState();
   return true;
 }
 
-void Handle(ULONG address, const std::wstring& name) {
+// Сначала Kill Switch пропускает подсеть, потом к ней ставится маршрут.
+bool Allow(const BypassNet& net) { return !g_before || g_before(net); }
+
+void Handle(ULONG address, const std::wstring& name, int rule) {
   if (Local(address)) return;
   {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_seen.count(address) || g_seen.size() >= kMaxRoutes) return;
     g_seen.insert(address);
+    // Адрес из уже открытой подсети (запомненной раньше) — маршрут к нему есть.
+    if (Covering(address) != nullptr) return;
   }
-  // Kill Switch не пропустил адрес — маршрут не ставим: мимо адаптера пакеты упёрлись бы в его фильтры.
-  if (g_before && !g_before(address)) return;
+  const BypassNet net{address, static_cast<unsigned char>(32)};
+  if (!Allow(net)) return;
   bool added;
   {
     std::lock_guard<std::mutex> lock(g_mutex);
-    added = AddRoute(address);
+    added = g_routes.size() < kMaxRoutes && AddRoute(net);
   }
-  if (added && g_after) g_after(address, name);
+  if (added && g_after) g_after(address, name, g_rule_texts[static_cast<size_t>(rule)]);
 }
 
 bool Prop(PEVENT_RECORD e, const wchar_t* name, void* out, ULONG size) {
@@ -254,7 +280,8 @@ void WINAPI OnEvent(PEVENT_RECORD e) {
   }
   if (g_pid_by_name && !Prop(e, L"PID", &pid, sizeof(pid))) return;
   std::wstring name;
-  if (!IsDirect(pid, name)) return;
+  const int rule = DirectRule(pid, name);
+  if (rule < 0) return;
   // Адрес назначения — третье поле (после PID и size), если описание события недоступно.
   ULONG address = 0;
   if (!Prop(e, L"daddr", &address, sizeof(address))) std::memcpy(&address, static_cast<BYTE*>(e->UserData) + 8, 4);
@@ -269,8 +296,8 @@ void WINAPI OnEvent(PEVENT_RECORD e) {
     LONGLONG routed = 0;
     {
       std::lock_guard<std::mutex> lock(g_mutex);
-      const auto it = g_routed_at.find(address);
-      if (it != g_routed_at.end()) routed = it->second;
+      const Route* r = Covering(address);
+      if (r != nullptr) routed = r->at;
     }
     if (routed != 0 && e->EventHeader.TimeStamp.QuadPart > routed + kStuckMargin) {
       int& count = g_stuck_count[(static_cast<ULONGLONG>(pid) << 32) | address];
@@ -280,7 +307,7 @@ void WINAPI OnEvent(PEVENT_RECORD e) {
       }
     }
   }
-  Handle(address, name);
+  Handle(address, name, rule);
 }
 
 std::vector<BYTE> Properties(const std::wstring& name) {
@@ -304,25 +331,16 @@ void StopSession(const std::wstring& name) {
   ::ControlTraceW(0, name.c_str(), reinterpret_cast<EVENT_TRACE_PROPERTIES*>(props.data()), EVENT_TRACE_CONTROL_STOP);
 }
 
-void DeleteHostRoutes(const std::set<ULONG>& addresses) {
-  PMIB_IPFORWARD_TABLE2 table = nullptr;
-  if (::GetIpForwardTable2(AF_INET, &table) != NO_ERROR) return;
-  for (ULONG i = 0; i < table->NumEntries; i++) {
-    MIB_IPFORWARD_ROW2& row = table->Table[i];
-    if (row.DestinationPrefix.PrefixLength == 32 && row.Protocol == MIB_IPPROTO_NETMGMT &&
-        addresses.count(row.DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr)) {
-      ::DeleteIpForwardEntry2(&row);
-    }
-  }
-  ::FreeMibTable(table);
-}
-
 }  // namespace
 
+bool BypassNetOk(const BypassNet& net) {
+  return net.second >= 16 && net.second <= 32 && !Local(net.first & Mask(net.second));
+}
+
 std::wstring BypassStart(const std::wstring& session_name, const std::wstring& tun_v4,
-                         const std::vector<std::wstring>& rules, const std::wstring& state_file,
-                         std::function<bool(unsigned long)> before_route,
-                         std::function<void(unsigned long, const std::wstring&)> on_route,
+                         const std::vector<std::wstring>& rules, const std::vector<BypassNet>& preload,
+                         const std::wstring& state_file, std::function<bool(const BypassNet&)> before_route,
+                         std::function<void(unsigned long, const std::wstring&, const std::wstring&)> on_route,
                          std::function<void(unsigned long, const std::wstring&)> on_stuck) {
   BypassStop();
   IN_ADDR tun{};
@@ -333,8 +351,11 @@ std::wstring BypassStart(const std::wstring& session_name, const std::wstring& t
   g_state_file = state_file;
   g_tun = tun.s_addr;
   g_rules.clear();
+  g_rule_texts.clear();
   for (const std::wstring& rule : rules) {
-    if (!rule.empty()) g_rules.push_back(Normalize(rule));
+    if (rule.empty()) continue;
+    g_rules.push_back(Normalize(rule));
+    g_rule_texts.push_back(rule);
   }
   g_before = std::move(before_route);
   g_after = std::move(on_route);
@@ -343,12 +364,23 @@ std::wstring BypassStart(const std::wstring& session_name, const std::wstring& t
   g_pids.clear();
   g_layout_checked = g_pid_by_name = false;
 
+  // Запомненные подсети — до первого пакета программы.
+  for (const BypassNet& net : preload) {
+    if (!BypassNetOk(net) || !Allow(net)) continue;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_routes.size() >= kMaxRoutes) break;
+    if (Covering(net.first) == nullptr) AddRoute(net);
+  }
+
   // Сеанс с тем же именем мог остаться после сбоя службы.
   StopSession(session_name);
   std::vector<BYTE> props = Properties(session_name);
   TRACEHANDLE session = 0;
   ULONG rc = ::StartTraceW(&session, session_name.c_str(), reinterpret_cast<EVENT_TRACE_PROPERTIES*>(props.data()));
-  if (rc != ERROR_SUCCESS) return L"не удалось начать слежение (код " + std::to_wstring(rc) + L")";
+  if (rc != ERROR_SUCCESS) {
+    BypassStop();
+    return L"не удалось начать слежение (код " + std::to_wstring(rc) + L")";
+  }
 
   // Только отправка UDP по IPv4; старая Windows фильтр по номеру события не знает — тогда отбираем сами.
   std::vector<BYTE> ids_buf(offsetof(EVENT_FILTER_EVENT_ID, Events) + sizeof(USHORT));
@@ -370,6 +402,7 @@ std::wstring BypassStart(const std::wstring& session_name, const std::wstring& t
   }
   if (rc != ERROR_SUCCESS) {
     ::ControlTraceW(session, nullptr, reinterpret_cast<EVENT_TRACE_PROPERTIES*>(props.data()), EVENT_TRACE_CONTROL_STOP);
+    BypassStop();
     return L"не удалось включить события сети (код " + std::to_wstring(rc) + L")";
   }
 
@@ -379,8 +412,10 @@ std::wstring BypassStart(const std::wstring& session_name, const std::wstring& t
   log.EventRecordCallback = OnEvent;
   const TRACEHANDLE trace = ::OpenTraceW(&log);
   if (trace == INVALID_PROCESSTRACE_HANDLE) {
+    const DWORD error = ::GetLastError();
     ::ControlTraceW(session, nullptr, reinterpret_cast<EVENT_TRACE_PROPERTIES*>(props.data()), EVENT_TRACE_CONTROL_STOP);
-    return L"не удалось читать события сети (код " + std::to_wstring(::GetLastError()) + L")";
+    BypassStop();
+    return L"не удалось читать события сети (код " + std::to_wstring(error) + L")";
   }
   g_session = session;
   g_trace = trace;
@@ -404,20 +439,19 @@ void BypassStop() {
   }
   if (g_thread.joinable()) g_thread.join();
   std::lock_guard<std::mutex> lock(g_mutex);
-  for (MIB_IPFORWARD_ROW2& row : g_routes) ::DeleteIpForwardEntry2(&row);
+  for (Route& r : g_routes) ::DeleteIpForwardEntry2(&r.row);
   g_routes.clear();
   g_seen.clear();
-  g_routed_at.clear();
   SaveState();
   g_before = nullptr;
   g_after = nullptr;
   g_stuck = nullptr;
 }
 
-std::vector<unsigned long> BypassAddresses() {
+std::vector<BypassNet> BypassNets() {
   std::lock_guard<std::mutex> lock(g_mutex);
-  std::vector<unsigned long> out;
-  for (const MIB_IPFORWARD_ROW2& row : g_routes) out.push_back(row.DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr);
+  std::vector<BypassNet> out;
+  for (const Route& r : g_routes) out.emplace_back(r.net, r.row.DestinationPrefix.PrefixLength);
   return out;
 }
 
@@ -429,16 +463,35 @@ void BypassCleanupStale(const std::wstring& state_file) {
   DWORD n = 0;
   while (::ReadFile(file, buf, sizeof(buf), &n, nullptr) && n > 0 && text.size() < 1024 * 1024) text.append(buf, n);
   ::CloseHandle(file);
-  std::set<ULONG> addresses;
+  // Строки «a.b.c.d/префикс» (у прежних записей — просто адрес, это /32).
+  std::set<std::pair<ULONG, UINT8>> nets;
   size_t start = 0;
   while (start < text.size()) {
     size_t end = text.find('\n', start);
     if (end == std::string::npos) end = text.size();
-    const std::string line = text.substr(start, end - start);
-    IN_ADDR address{};
-    if (::InetPtonA(AF_INET, line.c_str(), &address) == 1) addresses.insert(address.s_addr);
+    std::string line = text.substr(start, end - start);
     start = end + 1;
+    unsigned prefix = 32;
+    const size_t slash = line.find('/');
+    if (slash != std::string::npos) {
+      prefix = static_cast<unsigned>(std::strtoul(line.c_str() + slash + 1, nullptr, 10));
+      line.resize(slash);
+    }
+    IN_ADDR address{};
+    if (prefix <= 32 && ::InetPtonA(AF_INET, line.c_str(), &address) == 1) {
+      nets.insert({address.s_addr, static_cast<UINT8>(prefix)});
+    }
   }
-  DeleteHostRoutes(addresses);
+  PMIB_IPFORWARD_TABLE2 table = nullptr;
+  if (::GetIpForwardTable2(AF_INET, &table) == NO_ERROR) {
+    for (ULONG i = 0; i < table->NumEntries; i++) {
+      MIB_IPFORWARD_ROW2& row = table->Table[i];
+      if (row.Protocol == MIB_IPPROTO_NETMGMT &&
+          nets.count({row.DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr, row.DestinationPrefix.PrefixLength})) {
+        ::DeleteIpForwardEntry2(&row);
+      }
+    }
+    ::FreeMibTable(table);
+  }
   ::DeleteFileW(state_file.c_str());
 }

@@ -38,9 +38,10 @@
 //   «ks status»                      → «<1|0 — фильтры стоят> <фильтров в Windows>».
 //   «cleanup own» / «cleanup stale»  → «ok»: убрать свои зависшие адаптеры или неработающие чужие
 //       (Wintun). Скрипт зашит в службу, программа присылает только команду.
-//   «bypass\n<адрес адаптера v4>\n<правило>\n<правило>…» → «ok» или «error <текст>»: программы с пометкой
-//       «Напрямую» — мимо ядра (bypass.h). Затем по тому же подключению: «r<адрес> <имя exe>» на каждый
-//       поставленный маршрут и «s<адрес> <имя exe>», если сокет программы привязан к адаптеру и это
+//   «bypass\n<адрес адаптера v4>\n<правило>[\t<подсеть> <подсеть>…]\n…» → «ok» или «error <текст>»: программы
+//       с пометкой «Напрямую» — мимо ядра (bypass.h); подсети («a.b.c.d/24») — запомненные по прошлым
+//       подключениям, маршруты к ним ставятся сразу. Затем по тому же подключению: «r<адрес> <имя exe>\n<правило>»
+//       на каждый новый маршрут и «s<адрес> <имя exe>», если сокет программы привязан к адаптеру и это
 //       соединение идёт через ядро. Маршруты держатся, пока открыто подключение; после «bypass stop» по нему
 //       приходит «released».
 //   «bypass stop»                    → «ok»: убрать маршруты.
@@ -778,7 +779,7 @@ void KsHold(HANDLE pipe, const std::string& request) {
       if (g_ks_holder != nullptr) ::SetEvent(g_ks_holder);
       g_ks_holder = released;
       // Адреса, которые уже идут мимо адаптера (программы «Напрямую»), остаются открытыми.
-      for (const unsigned long address : BypassAddresses()) KillSwitchAllowAddress(address);
+      for (const BypassNet& net : BypassNets()) KillSwitchAllowNet(net.first, net.second);
     }
   }
   if (!error.empty()) {
@@ -867,9 +868,33 @@ void BypassHold(HANDLE pipe, const std::string& request) {
     PipeWrite(pipe, "error неверная команда");
     return;
   }
+  // Правило, после табуляции — его запомненные подсети через пробел (в путях Windows табуляции не бывает).
   std::vector<std::wstring> rules;
+  std::vector<BypassNet> preload;
   for (size_t i = 2; i < lines.size() && rules.size() < 1000; i++) {
-    if (!lines[i].empty() && lines[i].size() <= 1024) rules.push_back(Wide(lines[i]));
+    const size_t tab = lines[i].find('\t');
+    const std::string rule = lines[i].substr(0, tab);
+    if (rule.empty() || rule.size() > 1024) continue;
+    rules.push_back(Wide(rule));
+    if (tab == std::string::npos) continue;
+    const std::string nets = lines[i].substr(tab + 1);
+    for (size_t start = 0; start < nets.size() && preload.size() < 1024;) {
+      size_t end = nets.find(' ', start);
+      if (end == std::string::npos) end = nets.size();
+      const std::string net = nets.substr(start, end - start);
+      start = end + 1;
+      unsigned b[4], prefix;
+      char tail;
+      if (sscanf_s(net.c_str(), "%u.%u.%u.%u/%u%c", &b[0], &b[1], &b[2], &b[3], &prefix, &tail, 1) != 5 ||
+          b[0] > 255 || b[1] > 255 || b[2] > 255 || b[3] > 255) {
+        continue;
+      }
+      unsigned long address = 0;
+      auto* bytes = reinterpret_cast<unsigned char*>(&address);
+      for (int k = 0; k < 4; k++) bytes[k] = static_cast<unsigned char>(b[k]);
+      const BypassNet parsed{address, static_cast<unsigned char>(prefix > 32 ? 0 : prefix)};
+      if (BypassNetOk(parsed)) preload.push_back(parsed);
+    }
   }
   if (rules.empty()) {
     PipeWrite(pipe, "error нет программ");
@@ -886,14 +911,14 @@ void BypassHold(HANDLE pipe, const std::string& request) {
       KillSwitchDropAllowed();
     }
     error = BypassStart(
-        L"SkipIt bypass " + g_name, Wide(lines[1]), rules, BypassStateFile(),
-        [](unsigned long address) {
-          // Сначала Kill Switch пропускает адрес, потом пакеты идут к нему мимо адаптера.
+        L"SkipIt bypass " + g_name, Wide(lines[1]), rules, preload, BypassStateFile(),
+        [](const BypassNet& net) {
+          // Сначала Kill Switch пропускает подсеть, потом пакеты идут к ней мимо адаптера.
           std::lock_guard<std::mutex> ks(g_ks_mutex);
-          return KillSwitchAllowAddress(address).empty();
+          return KillSwitchAllowNet(net.first, net.second).empty();
         },
-        [pipe](unsigned long address, const std::wstring& name) {
-          PipeWrite(pipe, "r" + Dotted(address) + " " + Utf8(name));
+        [pipe](unsigned long address, const std::wstring& name, const std::wstring& rule) {
+          PipeWrite(pipe, "r" + Dotted(address) + " " + Utf8(name) + "\n" + Utf8(rule));
         },
         [pipe](unsigned long address, const std::wstring& name) {
           PipeWrite(pipe, "s" + Dotted(address) + " " + Utf8(name));
@@ -903,6 +928,11 @@ void BypassHold(HANDLE pipe, const std::string& request) {
     g_bypass_holder = error.empty() ? released : nullptr;
   }
   if (!error.empty()) {
+    {
+      // Разрешения, которые успели получить запомненные подсети.
+      std::lock_guard<std::mutex> ks(g_ks_mutex);
+      KillSwitchDropAllowed();
+    }
     ::CloseHandle(released);
     PipeWrite(pipe, "error " + Utf8(error));
     return;

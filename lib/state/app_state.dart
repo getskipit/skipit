@@ -2217,12 +2217,17 @@ class AppState extends ChangeNotifier {
     final detailed = settings.logLevel == 'info' || settings.logLevel == 'debug';
     _bypassCount = 0;
     try {
+      final nets = appRules.directNets;
       _bypass = await ServiceBypass.start(
           tunV4: XrayConfig.tunV4,
           rules: rules,
-          onRoute: (address, exe) {
+          nets: nets,
+          onRoute: (address, exe, rule) {
             _bypassCount++;
             if (detailed) log.add('app', 'Мимо ядра напрямую: $exe → $address');
+            // Подсеть запоминается за записью программы: в следующий раз маршрут к ней встанет до первого пакета.
+            final entry = appRules.entries.where((e) => e.match == rule).firstOrNull;
+            if (entry != null && entry.rememberNet(address)) save();
           },
           onStuck: (address, exe) {
             // Адрес — только на подробных уровнях, как и у маршрутов.
@@ -2231,7 +2236,8 @@ class AppState extends ChangeNotifier {
                 'Предупреждение: $exe шлёт через сокет, привязанный к адаптеру VPN${detailed ? ' ($address)' : ''}, — '
                     'это соединение доиграет через ядро, мимо ядра пойдёт следующее');
           });
-      log.add('app', 'Программы «Напрямую» идут мимо ядра');
+      final remembered = nets.values.fold<int>(0, (n, l) => n + l.length);
+      log.add('app', 'Программы «Напрямую» идут мимо ядра${remembered > 0 ? ' (запомненных подсетей: $remembered)' : ''}');
     } on ServiceException catch (e) {
       log.add('app', 'Предупреждение: программы «Напрямую» идут через ядро — $e');
     }

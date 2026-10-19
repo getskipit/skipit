@@ -202,13 +202,15 @@ class ServiceBypass {
   final ReceivePort _port;
 
   /// [tunV4] — адрес адаптера VPN, [rules] — правила программ в том виде, как их получает ядро.
-  /// [onRoute] — адрес и имя exe программы на каждый новый маршрут. [onStuck] — программа шлёт к адресу
+  /// [nets] — запомненные подсети правил: маршруты к ним служба ставит сразу.
+  /// [onRoute] — адрес, имя exe программы и её правило на каждый новый маршрут. [onStuck] — программа шлёт к адресу
   /// через «подключённый» к адаптеру сокет: это соединение до закрытия идёт через ядро.
   /// Отказ службы — [ServiceException].
   static Future<ServiceBypass> start({
     required String tunV4,
     required List<String> rules,
-    required void Function(String address, String exe) onRoute,
+    Map<String, List<String>> nets = const {},
+    required void Function(String address, String exe, String rule) onRoute,
     required void Function(String address, String exe) onStuck,
   }) async {
     final port = ReceivePort();
@@ -222,7 +224,7 @@ class ServiceBypass {
           if (!started.isCompleted) started.completeError(ServiceException(msg[1] as String));
           port.close();
         case 'r':
-          onRoute(msg[1] as String, msg[2] as String);
+          onRoute(msg[1] as String, msg[2] as String, msg[3] as String);
         case 's':
           onStuck(msg[1] as String, msg[2] as String);
         case 'gone':
@@ -230,13 +232,17 @@ class ServiceBypass {
           port.close();
       }
     });
-    await Isolate.spawn(_stream, [port.sendPort, ServiceClient.name, request(tunV4, rules)]);
+    await Isolate.spawn(_stream, [port.sendPort, ServiceClient.name, request(tunV4, rules, nets)]);
     await started.future;
     return ServiceBypass._(port);
   }
 
-  /// Команда службе: адрес адаптера и правила — по строке.
-  static String request(String tunV4, List<String> rules) => ['bypass', tunV4, ...rules].join('\n');
+  /// Команда службе: адрес адаптера и правила — по строке; у правила после табуляции — его подсети через пробел.
+  static String request(String tunV4, List<String> rules, [Map<String, List<String>> nets = const {}]) => [
+        'bypass',
+        tunV4,
+        for (final r in rules) (nets[r]?.isNotEmpty ?? false) ? '$r\t${nets[r]!.join(' ')}' : r,
+      ].join('\n');
 
   /// Убрать маршруты: пакеты программ снова идут через адаптер.
   Future<void> stop() async {
@@ -272,11 +278,18 @@ class ServiceBypass {
         final m = pipe.read();
         if (m == null || m.isEmpty) break;
         final text = utf8.decode(m, allowMalformed: true);
-        // «r<адрес> <имя exe>» — новый маршрут, «s<адрес> <имя exe>» — сокет привязан к адаптеру;
+        // «r<адрес> <имя exe>\n<правило>» — новый маршрут, «s<адрес> <имя exe>» — сокет привязан к адаптеру;
         // «released» — маршруты убраны.
         if (text == 'released' || !(text.startsWith('r') || text.startsWith('s'))) break;
-        final space = text.indexOf(' ');
-        out.send([text[0], space < 0 ? text.substring(1) : text.substring(1, space), space < 0 ? '' : text.substring(space + 1)]);
+        final newline = text.indexOf('\n');
+        final head = newline < 0 ? text : text.substring(0, newline);
+        final space = head.indexOf(' ');
+        out.send([
+          text[0],
+          space < 0 ? head.substring(1) : head.substring(1, space),
+          space < 0 ? '' : head.substring(space + 1),
+          newline < 0 ? '' : text.substring(newline + 1),
+        ]);
       }
       out.send(['gone']);
     } finally {

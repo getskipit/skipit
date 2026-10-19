@@ -14,7 +14,7 @@ namespace {
 
 HANDLE g_engine = nullptr;
 GUID g_sublayer{};
-std::vector<UINT64> g_allowed;  // Фильтры KillSwitchAllowAddress.
+std::vector<UINT64> g_allowed;  // Фильтры KillSwitchAllowNet.
 
 // Чем больше вес, тем раньше фильтр проверяется; срабатывает первый подошедший.
 constexpr UINT8 kWeightCores = 15;
@@ -283,16 +283,19 @@ std::wstring KillSwitchEngage(const std::vector<std::wstring>& apps, const std::
   return std::wstring();
 }
 
-std::wstring KillSwitchAllowAddress(unsigned long address) {
+std::wstring KillSwitchAllowNet(unsigned long address, unsigned char prefix) {
   if (!g_engine) return std::wstring();
   const Context c{g_engine, g_sublayer};
+  FWP_V4_ADDR_AND_MASK net{};
+  net.mask = prefix == 0 ? 0 : 0xFFFFFFFFUL << (32 - prefix);
+  net.addr = ntohl(address) & net.mask;
   // Тот же вес, что у локальной сети: ниже запрета DNS — к порту 53 мимо адаптера и тут нельзя.
   for (const GUID* layer : {&FWPM_LAYER_ALE_AUTH_CONNECT_V4, &FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4}) {
     FWPM_FILTER_CONDITION0 cond{};
     cond.fieldKey = FWPM_CONDITION_IP_REMOTE_ADDRESS;
     cond.matchType = FWP_MATCH_EQUAL;
-    cond.conditionValue.type = FWP_UINT32;
-    cond.conditionValue.uint32 = ntohl(address);
+    cond.conditionValue.type = FWP_V4_ADDR_MASK;
+    cond.conditionValue.v4AddrMask = &net;
     UINT64 id = 0;
     const DWORD rc = AddFilter(c, *layer, kWeightLan, true, &cond, 1, &id);
     if (rc != ERROR_SUCCESS) return Error(L"allow", rc);

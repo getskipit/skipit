@@ -22,12 +22,12 @@
 std::wstring KillSwitchEngage(const std::vector<std::wstring>& apps, const std::wstring& tun_v4,
                               const std::wstring& tun_v6, const std::wstring& self = std::wstring());
 
-// Разрешает соединения с адресом |address| (IPv4, порядок байт сети) мимо адаптера, пока стоят фильтры:
-// к нему служба SkipIt поставила маршрут мимо VPN для программ с пометкой «Напрямую» (service\bypass.h).
+// Разрешает соединения с подсетью |address|/|prefix| (IPv4, порядок байт сети) мимо адаптера, пока стоят
+// фильтры: к ней служба SkipIt поставила маршрут мимо VPN для программ с пометкой «Напрямую» (service\bypass.h).
 // Фильтры ещё не стоят — ничего не делает. Пустая строка или текст ошибки.
-std::wstring KillSwitchAllowAddress(unsigned long address);
+std::wstring KillSwitchAllowNet(unsigned long address, unsigned char prefix);
 
-// Убирает все разрешения KillSwitchAllowAddress (фильтры Kill Switch остаются).
+// Убирает все разрешения KillSwitchAllowNet (фильтры Kill Switch остаются).
 void KillSwitchDropAllowed();
 
 // Снимает фильтры. Безопасно вызывать, когда они не стоят.
