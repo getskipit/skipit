@@ -2074,6 +2074,8 @@ class AppState extends ChangeNotifier {
         }
       }
       _checkCancel();
+      if (usesTun) await _startBypass(viaService);
+      _checkCancel();
       if (settings.mode == ConnectionMode.systemProxy || settings.mode == ConnectionMode.mixed) {
         if (!settings.systemProxyActive) {
           // Прокси, который уже смотрит на наш же порт, «прежним» не считается: его оставили мы сами
@@ -2199,7 +2201,45 @@ class AppState extends ChangeNotifier {
         'напрямую: ${part(s.directDown, s.directUp)}';
   }
 
+  /// Программы с пометкой «Напрямую» — мимо ядра (Настройки → Подключение): служба SkipIt ставит к адресам,
+  /// куда они шлют UDP, маршруты сразу в сетевую карту. Без службы или при отказе пакеты этих программ
+  /// по-прежнему идут через ядро, и оно само отправляет их напрямую, — подключение от этого не срывается.
+  Future<void> _startBypass(bool viaService) async {
+    if (!settings.directPastCore || appRules.mode != AppRoutingMode.allExcept) return;
+    final rules = appRules.enabledMatches;
+    if (rules.isEmpty) return;
+    final version = viaService ? serviceVersion : await ServiceClient.hello();
+    if (version != ServiceClient.protocol) {
+      log.add('app', 'Предупреждение: программы «Напрямую» идут через ядро — нет службы SkipIt');
+      return;
+    }
+    // Адреса — только на подробных уровнях журнала: на них в файлах и так лежат адреса сайтов.
+    final detailed = settings.logLevel == 'info' || settings.logLevel == 'debug';
+    _bypassCount = 0;
+    try {
+      _bypass = await ServiceBypass.start(
+          tunV4: XrayConfig.tunV4,
+          rules: rules,
+          onRoute: (address, exe) {
+            _bypassCount++;
+            if (detailed) log.add('app', 'Мимо ядра напрямую: $exe → $address');
+          });
+      log.add('app', 'Программы «Напрямую» идут мимо ядра');
+    } on ServiceException catch (e) {
+      log.add('app', 'Предупреждение: программы «Напрямую» идут через ядро — $e');
+    }
+  }
+
+  ServiceBypass? _bypass;
+  int _bypassCount = 0;
+
   Future<void> _teardown() async {
+    final bypass = _bypass;
+    _bypass = null;
+    if (bypass != null) {
+      await bypass.stop();
+      if (_bypassCount > 0) log.add('app', 'Мимо ядра напрямую шли адреса: $_bypassCount');
+    }
     _statsTimer?.cancel();
     _statsTimer = null;
     _pollStats = null;

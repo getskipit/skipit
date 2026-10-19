@@ -17,9 +17,9 @@ class ServiceClient {
   static String get name => AppPaths.isDev ? 'SkipItDev' : 'SkipIt';
 
   /// Версия протокола, с которой умеет работать программа.
-  static const protocol = 'skipit-service 3';
+  static const protocol = 'skipit-service 4';
 
-  /// Версия протокола службы («skipit-service 3») или null, если служба не установлена, не запущена
+  /// Версия протокола службы («skipit-service 4») или null, если служба не установлена, не запущена
   /// или не отвечает.
   static Future<String?> hello({String? serviceName}) {
     final target = serviceName ?? name;
@@ -187,6 +187,92 @@ class ServiceCore {
           return;
         }
       }
+    } finally {
+      pipe.close();
+    }
+  }
+}
+
+/// Программы с пометкой «Напрямую» — мимо ядра (windows\service\bypass.h): служба следит, куда они шлют UDP,
+/// и ставит к этим адресам маршруты сразу в сетевую карту, мимо адаптера VPN. Маршруты держатся, пока
+/// открыто подключение к службе; закрылось оно (программа упала) — служба убирает их сама.
+class ServiceBypass {
+  ServiceBypass._(this._port);
+
+  final ReceivePort _port;
+
+  /// [tunV4] — адрес адаптера VPN, [rules] — правила программ в том виде, как их получает ядро.
+  /// [onRoute] — адрес и имя exe программы на каждый новый маршрут. Отказ службы — [ServiceException].
+  static Future<ServiceBypass> start({
+    required String tunV4,
+    required List<String> rules,
+    required void Function(String address, String exe) onRoute,
+  }) async {
+    final port = ReceivePort();
+    final started = Completer<void>();
+    port.listen((m) {
+      final msg = m as List;
+      switch (msg[0]) {
+        case 'ok':
+          started.complete();
+        case 'error':
+          if (!started.isCompleted) started.completeError(ServiceException(msg[1] as String));
+          port.close();
+        case 'r':
+          onRoute(msg[1] as String, msg[2] as String);
+        case 'gone':
+          if (!started.isCompleted) started.completeError(ServiceException('служба SkipIt не отвечает'));
+          port.close();
+      }
+    });
+    await Isolate.spawn(_stream, [port.sendPort, ServiceClient.name, request(tunV4, rules)]);
+    await started.future;
+    return ServiceBypass._(port);
+  }
+
+  /// Команда службе: адрес адаптера и правила — по строке.
+  static String request(String tunV4, List<String> rules) => ['bypass', tunV4, ...rules].join('\n');
+
+  /// Убрать маршруты: пакеты программ снова идут через адаптер.
+  Future<void> stop() async {
+    await ServiceClient.command('bypass stop');
+    _port.close();
+  }
+
+  /// Фоновый поток: держит подключение к службе и пересылает сообщения о новых маршрутах.
+  static void _stream(List args) {
+    final out = args[0] as SendPort;
+    final pipe = _Pipe.connect(args[1] as String);
+    if (pipe == null) {
+      out.send(['gone']);
+      return;
+    }
+    try {
+      if (!pipe.write(utf8.encode(args[2] as String))) {
+        out.send(['gone']);
+        return;
+      }
+      final first = pipe.read();
+      if (first == null) {
+        out.send(['gone']);
+        return;
+      }
+      final reply = utf8.decode(first, allowMalformed: true);
+      if (reply != 'ok') {
+        out.send(['error', reply.startsWith('error ') ? reply.substring(6) : reply]);
+        return;
+      }
+      out.send(['ok']);
+      while (true) {
+        final m = pipe.read();
+        if (m == null || m.isEmpty) break;
+        final text = utf8.decode(m, allowMalformed: true);
+        // «r<адрес> <имя exe>» — новый маршрут; «released» — маршруты убраны.
+        if (text == 'released' || !text.startsWith('r')) break;
+        final space = text.indexOf(' ');
+        out.send(['r', space < 0 ? text.substring(1) : text.substring(1, space), space < 0 ? '' : text.substring(space + 1)]);
+      }
+      out.send(['gone']);
     } finally {
       pipe.close();
     }

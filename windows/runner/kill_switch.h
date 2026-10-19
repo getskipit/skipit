@@ -22,6 +22,14 @@
 std::wstring KillSwitchEngage(const std::vector<std::wstring>& apps, const std::wstring& tun_v4,
                               const std::wstring& tun_v6, const std::wstring& self = std::wstring());
 
+// Разрешает соединения с адресом |address| (IPv4, порядок байт сети) мимо адаптера, пока стоят фильтры:
+// к нему служба SkipIt поставила маршрут мимо VPN для программ с пометкой «Напрямую» (service\bypass.h).
+// Фильтры ещё не стоят — ничего не делает. Пустая строка или текст ошибки.
+std::wstring KillSwitchAllowAddress(unsigned long address);
+
+// Убирает все разрешения KillSwitchAllowAddress (фильтры Kill Switch остаются).
+void KillSwitchDropAllowed();
+
 // Снимает фильтры. Безопасно вызывать, когда они не стоят.
 // Возвращает ответ Windows на закрытие сеанса (0 — успех или фильтры не стояли).
 unsigned long KillSwitchRelease();
