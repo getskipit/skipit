@@ -200,7 +200,7 @@ class _SettingsPageState extends State<SettingsPage> {
               TunCore.singbox => 'sing-box: трафик принимает sing-box и передаёт в Xray. Попробуйте, если с Xray что-то '
                   'работает хуже',
               TunCore.skipit => 'SkipIt: как Xray, но игры и другие программы «Напрямую» идут в интернет сами, минуя '
-                  'SkipIt, — пинг как без VPN. Нужна служба SkipIt',
+                  'SkipIt, — пинг как без VPN',
             },
             trailing: Segmented<TunCore>(
               value: s.tunCore,
