@@ -3,7 +3,7 @@
 ;   ISCC.exe /DAppVersion=1.1.6 installer\skipit.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.1.6"
+  #define AppVersion "1.1.7a"
 #endif
 #define AppName "SkipIt"
 #define AppExe "SkipIt.exe"
