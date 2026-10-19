@@ -889,15 +889,14 @@ void BypassHold(HANDLE pipe, const std::string& request) {
         [](unsigned long address) {
           // Сначала Kill Switch пропускает адрес, потом пакеты идут к нему мимо адаптера.
           std::lock_guard<std::mutex> ks(g_ks_mutex);
-          KillSwitchAllowAddress(address);
+          return KillSwitchAllowAddress(address).empty();
         },
         [pipe](unsigned long address, const std::wstring& name) {
           PipeWrite(pipe, "r" + Dotted(address) + " " + Utf8(name));
         });
-    if (error.empty()) {
-      if (g_bypass_holder != nullptr) ::SetEvent(g_bypass_holder);
-      g_bypass_holder = released;
-    }
+    // Прежний держатель (если был) больше ничего не держит: его маршруты BypassStart уже убрала.
+    if (g_bypass_holder != nullptr) ::SetEvent(g_bypass_holder);
+    g_bypass_holder = error.empty() ? released : nullptr;
   }
   if (!error.empty()) {
     ::CloseHandle(released);

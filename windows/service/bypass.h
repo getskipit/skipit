@@ -20,11 +20,11 @@
 // Начать. |tun_v4| — адрес адаптера VPN (его маршрут по умолчанию не берётся), |rules| — правила программ
 // в виде правил ядра: имя процесса (с .exe или без), полный путь или папка с «/» в конце, прямые слэши.
 // |before_route| вызывается перед каждым новым маршрутом с адресом (порядок байт сети) — Kill Switch
-// успевает его разрешить; |on_route| — после, с адресом и именем exe программы.
+// успевает его разрешить; false — маршрут не ставится. |on_route| — после, с адресом и именем exe программы.
 // Пустая строка — следим; иначе причина отказа.
 std::wstring BypassStart(const std::wstring& session_name, const std::wstring& tun_v4,
                          const std::vector<std::wstring>& rules, const std::wstring& state_file,
-                         std::function<void(unsigned long)> before_route,
+                         std::function<bool(unsigned long)> before_route,
                          std::function<void(unsigned long, const std::wstring&)> on_route);
 
 // Перестать следить и убрать поставленные маршруты. Безопасно вызывать, когда не начато.

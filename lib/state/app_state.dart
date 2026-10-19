@@ -2238,7 +2238,7 @@ class AppState extends ChangeNotifier {
     _bypass = null;
     if (bypass != null) {
       await bypass.stop();
-      if (_bypassCount > 0) log.add('app', 'Мимо ядра напрямую шли адреса: $_bypassCount');
+      if (_bypassCount > 0) log.add('app', 'Мимо ядра напрямую ушло адресов: $_bypassCount');
     }
     _statsTimer?.cancel();
     _statsTimer = null;

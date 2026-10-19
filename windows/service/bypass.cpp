@@ -40,7 +40,7 @@ std::wstring g_session_name;
 std::wstring g_state_file;
 ULONG g_tun = 0;
 std::vector<std::wstring> g_rules;
-std::function<void(unsigned long)> g_before;
+std::function<bool(unsigned long)> g_before;
 std::function<void(unsigned long, const std::wstring&)> g_after;
 std::vector<MIB_IPFORWARD_ROW2> g_routes;
 std::set<ULONG> g_seen;  // Адреса, по которым уже решено (с маршрутом или без).
@@ -209,7 +209,8 @@ void Handle(ULONG address, const std::wstring& name) {
     if (g_seen.count(address) || g_seen.size() >= kMaxRoutes) return;
     g_seen.insert(address);
   }
-  if (g_before) g_before(address);
+  // Kill Switch не пропустил адрес — маршрут не ставим: мимо адаптера пакеты упёрлись бы в его фильтры.
+  if (g_before && !g_before(address)) return;
   bool added;
   {
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -235,17 +236,16 @@ void WINAPI OnEvent(PEVENT_RECORD e) {
   DWORD pid = 0;
   std::memcpy(&pid, e->UserData, sizeof(pid));
   if (!g_layout_checked) {
+    g_layout_checked = true;
     DWORD named = 0;
-    if (Prop(e, L"PID", &named, sizeof(named))) {
-      g_layout_checked = true;
-      g_pid_by_name = named != pid;
-    }
+    g_pid_by_name = Prop(e, L"PID", &named, sizeof(named)) && named != pid;
   }
   if (g_pid_by_name && !Prop(e, L"PID", &pid, sizeof(pid))) return;
   std::wstring name;
   if (!IsDirect(pid, name)) return;
+  // Адрес назначения — третье поле (после PID и size), если описание события недоступно.
   ULONG address = 0;
-  if (!Prop(e, L"daddr", &address, sizeof(address))) return;
+  if (!Prop(e, L"daddr", &address, sizeof(address))) std::memcpy(&address, static_cast<BYTE*>(e->UserData) + 8, 4);
   Handle(address, name);
 }
 
@@ -287,7 +287,7 @@ void DeleteHostRoutes(const std::set<ULONG>& addresses) {
 
 std::wstring BypassStart(const std::wstring& session_name, const std::wstring& tun_v4,
                          const std::vector<std::wstring>& rules, const std::wstring& state_file,
-                         std::function<void(unsigned long)> before_route,
+                         std::function<bool(unsigned long)> before_route,
                          std::function<void(unsigned long, const std::wstring&)> on_route) {
   BypassStop();
   IN_ADDR tun{};
