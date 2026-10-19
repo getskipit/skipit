@@ -25,7 +25,7 @@
 // Запуск без этих ключей делает Windows (диспетчер служб): --name <имя> --client <путь>.
 //
 // Протокол — сообщения канала в режиме сообщений:
-//   «hello»                          → «skipit-service 4»
+//   «hello»                          → «skipit-service 2»
 //   «start\n<ядро>\n<папка гео>\n<конфиг>» (ядро — xray или sing-box) → «started <pid>» или «error <текст>»,
 //       затем по тому же подключению: «o<кусок вывода ядра>» … «x<код выхода>».
 //       Программа закрыла это подключение — ядро останавливается.
@@ -38,18 +38,10 @@
 //   «ks status»                      → «<1|0 — фильтры стоят> <фильтров в Windows>».
 //   «cleanup own» / «cleanup stale»  → «ok»: убрать свои зависшие адаптеры или неработающие чужие
 //       (Wintun). Скрипт зашит в службу, программа присылает только команду.
-//   «bypass\n<адрес адаптера v4>\n<правило>[\t<подсеть> <подсеть>…]\n…» → «ok» или «error <текст>»: программы
-//       с пометкой «Напрямую» — мимо ядра (bypass.h); подсети («a.b.c.d/24») — запомненные по прошлым
-//       подключениям, маршруты к ним ставятся сразу. Затем по тому же подключению: «r<адрес> <имя exe>\n<правило>»
-//       на каждый новый маршрут и «s<адрес> <имя exe>», если сокет программы привязан к адаптеру и это
-//       соединение идёт через ядро. Маршруты держатся, пока открыто подключение; после «bypass stop» по нему
-//       приходит «released».
-//   «bypass stop»                    → «ok»: убрать маршруты.
 
 #include <windows.h>
 #include <sddl.h>
 
-#include "bypass.h"
 #include "kill_switch.h"
 
 #include <algorithm>
@@ -66,7 +58,7 @@
 namespace {
 
 // Версия протокола между программой и службой: растёт, когда меняются команды.
-constexpr char kProtocol[] = "skipit-service 4";
+constexpr char kProtocol[] = "skipit-service 3";
 constexpr size_t kMaxMessage = 16 * 1024 * 1024;
 
 std::wstring g_name;
@@ -778,8 +770,6 @@ void KsHold(HANDLE pipe, const std::string& request) {
       // Прежний держатель (если был) больше ничего не держит: KillSwitchEngage сняла его фильтры.
       if (g_ks_holder != nullptr) ::SetEvent(g_ks_holder);
       g_ks_holder = released;
-      // Адреса, которые уже идут мимо адаптера (программы «Напрямую»), остаются открытыми.
-      for (const BypassNet& net : BypassNets()) KillSwitchAllowNet(net.first, net.second);
     }
   }
   if (!error.empty()) {
@@ -824,146 +814,6 @@ void KsRelease(HANDLE pipe) {
 void KsStatus(HANDLE pipe) {
   std::lock_guard<std::mutex> lock(g_ks_mutex);
   PipeWrite(pipe, std::string(KillSwitchEngaged() ? "1 " : "0 ") + std::to_string(KillSwitchCountFilters()));
-}
-
-// ---------- программы «Напрямую» мимо ядра ----------
-
-std::mutex g_bypass_mutex;
-HANDLE g_bypass_holder = nullptr;  // Событие подключения, которое держит маршруты: сработало — маршруты убраны.
-
-// Маршруты, поставленные службой: после сбоя они убираются при следующем запуске.
-std::wstring BypassStateFile() { return WorkDir() + L"\\bypass.txt"; }
-
-std::string Utf8(const std::wstring& s) {
-  if (s.empty()) return std::string();
-  const int n = ::WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0, nullptr, nullptr);
-  std::string out(n > 0 ? n : 0, '\0');
-  if (n > 0) ::WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), n, nullptr, nullptr);
-  return out;
-}
-
-// Адрес IPv4 в порядке байт сети — «a.b.c.d».
-std::string Dotted(unsigned long address) {
-  const auto* b = reinterpret_cast<const unsigned char*>(&address);
-  return std::to_string(b[0]) + "." + std::to_string(b[1]) + "." + std::to_string(b[2]) + "." + std::to_string(b[3]);
-}
-
-// Убрать маршруты и их разрешения в Kill Switch. Вызывается под g_bypass_mutex.
-void BypassDrop() {
-  BypassStop();
-  std::lock_guard<std::mutex> lock(g_ks_mutex);
-  KillSwitchDropAllowed();
-}
-
-void BypassHold(HANDLE pipe, const std::string& request) {
-  // «bypass\n<v4>\n<правило>\n<правило>…»
-  std::vector<std::string> lines;
-  for (size_t start = 0; start <= request.size();) {
-    size_t end = request.find('\n', start);
-    if (end == std::string::npos) end = request.size();
-    lines.push_back(request.substr(start, end - start));
-    start = end + 1;
-  }
-  if (lines.size() < 3 || !AddressOk(lines[1])) {
-    PipeWrite(pipe, "error неверная команда");
-    return;
-  }
-  // Правило, после табуляции — его запомненные подсети через пробел (в путях Windows табуляции не бывает).
-  std::vector<std::wstring> rules;
-  std::vector<BypassNet> preload;
-  for (size_t i = 2; i < lines.size() && rules.size() < 1000; i++) {
-    const size_t tab = lines[i].find('\t');
-    const std::string rule = lines[i].substr(0, tab);
-    if (rule.empty() || rule.size() > 1024) continue;
-    rules.push_back(Wide(rule));
-    if (tab == std::string::npos) continue;
-    const std::string nets = lines[i].substr(tab + 1);
-    for (size_t start = 0; start < nets.size() && preload.size() < 1024;) {
-      size_t end = nets.find(' ', start);
-      if (end == std::string::npos) end = nets.size();
-      const std::string net = nets.substr(start, end - start);
-      start = end + 1;
-      unsigned b[4], prefix;
-      char tail;
-      if (sscanf_s(net.c_str(), "%u.%u.%u.%u/%u%c", &b[0], &b[1], &b[2], &b[3], &prefix, &tail, 1) != 5 ||
-          b[0] > 255 || b[1] > 255 || b[2] > 255 || b[3] > 255) {
-        continue;
-      }
-      unsigned long address = 0;
-      auto* bytes = reinterpret_cast<unsigned char*>(&address);
-      for (int k = 0; k < 4; k++) bytes[k] = static_cast<unsigned char>(b[k]);
-      const BypassNet parsed{address, static_cast<unsigned char>(prefix > 32 ? 0 : prefix)};
-      if (BypassNetOk(parsed)) preload.push_back(parsed);
-    }
-  }
-  if (rules.empty()) {
-    PipeWrite(pipe, "error нет программ");
-    return;
-  }
-  HANDLE released = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
-  if (released == nullptr) return;
-  std::wstring error;
-  {
-    std::lock_guard<std::mutex> lock(g_bypass_mutex);
-    // Прежние маршруты (если были) BypassStart убирает сама; их разрешения в Kill Switch — здесь.
-    {
-      std::lock_guard<std::mutex> ks(g_ks_mutex);
-      KillSwitchDropAllowed();
-    }
-    error = BypassStart(
-        L"SkipIt bypass " + g_name, Wide(lines[1]), rules, preload, BypassStateFile(),
-        [](const BypassNet& net) {
-          // Сначала Kill Switch пропускает подсеть, потом пакеты идут к ней мимо адаптера.
-          std::lock_guard<std::mutex> ks(g_ks_mutex);
-          return KillSwitchAllowNet(net.first, net.second).empty();
-        },
-        [pipe](unsigned long address, const std::wstring& name, const std::wstring& rule) {
-          PipeWrite(pipe, "r" + Dotted(address) + " " + Utf8(name) + "\n" + Utf8(rule));
-        },
-        [pipe](unsigned long address, const std::wstring& name) {
-          PipeWrite(pipe, "s" + Dotted(address) + " " + Utf8(name));
-        });
-    // Прежний держатель (если был) больше ничего не держит: его маршруты BypassStart уже убрала.
-    if (g_bypass_holder != nullptr) ::SetEvent(g_bypass_holder);
-    g_bypass_holder = error.empty() ? released : nullptr;
-  }
-  if (!error.empty()) {
-    {
-      // Разрешения, которые успели получить запомненные подсети.
-      std::lock_guard<std::mutex> ks(g_ks_mutex);
-      KillSwitchDropAllowed();
-    }
-    ::CloseHandle(released);
-    PipeWrite(pipe, "error " + Utf8(error));
-    return;
-  }
-  PipeWrite(pipe, "ok");
-  std::string message;
-  int r;
-  while ((r = PipeRead(pipe, message, released)) == 1) {
-  }
-  {
-    std::lock_guard<std::mutex> lock(g_bypass_mutex);
-    if (g_bypass_holder == released) {
-      // Программа отключилась, не убрав маршруты (закрылась или упала) — убираем сами.
-      BypassDrop();
-      g_bypass_holder = nullptr;
-    }
-  }
-  if (r == 2) PipeWrite(pipe, "released");
-  ::CloseHandle(released);
-}
-
-void BypassRelease(HANDLE pipe) {
-  {
-    std::lock_guard<std::mutex> lock(g_bypass_mutex);
-    if (g_bypass_holder != nullptr) {
-      BypassDrop();
-      ::SetEvent(g_bypass_holder);
-      g_bypass_holder = nullptr;
-    }
-  }
-  PipeWrite(pipe, "ok");
 }
 
 // ---------- уборка адаптеров ----------
@@ -1021,11 +871,6 @@ void Serve(HANDLE pipe) {
       KsRelease(pipe);
     } else if (request == "ks status") {
       KsStatus(pipe);
-    } else if (request.rfind("bypass\n", 0) == 0) {
-      BypassHold(pipe, request);
-      return;  // Подключение держит маршруты, пока не закроется или не придёт «bypass stop».
-    } else if (request == "bypass stop") {
-      BypassRelease(pipe);
     } else if (request == "cleanup own" || request == "cleanup stale") {
       Cleanup(pipe, request == "cleanup own");
     } else if (!PipeWrite(pipe, "error неизвестная команда")) {
@@ -1131,14 +976,8 @@ void WINAPI ServiceMain(DWORD, LPWSTR*) {
   JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
   limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
   ::SetInformationJobObject(g_job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
-  // Маршруты мимо адаптера, оставшиеся после сбоя службы.
-  BypassCleanupStale(BypassStateFile());
   SetState(SERVICE_RUNNING);
   Listen();
-  {
-    std::lock_guard<std::mutex> lock(g_bypass_mutex);
-    BypassStop();
-  }
   SetState(SERVICE_STOPPED);
 }
 

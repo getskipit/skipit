@@ -199,12 +199,10 @@ class _SettingsPageState extends State<SettingsPage> {
               TunCore.xray => 'Xray: весь трафик идёт через Xray — и через VPN, и «напрямую». Обычный режим',
               TunCore.singbox => 'sing-box: трафик принимает sing-box и передаёт в Xray. Попробуйте, если с Xray что-то '
                   'работает хуже',
-              TunCore.skipit => 'SkipIt: как Xray, но игры и другие программы «Напрямую» идут в интернет сами, минуя '
-                  'SkipIt, — пинг как без VPN',
             },
             trailing: Segmented<TunCore>(
               value: s.tunCore,
-              items: const {TunCore.xray: 'Xray', TunCore.singbox: 'sing-box', TunCore.skipit: 'SkipIt'},
+              items: const {TunCore.xray: 'Xray', TunCore.singbox: 'sing-box'},
               onChanged: (v) {
                 s.tunCore = v;
                 state.changed();
@@ -678,7 +676,7 @@ const _keywords = <String, String>{
   'Уведомления Windows': 'оповещения сообщения всплывающие',
   'Подключаться при запуске': 'автоподключение автозапуск старт',
   'Переподключаться при сбое': 'обрыв падение автоматически восстановить',
-  'Режим TUN': 'ядро xray sing-box singbox skipit адаптер игры пинг напрямую мимо',
+  'Режим TUN': 'ядро xray sing-box singbox адаптер',
   'Сетевой стек sing-box': 'stack стек gvisor system mixed системный смешанный адаптер',
   'Kill Switch': 'килл свитч защита утечка обрыв блокировка интернета',
   'Автовыбор сервера': 'лучший быстрый пинг авто',

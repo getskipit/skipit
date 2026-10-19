@@ -13,8 +13,6 @@
 namespace {
 
 HANDLE g_engine = nullptr;
-GUID g_sublayer{};
-std::vector<UINT64> g_allowed;  // Фильтры KillSwitchAllowNet.
 
 // Чем больше вес, тем раньше фильтр проверяется; срабатывает первый подошедший.
 constexpr UINT8 kWeightCores = 15;
@@ -56,7 +54,7 @@ struct Context {
 };
 
 DWORD AddFilter(const Context& c, const GUID& layer, UINT8 weight, bool permit,
-                FWPM_FILTER_CONDITION0* conditions, UINT32 count, UINT64* id = nullptr) {
+                FWPM_FILTER_CONDITION0* conditions, UINT32 count) {
   wchar_t name[] = L"SkipIt kill switch";
   FWPM_FILTER0 filter{};
   filter.displayData.name = name;
@@ -67,7 +65,7 @@ DWORD AddFilter(const Context& c, const GUID& layer, UINT8 weight, bool permit,
   filter.numFilterConditions = count;
   filter.filterCondition = conditions;
   filter.action.type = permit ? FWP_ACTION_PERMIT : FWP_ACTION_BLOCK;
-  return FwpmFilterAdd0(c.engine, &filter, nullptr, id);
+  return FwpmFilterAdd0(c.engine, &filter, nullptr, nullptr);
 }
 
 // Фильтры одного слоя: исходящие или входящие (|inbound|) соединения IPv4 или IPv6.
@@ -231,7 +229,6 @@ std::wstring KillSwitchEngage(const std::vector<std::wstring>& apps, const std::
     error = Error(L"begin", rc);
   } else {
     Context c{engine, GUID{}};
-    g_sublayer = GUID{};
     FWPM_SUBLAYER0 sublayer{};
     if (UuidCreate(&c.sublayer) != RPC_S_OK) {
       error = Error(L"uuid", ERROR_GEN_FAILURE);
@@ -268,7 +265,6 @@ std::wstring KillSwitchEngage(const std::vector<std::wstring>& apps, const std::
     if (error.empty()) {
       rc = FwpmTransactionCommit0(engine);
       if (rc != ERROR_SUCCESS) error = Error(L"commit", rc);
-      g_sublayer = c.sublayer;
     } else {
       FwpmTransactionAbort0(engine);
     }
@@ -283,36 +279,7 @@ std::wstring KillSwitchEngage(const std::vector<std::wstring>& apps, const std::
   return std::wstring();
 }
 
-std::wstring KillSwitchAllowNet(unsigned long address, unsigned char prefix) {
-  if (!g_engine) return std::wstring();
-  const Context c{g_engine, g_sublayer};
-  FWP_V4_ADDR_AND_MASK net{};
-  net.mask = prefix == 0 ? 0 : 0xFFFFFFFFUL << (32 - prefix);
-  net.addr = ntohl(address) & net.mask;
-  // Тот же вес, что у локальной сети: ниже запрета DNS — к порту 53 мимо адаптера и тут нельзя.
-  for (const GUID* layer : {&FWPM_LAYER_ALE_AUTH_CONNECT_V4, &FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4}) {
-    FWPM_FILTER_CONDITION0 cond{};
-    cond.fieldKey = FWPM_CONDITION_IP_REMOTE_ADDRESS;
-    cond.matchType = FWP_MATCH_EQUAL;
-    cond.conditionValue.type = FWP_V4_ADDR_MASK;
-    cond.conditionValue.v4AddrMask = &net;
-    UINT64 id = 0;
-    const DWORD rc = AddFilter(c, *layer, kWeightLan, true, &cond, 1, &id);
-    if (rc != ERROR_SUCCESS) return Error(L"allow", rc);
-    g_allowed.push_back(id);
-  }
-  return std::wstring();
-}
-
-void KillSwitchDropAllowed() {
-  if (g_engine) {
-    for (const UINT64 id : g_allowed) FwpmFilterDeleteById0(g_engine, id);
-  }
-  g_allowed.clear();
-}
-
 unsigned long KillSwitchRelease() {
-  g_allowed.clear();
   if (!g_engine) return ERROR_SUCCESS;
   const DWORD rc = FwpmEngineClose0(g_engine);
   g_engine = nullptr;

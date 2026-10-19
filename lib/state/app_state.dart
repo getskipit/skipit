@@ -1239,8 +1239,7 @@ class AppState extends ChangeNotifier {
   bool get usesTun => settings.mode == ConnectionMode.tun || settings.mode == ConnectionMode.mixed;
 
   /// TUN поднимает само ядро Xray, sing-box не запускается.
-  /// Адаптер поднимает Xray: ядро TUN «Xray» или «SkipIt».
-  bool get xrayTun => usesTun && settings.tunCore != TunCore.singbox;
+  bool get xrayTun => usesTun && settings.tunCore == TunCore.xray;
   bool get isConnected => status == ConnStatus.connected;
   bool get isBusy => status == ConnStatus.connecting || status == ConnStatus.disconnecting;
 
@@ -1840,8 +1839,7 @@ class AppState extends ChangeNotifier {
     status = ConnStatus.connecting;
     notifyListeners();
     // Каждое подключение — отдельный отрезок журнала (раздел «Логи»).
-    log.startSession(selectedServer?.name ?? 'Сервер не выбран',
-        detail: !xrayTun ? settings.mode.label : '${settings.mode.label} · ${settings.tunCore == TunCore.skipit ? 'SkipIt' : 'Xray'}');
+    log.startSession(selectedServer?.name ?? 'Сервер не выбран', detail: xrayTun ? '${settings.mode.label} · Xray' : settings.mode.label);
     log.add('app', 'Подключение…');
     try {
       // С запущенным zapret не подключаемся вовсе: он правит пакеты, в том числе на пути к VPN-серверу.
@@ -1855,14 +1853,6 @@ class AppState extends ChangeNotifier {
       if (viaService) {
         serviceVersion = await ServiceClient.hello();
         if (serviceVersion != ServiceClient.protocol) throw NeedAdminException();
-      }
-      // Ядру TUN «SkipIt» служба нужна всегда: программы «Напрямую» мимо ядра пускает она.
-      if (usesTun && settings.tunCore == TunCore.skipit) {
-        if (!viaService) serviceVersion = await ServiceClient.hello();
-        if (serviceVersion != ServiceClient.protocol) {
-          throw CoreException('Режиму TUN «SkipIt» нужна служба SkipIt, а она не отвечает. Переустановите SkipIt '
-              'или выберите режим TUN «Xray» (Настройки → Подключение).');
-        }
       }
 
       // Два VPN с TUN одновременно дерутся за маршруты — сеть ломается до перезагрузки.
@@ -2084,8 +2074,6 @@ class AppState extends ChangeNotifier {
         }
       }
       _checkCancel();
-      if (usesTun && settings.tunCore == TunCore.skipit) await _startBypass();
-      _checkCancel();
       if (settings.mode == ConnectionMode.systemProxy || settings.mode == ConnectionMode.mixed) {
         if (!settings.systemProxyActive) {
           // Прокси, который уже смотрит на наш же порт, «прежним» не считается: его оставили мы сами
@@ -2211,55 +2199,7 @@ class AppState extends ChangeNotifier {
         'напрямую: ${part(s.directDown, s.directUp)}';
   }
 
-  /// Ядро TUN «SkipIt»: программы с пометкой «Напрямую» служба SkipIt пускает мимо ядра — ставит к адресам,
-  /// куда они шлют UDP, маршруты сразу в сетевую карту. Служба к этому месту уже проверена (connect).
-  Future<void> _startBypass() async {
-    final rules = appRules.mode == AppRoutingMode.allExcept ? appRules.enabledMatches : const <String>[];
-    if (rules.isEmpty) {
-      log.add('app', 'Программ «Напрямую» в правилах приложений нет — режим TUN «SkipIt» работает как «Xray»');
-      return;
-    }
-    // Адреса — только на подробных уровнях журнала: на них в файлах и так лежат адреса сайтов.
-    final detailed = settings.logLevel == 'info' || settings.logLevel == 'debug';
-    _bypassCount = 0;
-    try {
-      final nets = appRules.directNets;
-      _bypass = await ServiceBypass.start(
-          tunV4: XrayConfig.tunV4,
-          rules: rules,
-          nets: nets,
-          onRoute: (address, exe, rule) {
-            _bypassCount++;
-            if (detailed) log.add('app', 'Мимо ядра напрямую: $exe → $address');
-            // Подсеть запоминается за записью программы: в следующий раз маршрут к ней встанет до первого пакета.
-            final entry = appRules.entries.where((e) => e.match == rule).firstOrNull;
-            if (entry != null && entry.rememberNet(address)) save();
-          },
-          onStuck: (address, exe) {
-            // Адрес — только на подробных уровнях, как и у маршрутов.
-            log.add(
-                'app',
-                'Предупреждение: $exe шлёт через сокет, привязанный к адаптеру VPN${detailed ? ' ($address)' : ''}, — '
-                    'это соединение доиграет через ядро, мимо ядра пойдёт следующее');
-          });
-      final remembered = nets.values.fold<int>(0, (n, l) => n + l.length);
-      log.add('app', 'Программы «Напрямую» идут мимо ядра${remembered > 0 ? ' (запомненных подсетей: $remembered)' : ''}');
-    } on ServiceException catch (e) {
-      throw CoreException('Служба SkipIt не пустила программы «Напрямую» мимо ядра ($e). '
-          'Можно подключиться в режиме TUN «Xray» (Настройки → Подключение).');
-    }
-  }
-
-  ServiceBypass? _bypass;
-  int _bypassCount = 0;
-
   Future<void> _teardown() async {
-    final bypass = _bypass;
-    _bypass = null;
-    if (bypass != null) {
-      await bypass.stop();
-      if (_bypassCount > 0) log.add('app', 'Мимо ядра напрямую ушло адресов: $_bypassCount');
-    }
     _statsTimer?.cancel();
     _statsTimer = null;
     _pollStats = null;

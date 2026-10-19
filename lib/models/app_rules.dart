@@ -21,9 +21,7 @@ class AppEntry {
     this.action = AppAction.proxy,
     this.enabled = true,
     this.exe,
-    List<String>? nets,
-  })  : id = id ?? newId(),
-        nets = nets ?? [];
+  }) : id = id ?? newId();
 
   final String id;
 
@@ -38,27 +36,6 @@ class AppEntry {
   /// На само правило не влияет. После обновления программы файл может переехать в новую папку
   /// версии — тогда окно находит его заново.
   String? exe;
-
-  /// Подсети серверов («a.b.c.d/24»), куда программа слала UDP мимо ядра в прошлые подключения (Настройки →
-  /// «Программы „Напрямую“ — мимо ядра»): к ним служба ставит маршрут мимо адаптера сразу при подключении,
-  /// до первого пакета. Используются, только пока программа в списке и он значит «напрямую»; удалили
-  /// запись — память уходит вместе с ней. Свежие — в конце.
-  final List<String> nets;
-
-  /// Больше подсетей одной программы не помним: самые давние уходят.
-  static const maxNets = 256;
-
-  /// Запомнить подсеть /24 адреса [address]; true — список изменился.
-  bool rememberNet(String address) {
-    final parts = address.split('.');
-    if (parts.length != 4) return false;
-    final net = '${parts[0]}.${parts[1]}.${parts[2]}.0/24';
-    if (nets.isNotEmpty && nets.last == net) return false;
-    nets.remove(net);
-    nets.add(net);
-    if (nets.length > maxNets) nets.removeRange(0, nets.length - maxNets);
-    return true;
-  }
 
   /// Файл для значка записи: выбранный exe или сам путь правила; у папки без программы и у имени
   /// процесса его нет.
@@ -115,7 +92,6 @@ class AppEntry {
         'action': action.name,
         'enabled': enabled,
         if (exe != null) 'exe': exe,
-        if (nets.isNotEmpty) 'nets': nets,
       };
 
   factory AppEntry.fromJson(Map<String, dynamic> j) => AppEntry(
@@ -125,7 +101,6 @@ class AppEntry {
         action: AppAction.values.asNameMap()[j['action']] ?? AppAction.proxy,
         enabled: parseBool(j['enabled'], true),
         exe: j['exe'] as String?,
-        nets: ((j['nets'] as List?) ?? const []).whereType<String>().toList(),
       );
 }
 
@@ -144,14 +119,6 @@ class AppRules {
   /// Выключенные и переименованные записи на него не влияют, а при режиме «Выключено» список не важен.
   String get signature =>
       mode == AppRoutingMode.off ? 'off' : '${mode.name}|${(enabledMatches.map((m) => m.toLowerCase()).toList()..sort()).join('|')}';
-
-  /// Запомненные подсети включённых программ списка — только когда список значит «напрямую».
-  Map<String, List<String>> get directNets => mode != AppRoutingMode.allExcept
-      ? const {}
-      : {
-          for (final e in entries)
-            if (e.enabled && e.match.isNotEmpty && e.nets.isNotEmpty) e.match: e.nets,
-        };
 
   List<String> matchesFor(AppAction action) => entries
       .where((e) => e.enabled && e.action == action && e.match.isNotEmpty)

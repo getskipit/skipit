@@ -254,8 +254,8 @@ class _HomePageState extends State<HomePage> {
 
 /// Выбор ядра, которое поднимает TUN-адаптер: небольшая кнопка с выпадающим меню.
 /// Название ядра на кнопке. Сначала гаснет старое название, затем проявляется новое; ширина кнопки меняется
-/// всё это время — так длинная надпись не обрезается на глазах. Названий три, а у AnimatedCrossFade две
-/// стороны: новое название ложится на скрытую сторону, и стороны меняются местами.
+/// всё это время — так длинная надпись не обрезается на глазах. Новое название ложится на скрытую сторону
+/// AnimatedCrossFade, и стороны меняются местами.
 class _CoreName extends StatefulWidget {
   const _CoreName(this.name);
   final String name;
@@ -302,7 +302,7 @@ class _TunCorePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-        message: 'Как работает TUN: Xray, sing-box или SkipIt — пояснение внизу списка',
+        message: 'Как работает TUN: Xray или sing-box — пояснение внизу списка',
         waitDuration: const Duration(milliseconds: 500),
         child: Hover(
           builder: (context, hovered) => GestureDetector(
@@ -315,10 +315,6 @@ class _TunCorePicker extends StatelessWidget {
                 AppMenuItem(TunCore.singbox, 'sing-box',
                     checked: value == TunCore.singbox,
                     description: 'Трафик принимает sing-box и передаёт в Xray. Попробуйте, если с Xray что-то работает хуже'),
-                AppMenuItem(TunCore.skipit, 'SkipIt',
-                    checked: value == TunCore.skipit,
-                    description: 'Как Xray, но игры и другие программы «Напрямую» идут в интернет сами, минуя SkipIt, '
-                        '— пинг как без VPN'),
               ]);
               if (picked != null) onChanged(picked);
             },
@@ -333,7 +329,7 @@ class _TunCorePicker extends StatelessWidget {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Text('Режим TUN', style: TextStyle(color: C.muted, fontSize: 12)),
                 const SizedBox(width: 8),
-                _CoreName(switch (value) { TunCore.xray => 'Xray', TunCore.singbox => 'sing-box', TunCore.skipit => 'SkipIt' }),
+                _CoreName(value == TunCore.xray ? 'Xray' : 'sing-box'),
                 const SizedBox(width: 4),
                 Icon(Icons.expand_more_rounded, size: 18, color: hovered ? C.orange : C.muted),
               ]),
