@@ -47,9 +47,9 @@ void main() {
     expect(rules.directNets, isEmpty);
   });
 
-  test('«мимо ядра» включено по умолчанию и сохраняется', () {
-    expect(AppSettings().directPastCore, isTrue);
-    final off = AppSettings()..directPastCore = false;
-    expect(AppSettings.fromJson(off.toJson()).directPastCore, isFalse);
+  test('ядро TUN по умолчанию — Xray, выбор «SkipIt» сохраняется', () {
+    expect(AppSettings().tunCore, TunCore.xray);
+    final skipit = AppSettings()..tunCore = TunCore.skipit;
+    expect(AppSettings.fromJson(skipit.toJson()).tunCore, TunCore.skipit);
   });
 }

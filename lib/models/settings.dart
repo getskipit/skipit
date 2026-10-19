@@ -34,6 +34,10 @@ enum TunCore {
 
   /// sing-box держит адаптер и отдаёт трафик в SOCKS-порт Xray.
   singbox,
+
+  /// Адаптер поднимает Xray, а программы с пометкой «Напрямую» служба SkipIt пускает мимо ядра: ставит к
+  /// адресам, куда они шлют UDP, маршруты сразу в сетевую карту (подсети знакомых серверов — до первого пакета).
+  skipit,
 }
 
 enum PingType { tcp, realDelay }
@@ -99,10 +103,6 @@ class AppSettings {
 
   /// Kill Switch: в режимах с TUN не выпускать трафик мимо VPN, даже если ядро упало.
   bool killSwitch = false;
-
-  /// Программы, которые по правилам приложений идут напрямую (игры), — мимо ядра: служба SkipIt ставит
-  /// к адресам, куда они шлют UDP, маршруты сразу в сетевую карту.
-  bool directPastCore = true;
   bool connectOnStart = false;
 
   /// При запуске просить права администратора (нужны для TUN и «Смешанного» режима).
@@ -187,7 +187,6 @@ class AppSettings {
         'autoSelect': autoSelect,
         'autoReconnect': autoReconnect,
         'killSwitch': killSwitch,
-        'directPastCore': directPastCore,
         'connectOnStart': connectOnStart,
         'runAsAdmin': runAsAdmin,
         'testUrl': testUrl,
@@ -255,7 +254,6 @@ class AppSettings {
     s.autoSelect = parseBool(j['autoSelect'], s.autoSelect);
     s.autoReconnect = parseBool(j['autoReconnect'], s.autoReconnect);
     s.killSwitch = parseBool(j['killSwitch'], s.killSwitch);
-    s.directPastCore = parseBool(j['directPastCore'], s.directPastCore);
     s.connectOnStart = parseBool(j['connectOnStart'], s.connectOnStart);
     s.runAsAdmin = parseBool(j['runAsAdmin'], s.runAsAdmin);
     s.testUrl = j['testUrl'] as String? ?? s.testUrl;

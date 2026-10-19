@@ -253,6 +253,46 @@ class _HomePageState extends State<HomePage> {
 }
 
 /// Выбор ядра, которое поднимает TUN-адаптер: небольшая кнопка с выпадающим меню.
+/// Название ядра на кнопке. Сначала гаснет старое название, затем проявляется новое; ширина кнопки меняется
+/// всё это время — так длинная надпись не обрезается на глазах. Названий три, а у AnimatedCrossFade две
+/// стороны: новое название ложится на скрытую сторону, и стороны меняются местами.
+class _CoreName extends StatefulWidget {
+  const _CoreName(this.name);
+  final String name;
+
+  @override
+  State<_CoreName> createState() => _CoreNameState();
+}
+
+class _CoreNameState extends State<_CoreName> {
+  late String _first = widget.name, _second = widget.name;
+  bool _showSecond = false;
+
+  @override
+  void didUpdateWidget(_CoreName old) {
+    super.didUpdateWidget(old);
+    if (widget.name == (_showSecond ? _second : _first)) return;
+    if (_showSecond) {
+      _first = widget.name;
+    } else {
+      _second = widget.name;
+    }
+    _showSecond = !_showSecond;
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedCrossFade(
+        duration: const Duration(milliseconds: 320),
+        sizeCurve: Curves.easeInOutCubic,
+        firstCurve: const Interval(0.55, 1),
+        secondCurve: const Interval(0.55, 1),
+        alignment: Alignment.centerLeft,
+        crossFadeState: _showSecond ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+        firstChild: Text(_first, maxLines: 1, softWrap: false, style: _TunCorePicker._coreStyle),
+        secondChild: Text(_second, maxLines: 1, softWrap: false, style: _TunCorePicker._coreStyle),
+      );
+}
+
 class _TunCorePicker extends StatelessWidget {
   const _TunCorePicker({required this.value, required this.onChanged});
   final TunCore value;
@@ -262,7 +302,8 @@ class _TunCorePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-        message: 'Чем поднимать TUN-адаптер: sing-box — отдельным ядром, Xray — тем же ядром, что и подключение',
+        message: 'Чем поднимать TUN-адаптер: Xray — тем же ядром, что и подключение, sing-box — отдельным ядром, '
+            'SkipIt — как Xray, но программы «Напрямую» идут мимо ядра',
         waitDuration: const Duration(milliseconds: 500),
         child: Hover(
           builder: (context, hovered) => GestureDetector(
@@ -271,6 +312,7 @@ class _TunCorePicker extends StatelessWidget {
               final picked = await showAppMenu<TunCore>(context, centered: true, items: [
                 AppMenuItem(TunCore.xray, 'Xray', checked: value == TunCore.xray),
                 AppMenuItem(TunCore.singbox, 'sing-box', checked: value == TunCore.singbox),
+                AppMenuItem(TunCore.skipit, 'SkipIt', checked: value == TunCore.skipit),
               ]);
               if (picked != null) onChanged(picked);
             },
@@ -285,18 +327,7 @@ class _TunCorePicker extends StatelessWidget {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Text('Ядро TUN', style: TextStyle(color: C.muted, fontSize: 12)),
                 const SizedBox(width: 8),
-                // Сначала гаснет старое название, затем проявляется новое; ширина кнопки меняется
-                // всё это время — так длинная надпись не обрезается на глазах.
-                AnimatedCrossFade(
-                  duration: const Duration(milliseconds: 320),
-                  sizeCurve: Curves.easeInOutCubic,
-                  firstCurve: const Interval(0.55, 1),
-                  secondCurve: const Interval(0.55, 1),
-                  alignment: Alignment.centerLeft,
-                  crossFadeState: value == TunCore.xray ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-                  firstChild: const Text('sing-box', maxLines: 1, softWrap: false, style: _coreStyle),
-                  secondChild: const Text('Xray', maxLines: 1, softWrap: false, style: _coreStyle),
-                ),
+                _CoreName(switch (value) { TunCore.xray => 'Xray', TunCore.singbox => 'sing-box', TunCore.skipit => 'SkipIt' }),
                 const SizedBox(width: 4),
                 Icon(Icons.expand_more_rounded, size: 18, color: hovered ? C.orange : C.muted),
               ]),

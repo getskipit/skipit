@@ -193,21 +193,17 @@ class _SettingsPageState extends State<SettingsPage> {
                   'его не откроете. Действует в режимах TUN и «Смешанный»; локальная сеть остаётся доступной',
               s.killSwitch,
               (v) => state.setKillSwitch(v)),
-          toggle(
-              'Программы «Напрямую» — мимо ядра',
-              'Игры и другие программы, которые по правилам приложений идут напрямую, шлют UDP сразу в сетевую '
-                  'карту, а не через ядро VPN — пинг как без VPN. Нужна служба SkipIt; действует в режимах TUN '
-                  'и «Смешанный» со следующего подключения',
-              s.directPastCore,
-              (v) => s.directPastCore = v),
           _Row(
             title: 'Ядро для TUN',
-            subtitle: s.tunCore == TunCore.xray
-                ? 'Xray: адаптер поднимает то же ядро, что и подключение, sing-box не запускается'
-                : 'sing-box держит адаптер и передаёт трафик в Xray. Действует в режимах TUN и «Смешанный»',
+            subtitle: switch (s.tunCore) {
+              TunCore.xray => 'Xray: адаптер поднимает то же ядро, что и подключение, sing-box не запускается',
+              TunCore.singbox => 'sing-box держит адаптер и передаёт трафик в Xray. Действует в режимах TUN и «Смешанный»',
+              TunCore.skipit => 'SkipIt: адаптер держит Xray, а игры и другие программы «Напрямую» служба SkipIt '
+                  'пускает мимо ядра — пинг как без VPN. Знакомые серверы — с первого пакета, новый — через долю секунды',
+            },
             trailing: Segmented<TunCore>(
               value: s.tunCore,
-              items: const {TunCore.xray: 'Xray', TunCore.singbox: 'sing-box'},
+              items: const {TunCore.xray: 'Xray', TunCore.singbox: 'sing-box', TunCore.skipit: 'SkipIt'},
               onChanged: (v) {
                 s.tunCore = v;
                 state.changed();
@@ -681,10 +677,9 @@ const _keywords = <String, String>{
   'Уведомления Windows': 'оповещения сообщения всплывающие',
   'Подключаться при запуске': 'автоподключение автозапуск старт',
   'Переподключаться при сбое': 'обрыв падение автоматически восстановить',
-  'Ядро для TUN': 'xray sing-box singbox адаптер ядро',
+  'Ядро для TUN': 'xray sing-box singbox skipit адаптер ядро игры пинг напрямую мимо',
   'Сетевой стек sing-box': 'stack стек gvisor system mixed системный смешанный адаптер',
   'Kill Switch': 'килл свитч защита утечка обрыв блокировка интернета',
-  'Программы «Напрямую» — мимо ядра': 'игры пинг задержка udp напрямую обход ядро маршрут лаги',
   'Автовыбор сервера': 'лучший быстрый пинг авто',
   'Разрешить подключения из локальной сети': 'lan wifi роутер телефон раздать другим устройствам',
   'Тип проверки': 'пинг задержка ping tcp скорость',
