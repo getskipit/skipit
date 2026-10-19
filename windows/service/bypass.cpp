@@ -42,8 +42,11 @@ ULONG g_tun = 0;
 std::vector<std::wstring> g_rules;
 std::function<bool(unsigned long)> g_before;
 std::function<void(unsigned long, const std::wstring&)> g_after;
+std::function<void(unsigned long, const std::wstring&)> g_stuck;
 std::vector<MIB_IPFORWARD_ROW2> g_routes;
 std::set<ULONG> g_seen;  // Адреса, по которым уже решено (с маршрутом или без).
+// Адрес с маршрутом → когда поставлен: системное время (FILETIME), в нём же время событий.
+std::unordered_map<ULONG, LONGLONG> g_routed_at;
 
 // Дальше — только поток событий.
 struct Known {
@@ -54,6 +57,12 @@ struct Known {
 std::unordered_map<DWORD, Known> g_pids;
 bool g_layout_checked = false;
 bool g_pid_by_name = false;  // Номер процесса — не первое поле события: берём его по имени поля.
+// Пакеты с адресом адаптера уже после маршрута: программа + адрес → сколько; сообщено — больше не считаем.
+std::unordered_map<ULONGLONG, int> g_stuck_count;
+// Пакеты, отправленные раньше чем через 0,3 с после маршрута, не считаются: события доходят с задержкой.
+constexpr LONGLONG kStuckMargin = 3000000;  // В сотнях наносекунд.
+// Столько пакетов мимо маршрута — уже не случайность, а привязанный к адаптеру сокет.
+constexpr int kStuckPackets = 20;
 
 std::wstring Lower(const std::wstring& s) {
   if (s.empty()) return s;
@@ -198,6 +207,9 @@ bool AddRoute(ULONG address) {
   // Такой маршрут уже есть (поставил кто-то другой) — он не наш, и убирать его не нам.
   if (::CreateIpForwardEntry2(&row) != NO_ERROR) return false;
   g_routes.push_back(row);
+  FILETIME now;
+  ::GetSystemTimePreciseAsFileTime(&now);
+  g_routed_at[address] = (static_cast<LONGLONG>(now.dwHighDateTime) << 32) | now.dwLowDateTime;
   SaveState();
   return true;
 }
@@ -246,6 +258,28 @@ void WINAPI OnEvent(PEVENT_RECORD e) {
   // Адрес назначения — третье поле (после PID и size), если описание события недоступно.
   ULONG address = 0;
   if (!Prop(e, L"daddr", &address, sizeof(address))) std::memcpy(&address, static_cast<BYTE*>(e->UserData) + 8, 4);
+  // Отправитель — адрес адаптера, хотя маршрут к этому адресу уже идёт мимо: программа «подключила» сокет
+  // UDP (connect), и Windows привязала его к адаптеру. Такой сокет до закрытия шлёт через ядро; мимо пойдёт
+  // только новое соединение. Сообщаем один раз на программу и адрес.
+  ULONG source = 0;
+  if (!Prop(e, L"saddr", &source, sizeof(source)) && e->UserDataLength >= 16) {
+    std::memcpy(&source, static_cast<BYTE*>(e->UserData) + 12, 4);
+  }
+  if (source == g_tun && g_stuck) {
+    LONGLONG routed = 0;
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      const auto it = g_routed_at.find(address);
+      if (it != g_routed_at.end()) routed = it->second;
+    }
+    if (routed != 0 && e->EventHeader.TimeStamp.QuadPart > routed + kStuckMargin) {
+      int& count = g_stuck_count[(static_cast<ULONGLONG>(pid) << 32) | address];
+      if (count >= 0 && ++count >= kStuckPackets) {
+        count = -1;
+        g_stuck(address, name);
+      }
+    }
+  }
   Handle(address, name);
 }
 
@@ -288,7 +322,8 @@ void DeleteHostRoutes(const std::set<ULONG>& addresses) {
 std::wstring BypassStart(const std::wstring& session_name, const std::wstring& tun_v4,
                          const std::vector<std::wstring>& rules, const std::wstring& state_file,
                          std::function<bool(unsigned long)> before_route,
-                         std::function<void(unsigned long, const std::wstring&)> on_route) {
+                         std::function<void(unsigned long, const std::wstring&)> on_route,
+                         std::function<void(unsigned long, const std::wstring&)> on_stuck) {
   BypassStop();
   IN_ADDR tun{};
   if (::InetPtonW(AF_INET, tun_v4.c_str(), &tun) != 1) return L"неверный адрес адаптера";
@@ -303,6 +338,8 @@ std::wstring BypassStart(const std::wstring& session_name, const std::wstring& t
   }
   g_before = std::move(before_route);
   g_after = std::move(on_route);
+  g_stuck = std::move(on_stuck);
+  g_stuck_count.clear();
   g_pids.clear();
   g_layout_checked = g_pid_by_name = false;
 
@@ -370,9 +407,11 @@ void BypassStop() {
   for (MIB_IPFORWARD_ROW2& row : g_routes) ::DeleteIpForwardEntry2(&row);
   g_routes.clear();
   g_seen.clear();
+  g_routed_at.clear();
   SaveState();
   g_before = nullptr;
   g_after = nullptr;
+  g_stuck = nullptr;
 }
 
 std::vector<unsigned long> BypassAddresses() {

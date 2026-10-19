@@ -2223,6 +2223,13 @@ class AppState extends ChangeNotifier {
           onRoute: (address, exe) {
             _bypassCount++;
             if (detailed) log.add('app', 'Мимо ядра напрямую: $exe → $address');
+          },
+          onStuck: (address, exe) {
+            // Адрес — только на подробных уровнях, как и у маршрутов.
+            log.add(
+                'app',
+                'Предупреждение: $exe шлёт через сокет, привязанный к адаптеру VPN${detailed ? ' ($address)' : ''}, — '
+                    'это соединение доиграет через ядро, мимо ядра пойдёт следующее');
           });
       log.add('app', 'Программы «Напрямую» идут мимо ядра');
     } on ServiceException catch (e) {

@@ -40,7 +40,8 @@
 //       (Wintun). Скрипт зашит в службу, программа присылает только команду.
 //   «bypass\n<адрес адаптера v4>\n<правило>\n<правило>…» → «ok» или «error <текст>»: программы с пометкой
 //       «Напрямую» — мимо ядра (bypass.h). Затем по тому же подключению: «r<адрес> <имя exe>» на каждый
-//       поставленный маршрут. Маршруты держатся, пока открыто подключение; после «bypass stop» по нему
+//       поставленный маршрут и «s<адрес> <имя exe>», если сокет программы привязан к адаптеру и это
+//       соединение идёт через ядро. Маршруты держатся, пока открыто подключение; после «bypass stop» по нему
 //       приходит «released».
 //   «bypass stop»                    → «ok»: убрать маршруты.
 
@@ -893,6 +894,9 @@ void BypassHold(HANDLE pipe, const std::string& request) {
         },
         [pipe](unsigned long address, const std::wstring& name) {
           PipeWrite(pipe, "r" + Dotted(address) + " " + Utf8(name));
+        },
+        [pipe](unsigned long address, const std::wstring& name) {
+          PipeWrite(pipe, "s" + Dotted(address) + " " + Utf8(name));
         });
     // Прежний держатель (если был) больше ничего не держит: его маршруты BypassStart уже убрала.
     if (g_bypass_holder != nullptr) ::SetEvent(g_bypass_holder);
