@@ -69,7 +69,7 @@ class Tray {
       _call('update', {
         'modeLabel': 'РЕЖИМ',
         'serversLabel': 'СЕРВЕР',
-        'coreLabel': 'ЯДРО TUN',
+        'coreLabel': 'РЕЖИМ TUN',
         'modes': modes,
         'mode': mode,
         'cores': cores,

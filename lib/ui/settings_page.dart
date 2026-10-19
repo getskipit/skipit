@@ -194,12 +194,13 @@ class _SettingsPageState extends State<SettingsPage> {
               s.killSwitch,
               (v) => state.setKillSwitch(v)),
           _Row(
-            title: 'Ядро для TUN',
+            title: 'Режим TUN',
             subtitle: switch (s.tunCore) {
-              TunCore.xray => 'Xray: адаптер поднимает то же ядро, что и подключение, sing-box не запускается',
-              TunCore.singbox => 'sing-box держит адаптер и передаёт трафик в Xray. Действует в режимах TUN и «Смешанный»',
-              TunCore.skipit => 'SkipIt: адаптер держит Xray, а игры и другие программы «Напрямую» служба SkipIt '
-                  'пускает мимо ядра — пинг как без VPN. Знакомые серверы — с первого пакета, новый — через долю секунды',
+              TunCore.xray => 'Xray: весь трафик идёт через Xray — и через VPN, и «напрямую». Обычный режим',
+              TunCore.singbox => 'sing-box: трафик принимает sing-box и передаёт в Xray. Попробуйте, если с Xray что-то '
+                  'работает хуже',
+              TunCore.skipit => 'SkipIt: как Xray, но игры и другие программы «Напрямую» идут в интернет сами, минуя '
+                  'SkipIt, — пинг как без VPN. Нужна служба SkipIt',
             },
             trailing: Segmented<TunCore>(
               value: s.tunCore,
@@ -677,7 +678,7 @@ const _keywords = <String, String>{
   'Уведомления Windows': 'оповещения сообщения всплывающие',
   'Подключаться при запуске': 'автоподключение автозапуск старт',
   'Переподключаться при сбое': 'обрыв падение автоматически восстановить',
-  'Ядро для TUN': 'xray sing-box singbox skipit адаптер ядро игры пинг напрямую мимо',
+  'Режим TUN': 'ядро xray sing-box singbox skipit адаптер игры пинг напрямую мимо',
   'Сетевой стек sing-box': 'stack стек gvisor system mixed системный смешанный адаптер',
   'Kill Switch': 'килл свитч защита утечка обрыв блокировка интернета',
   'Автовыбор сервера': 'лучший быстрый пинг авто',

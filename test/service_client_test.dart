@@ -47,7 +47,7 @@ void main() {
     expect(rules.directNets, isEmpty);
   });
 
-  test('ядро TUN по умолчанию — Xray, выбор «SkipIt» сохраняется', () {
+  test('режим TUN по умолчанию — Xray, выбор «SkipIt» сохраняется', () {
     expect(AppSettings().tunCore, TunCore.xray);
     final skipit = AppSettings()..tunCore = TunCore.skipit;
     expect(AppSettings.fromJson(skipit.toJson()).tunCore, TunCore.skipit);

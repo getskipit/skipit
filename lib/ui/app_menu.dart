@@ -5,7 +5,8 @@ import 'widgets.dart';
 
 /// Пункт всплывающего меню: значок, подпись, отметка выбранного.
 class AppMenuItem<T> {
-  const AppMenuItem(this.value, this.label, {this.icon, this.danger = false, this.checked = false, this.hint})
+  const AppMenuItem(this.value, this.label,
+      {this.icon, this.danger = false, this.checked = false, this.hint, this.description})
       : divider = false;
 
   /// Тонкая линия-разделитель между группами пунктов.
@@ -16,6 +17,7 @@ class AppMenuItem<T> {
         danger = false,
         checked = false,
         hint = null,
+        description = null,
         divider = true;
 
   final T? value;
@@ -30,6 +32,9 @@ class AppMenuItem<T> {
 
   /// Серая подпись справа (например, сочетание клавиш).
   final String? hint;
+
+  /// Пояснение: что это и как работает. Показывается внизу меню — у пункта под мышью, иначе у выбранного.
+  final String? description;
   final bool divider;
 }
 
@@ -127,10 +132,34 @@ class _MenuLayout extends SingleChildLayoutDelegate {
       old.anchor != anchor || old.alignRight != alignRight || old.centered != centered;
 }
 
-class _MenuCard<T> extends StatelessWidget {
+class _MenuCard<T> extends StatefulWidget {
   const _MenuCard({required this.items, required this.minWidth});
   final List<AppMenuItem<T>> items;
   final double minWidth;
+
+  @override
+  State<_MenuCard<T>> createState() => _MenuCardState<T>();
+}
+
+class _MenuCardState<T> extends State<_MenuCard<T>> {
+  AppMenuItem<T>? _hovered;
+
+  List<AppMenuItem<T>> get items => widget.items;
+  double get minWidth => widget.minWidth;
+
+  /// Строка пояснений внизу меню: постоянного размера, чтобы меню не меняло размер при наведении.
+  Widget _description() {
+    final shown = _hovered?.description ?? items.where((i) => i.checked).firstOrNull?.description;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(9, 4, 9, 4),
+      child: SizedBox(
+        width: 280,
+        height: 50,
+        child: Text(shown ?? '',
+            maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, height: 1.35, color: C.muted)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Material(
@@ -155,7 +184,18 @@ class _MenuCard<T> extends StatelessWidget {
                       child: Container(height: 1, color: C.border),
                     )
                   else
-                    _MenuRow<T>(item: item),
+                    MouseRegion(
+                      onEnter: (_) => setState(() => _hovered = item),
+                      onExit: (_) => setState(() => _hovered = _hovered == item ? null : _hovered),
+                      child: _MenuRow<T>(item: item),
+                    ),
+                if (items.any((i) => i.description != null)) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                    child: Container(height: 1, color: C.border),
+                  ),
+                  _description(),
+                ],
               ]),
             ),
           ),

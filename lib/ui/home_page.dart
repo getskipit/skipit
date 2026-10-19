@@ -302,17 +302,23 @@ class _TunCorePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-        message: 'Чем поднимать TUN-адаптер: Xray — тем же ядром, что и подключение, sing-box — отдельным ядром, '
-            'SkipIt — как Xray, но программы «Напрямую» идут мимо ядра',
+        message: 'Как работает TUN: Xray, sing-box или SkipIt — пояснение внизу списка',
         waitDuration: const Duration(milliseconds: 500),
         child: Hover(
           builder: (context, hovered) => GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () async {
               final picked = await showAppMenu<TunCore>(context, centered: true, items: [
-                AppMenuItem(TunCore.xray, 'Xray', checked: value == TunCore.xray),
-                AppMenuItem(TunCore.singbox, 'sing-box', checked: value == TunCore.singbox),
-                AppMenuItem(TunCore.skipit, 'SkipIt', checked: value == TunCore.skipit),
+                AppMenuItem(TunCore.xray, 'Xray',
+                    checked: value == TunCore.xray,
+                    description: 'Весь трафик идёт через Xray — и через VPN, и «напрямую». Обычный режим'),
+                AppMenuItem(TunCore.singbox, 'sing-box',
+                    checked: value == TunCore.singbox,
+                    description: 'Трафик принимает sing-box и передаёт в Xray. Попробуйте, если с Xray что-то работает хуже'),
+                AppMenuItem(TunCore.skipit, 'SkipIt',
+                    checked: value == TunCore.skipit,
+                    description: 'Как Xray, но игры и другие программы «Напрямую» идут в интернет сами, минуя SkipIt, '
+                        '— пинг как без VPN'),
               ]);
               if (picked != null) onChanged(picked);
             },
@@ -325,7 +331,7 @@ class _TunCorePicker extends StatelessWidget {
                 border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.5) : C.border),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('Ядро TUN', style: TextStyle(color: C.muted, fontSize: 12)),
+                Text('Режим TUN', style: TextStyle(color: C.muted, fontSize: 12)),
                 const SizedBox(width: 8),
                 _CoreName(switch (value) { TunCore.xray => 'Xray', TunCore.singbox => 'sing-box', TunCore.skipit => 'SkipIt' }),
                 const SizedBox(width: 4),

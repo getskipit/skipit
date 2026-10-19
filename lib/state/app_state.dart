@@ -901,7 +901,7 @@ class AppState extends ChangeNotifier {
         'Windows': Platform.operatingSystemVersion,
         'Состояние': '${status.name}${linkDown ? ', связи через сервер нет' : ''}',
         'Режим': settings.mode.label,
-        'Ядро TUN': tun ? settings.tunCore.name : null,
+        'Режим TUN': tun ? settings.tunCore.name : null,
         'Стек sing-box': tun && settings.tunCore == TunCore.singbox ? settings.singboxStack : null,
         'Kill Switch': tun ? (settings.killSwitch ? 'включён' : 'выключен') : null,
         'Служба': serviceVersion ?? 'не отвечает',
@@ -1860,8 +1860,8 @@ class AppState extends ChangeNotifier {
       if (usesTun && settings.tunCore == TunCore.skipit) {
         if (!viaService) serviceVersion = await ServiceClient.hello();
         if (serviceVersion != ServiceClient.protocol) {
-          throw CoreException('Ядру TUN «SkipIt» нужна служба SkipIt, а она не отвечает. Переустановите SkipIt '
-              'или выберите ядро TUN «Xray» (Настройки → Подключение).');
+          throw CoreException('Режиму TUN «SkipIt» нужна служба SkipIt, а она не отвечает. Переустановите SkipIt '
+              'или выберите режим TUN «Xray» (Настройки → Подключение).');
         }
       }
 
@@ -1913,7 +1913,7 @@ class AppState extends ChangeNotifier {
       if (xrayTun) {
         if (!File(AppPaths.wintunDll).existsSync()) {
           throw CoreException('Не найден файл wintun.dll рядом с ядром Xray — без него Xray не может создать адаптер. '
-              'Переустановите SkipIt или выберите ядро TUN «sing-box».');
+              'Переустановите SkipIt или выберите режим TUN «sing-box».');
         }
         XrayConfig.addTun(config, settings: session, apps: appRules, directDomains: [
           for (final domestic in routing.domesticDnsList.map(Uri.tryParse))
@@ -2216,7 +2216,7 @@ class AppState extends ChangeNotifier {
   Future<void> _startBypass() async {
     final rules = appRules.mode == AppRoutingMode.allExcept ? appRules.enabledMatches : const <String>[];
     if (rules.isEmpty) {
-      log.add('app', 'Программ «Напрямую» в правилах приложений нет — ядро TUN «SkipIt» работает как «Xray»');
+      log.add('app', 'Программ «Напрямую» в правилах приложений нет — режим TUN «SkipIt» работает как «Xray»');
       return;
     }
     // Адреса — только на подробных уровнях журнала: на них в файлах и так лежат адреса сайтов.
@@ -2246,7 +2246,7 @@ class AppState extends ChangeNotifier {
       log.add('app', 'Программы «Напрямую» идут мимо ядра${remembered > 0 ? ' (запомненных подсетей: $remembered)' : ''}');
     } on ServiceException catch (e) {
       throw CoreException('Служба SkipIt не пустила программы «Напрямую» мимо ядра ($e). '
-          'Можно подключиться с ядром TUN «Xray» (Настройки → Подключение).');
+          'Можно подключиться в режиме TUN «Xray» (Настройки → Подключение).');
     }
   }
 
