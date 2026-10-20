@@ -11,6 +11,7 @@ import '../core/kill_switch.dart';
 import '../core/line_check.dart';
 import '../core/link_parser.dart';
 import '../core/net.dart';
+import '../core/pac.dart';
 import '../core/paths.dart';
 import '../core/ping.dart';
 import '../core/report.dart';
@@ -916,6 +917,7 @@ class AppState extends ChangeNotifier {
         'Подписок': subscriptions.length,
         'Системный прокси Windows': proxy.enabled ? 'включён, ${proxy.server}' : 'выключен',
         'Исключения прокси': proxy.override.isEmpty ? null : proxy.override,
+        'Файл автонастройки прокси': (proxy.autoConfig ?? '').isEmpty ? null : proxy.autoConfig,
         'Маршрут по умолчанию через адаптер': WinSys.tunnelOnDefaultRoute(),
         'Журнал': session == null ? 'нет' : '${session.id}, ${session.detail}',
       },
@@ -2091,9 +2093,17 @@ class AppState extends ChangeNotifier {
           // (после сбоя) или вторая копия SkipIt на том же порту. Вернуть его при отключении значило бы
           // оставить Windows смотреть в мёртвый порт — у браузеров пропал бы интернет.
           final now = await WinSys.readProxy();
-          settings.previousProxy = WinSys.localProxyPort(now) == session.httpPort ? null : now;
+          final ours = WinSys.localProxyPort(now) == session.httpPort || PacServer.isOwn(now.autoConfig ?? '');
+          settings.previousProxy = ours ? null : now;
         }
-        await WinSys.setProxy('127.0.0.1:${session.httpPort}', bypass: settings.proxyBypass);
+        if (settings.mode == ConnectionMode.mixed) {
+          // Через файл автонастройки: его понимают браузеры, а программы, которые знают только «ручной» прокси
+          // (игры на Python вроде Мира танков ломаются, увидев его), идут через адаптер (см. PacServer).
+          _pac = await PacServer.start(PacServer.script(session.httpPort, settings.proxyBypass));
+          await WinSys.setAutoProxy(_pac!.url);
+        } else {
+          await WinSys.setProxy('127.0.0.1:${session.httpPort}', bypass: settings.proxyBypass);
+        }
         settings.systemProxyActive = true;
       }
       await saveNow();
@@ -2223,6 +2233,9 @@ class AppState extends ChangeNotifier {
         'напрямую: ${part(s.directDown, s.directUp)}';
   }
 
+  /// Сервер файла автонастройки прокси, пока подключён «Смешанный».
+  PacServer? _pac;
+
   Future<void> _teardown() async {
     _statsTimer?.cancel();
     _statsTimer = null;
@@ -2238,6 +2251,8 @@ class AppState extends ChangeNotifier {
     // Возвращённый нами прокси может указывать на локальный порт, который больше никто не слушает (его
     // запомнили раньше, до этого исправления, или оставил другой клиент) — тогда выключаем его. Если прокси
     // мы не ставили, его не трогаем: это чужая настройка.
+    await _pac?.stop();
+    _pac = null;
     if (restoredProxy) await WinSys.disableDeadLocalProxy();
     _session = null;
     _directPort = null;

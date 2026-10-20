@@ -3,6 +3,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'pac.dart';
 import 'paths.dart';
 import 'service_client.dart';
 
@@ -14,19 +15,24 @@ const urlScheme = 'skipit';
 
 /// Состояние системного прокси до подключения — чтобы вернуть как было.
 class SystemProxyState {
-  SystemProxyState({required this.enabled, this.server = '', this.override = ''});
+  SystemProxyState({required this.enabled, this.server = '', this.override = '', this.autoConfig});
 
   final bool enabled;
   final String server;
   final String override;
 
+  /// Адрес файла автонастройки прокси (AutoConfigURL); пусто — его не было; null — не записан (состояние
+  /// сохранила версия, которая файл автонастройки не трогала: тогда при возврате его не трогаем и мы).
+  final String? autoConfig;
+
   Map<String, dynamic> toJson() =>
-      {'enabled': enabled, 'server': server, 'override': override};
+      {'enabled': enabled, 'server': server, 'override': override, if (autoConfig != null) 'autoConfig': autoConfig};
 
   factory SystemProxyState.fromJson(Map<String, dynamic> j) => SystemProxyState(
         enabled: j['enabled'] == true,
         server: j['server'] as String? ?? '',
         override: j['override'] as String? ?? '',
+        autoConfig: j['autoConfig'] as String?,
       );
 }
 
@@ -98,7 +104,15 @@ class WinSys {
       enabled: enable != null && enable != '0x0',
       server: await _regQuery(_internetSettingsKey, 'ProxyServer') ?? '',
       override: await _regQuery(_internetSettingsKey, 'ProxyOverride') ?? '',
+      autoConfig: await _regQuery(_internetSettingsKey, 'AutoConfigURL') ?? '',
     );
+  }
+
+  /// Прокси через файл автонастройки по адресу [url] («Смешанный», см. PacServer); «ручной» прокси выключен.
+  static Future<void> setAutoProxy(String url) async {
+    await _regSet(_internetSettingsKey, 'AutoConfigURL', 'REG_SZ', url);
+    await _regSet(_internetSettingsKey, 'ProxyEnable', 'REG_DWORD', '0');
+    _refreshInternetSettings();
   }
 
   /// Адреса, которые идут мимо системного прокси, если человек не задал свой список: этот компьютер
@@ -125,6 +139,14 @@ class WinSys {
     }
     if (prev != null && prev.override.isNotEmpty) {
       await _regSet(_internetSettingsKey, 'ProxyOverride', 'REG_SZ', prev.override);
+    }
+    // Файл автонастройки: прежний возвращаем; если его не было — убираем. Неизвестно, был ли (prev нет или
+    // его записала старая версия), — убираем только свой.
+    final pac = prev?.autoConfig;
+    if (pac != null && pac.isNotEmpty) {
+      await _regSet(_internetSettingsKey, 'AutoConfigURL', 'REG_SZ', pac);
+    } else if (pac != null || PacServer.isOwn(await _regQuery(_internetSettingsKey, 'AutoConfigURL') ?? '')) {
+      await _regDelete(_internetSettingsKey, 'AutoConfigURL');
     }
     _refreshInternetSettings();
   }
@@ -606,6 +628,12 @@ class WinSys {
   /// клиент), выключает: иначе у браузеров пропал бы интернет.
   static Future<void> disableDeadLocalProxy() async {
     final proxy = await readProxy();
+    // Свой файл автонастройки, который уже никто не отдаёт: Windows и так пошла бы напрямую, но адрес не нужен.
+    final pacPort = PacServer.portOf(proxy.autoConfig ?? '');
+    if (pacPort != null && !await _listening(pacPort)) {
+      await _regDelete(_internetSettingsKey, 'AutoConfigURL');
+      _refreshInternetSettings();
+    }
     final port = localProxyPort(proxy);
     if (port != null) {
       try {
@@ -615,6 +643,17 @@ class WinSys {
       } catch (_) {
         await restoreProxy(null);
       }
+    }
+  }
+
+  /// Слушает ли кто-нибудь локальный порт [port].
+  static Future<bool> _listening(int port) async {
+    try {
+      final s = await Socket.connect(InternetAddress.loopbackIPv4, port, timeout: const Duration(milliseconds: 400));
+      s.destroy();
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
