@@ -1986,6 +1986,15 @@ class AppState extends ChangeNotifier {
       _reportSingbox = null;
       _reportConn = _connFacts(server, routing);
       _checkCancel();
+      // В «Смешанном» с адаптером Xray прокси Windows включается только после адаптера (ниже). Если он уже
+      // смотрит на наш порт (остался после сбоя или от второй копии SkipIt), выключаем его на время подключения:
+      // иначе браузеры пойдут в ядро в первые же доли секунды, когда у адаптера ещё нет адреса. Ядро запоминает
+      // список адресов компьютера на минуту и всю эту минуту не применяет правила по программам к трафику из
+      // адаптера — игры «Напрямую» уходят через VPN.
+      if (xrayTun && settings.mode == ConnectionMode.mixed) {
+        final port = WinSys.localProxyPort(await WinSys.readProxy());
+        if (port != null && (port == session.httpPort || port == settings.httpPort)) await WinSys.restoreProxy(null);
+      }
       // Kill Switch ставится до запуска ядер: с этой минуты мимо VPN ничего не выходит.
       if (usesTun && settings.killSwitch) {
         await KillSwitch.engage();
@@ -2024,6 +2033,8 @@ class AppState extends ChangeNotifier {
           tunFailed = true;
           throw CoreException(_tunFailure('xray'));
         }
+        await _waitTunAddress();
+        _checkCancel();
       } else if (usesTun) {
         final domains = <String>[
           if (InternetAddress.tryParse(server.address) == null && server.address.isNotEmpty) server.address,
@@ -2125,6 +2136,19 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       if (e is NeedAdminException && !cancelled) rethrow;
     }
+  }
+
+  /// Ждёт (до 3 с), пока у адаптера Xray появится его адрес в списке адресов компьютера — в том, который видит
+  /// и ядро. Только после этого через системный прокси в ядро пускается трафик (см. connect).
+  Future<void> _waitTunAddress() async {
+    final deadline = DateTime.now().add(const Duration(seconds: 3));
+    while (DateTime.now().isBefore(deadline)) {
+      final list = await NetworkInterface.list(type: InternetAddressType.IPv4);
+      if (list.any((i) => i.addresses.any((a) => a.address == XrayConfig.tunV4))) return;
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    log.add('app', 'Предупреждение: у адаптера VPN долго не появлялся адрес — первую минуту правила по программам '
+        'могут не действовать');
   }
 
   /// sing-box сообщает, что Windows не отдаёт ему сетевой адаптер.
