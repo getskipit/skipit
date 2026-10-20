@@ -87,8 +87,8 @@ jobs:
           gh release upload '${{ github.event.release.tag_name }}' $file --clobber
 
       # Флаг pre-release выставляется по номеру версии, а не по галочке в форме —
-      # чтобы его нельзя было забыть: буква в конце (например, 1.1.6a) → pre-release,
-      # без буквы (1.1.6) → обычный релиз, помеченный как последний.
+      # чтобы его нельзя было забыть: буква в конце, можно с номером сборки (например, 1.1.6a или 1.1.6a-2)
+      # → pre-release, без буквы (1.1.6) → обычный релиз, помеченный как последний.
       - name: Pre-release по номеру версии
         if: github.event_name == 'release'
         shell: pwsh
@@ -97,7 +97,7 @@ jobs:
         run: |
           $tag = '${{ github.event.release.tag_name }}'
           $v = '${{ steps.ver.outputs.version }}'
-          if ($v -match '[A-Za-z]$') {
+          if ($v -match '[A-Za-z](-\d+)?$') {
             gh release edit $tag --prerelease
             Write-Host "$v — альфа/бета: отмечен как pre-release"
           } else {

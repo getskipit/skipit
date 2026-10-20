@@ -176,4 +176,13 @@ void main() {
     expect(Updates.compare('v2.0.2b', '2.0.2b'), 0);
     expect(Updates.compare('2.0.3', '2.0.3b'), 1);
   });
+
+  test('Сравнение версий с номером сборки (условные номера)', () {
+    const order = ['2.0.2', '2.0.3a', '2.0.3a-1', '2.0.3a-2', '2.0.3a-10', '2.0.3b', '2.0.3b-1', '2.0.3'];
+    for (var i = 0; i + 1 < order.length; i++) {
+      expect(Updates.compare(order[i + 1], order[i]), 1, reason: '${order[i + 1]} новее ${order[i]}');
+      expect(Updates.compare(order[i], order[i + 1]), -1);
+    }
+    expect(Updates.compare('v2.0.3a-2', '2.0.3a-2'), 0);
+  });
 }

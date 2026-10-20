@@ -180,7 +180,9 @@ class Updates {
     }
   }
 
-  /// Сравнение версий вида 1.2.3, 1.2.3a, v26.3.27: сначала числа, потом буквенный суффикс.
+  /// Сравнение версий вида 1.2.3, 1.2.3a, 1.2.3a-2, v26.3.27: сначала числа, потом буква, потом номер сборки
+  /// после дефиса. Версия без буквы новее версий с буквой, без номера сборки — старше сборок с номером:
+  /// 1.2.3a < 1.2.3a-1 < 1.2.3a-2 < 1.2.3b < 1.2.3b-1 < 1.2.3.
   static int compare(String a, String b) {
     List<int> nums(String v) =>
         RegExp(r'\d+').allMatches(v.split(RegExp(r'[-+]')).first).map((m) => int.parse(m.group(0)!)).toList();
@@ -194,6 +196,8 @@ class Updates {
     // «1.2.3» новее, чем «1.2.3a» (буква — предварительная версия).
     if (sa.isEmpty && sb.isNotEmpty) return 1;
     if (sa.isNotEmpty && sb.isEmpty) return -1;
-    return sa.compareTo(sb).sign;
+    if (sa != sb) return sa.compareTo(sb).sign;
+    int build(String v) => int.tryParse(RegExp(r'-(\d+)').firstMatch(v)?.group(1) ?? '') ?? 0;
+    return (build(a) - build(b)).sign;
   }
 }
