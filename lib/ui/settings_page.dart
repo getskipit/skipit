@@ -196,9 +196,10 @@ class _SettingsPageState extends State<SettingsPage> {
           _Row(
             title: 'Режим TUN',
             subtitle: switch (s.tunCore) {
-              TunCore.xray => 'Xray: весь трафик идёт через Xray — и через VPN, и «напрямую». Обычный режим',
-              TunCore.singbox => 'sing-box: трафик принимает sing-box и передаёт в Xray. Попробуйте, если с Xray что-то '
-                  'работает хуже',
+              TunCore.xray => 'Xray: всё делает ядро Xray — перехватывает трафик компьютера и решает, что отправить '
+                  'через VPN-сервер, а что напрямую, мимо него',
+              TunCore.singbox => 'sing-box: трафик перехватывает ядро sing-box и передаёт его Xray, а тот решает, что '
+                  'отправить через VPN-сервер, а что напрямую',
             },
             trailing: Segmented<TunCore>(
               value: s.tunCore,

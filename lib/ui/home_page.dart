@@ -311,10 +311,12 @@ class _TunCorePicker extends StatelessWidget {
               final picked = await showAppMenu<TunCore>(context, centered: true, items: [
                 AppMenuItem(TunCore.xray, 'Xray',
                     checked: value == TunCore.xray,
-                    description: 'Весь трафик идёт через Xray — и через VPN, и «напрямую». Обычный режим'),
+                    description: 'Всё делает ядро Xray: перехватывает трафик компьютера и решает, что отправить через '
+                        'VPN-сервер, а что напрямую — мимо него'),
                 AppMenuItem(TunCore.singbox, 'sing-box',
                     checked: value == TunCore.singbox,
-                    description: 'Трафик принимает sing-box и передаёт в Xray. Попробуйте, если с Xray что-то работает хуже'),
+                    description: 'Трафик перехватывает ядро sing-box и передаёт его Xray, а тот решает, что отправить '
+                        'через VPN-сервер, а что напрямую'),
               ]);
               if (picked != null) onChanged(picked);
             },
