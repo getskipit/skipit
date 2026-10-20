@@ -28,12 +28,16 @@ class PacServer {
   /// Сервер на свободном порту 127.0.0.1, отдаёт [script] на любой запрос.
   static Future<PacServer> start(String script) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    server.listen((r) {
-      r.response.headers.contentType = ContentType('application', 'x-ns-proxy-autoconfig', charset: 'utf-8');
-      r.response.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
-      r.response.write(script);
-      r.response.close();
-    });
+    server.listen((r) async {
+      try {
+        r.response.headers.contentType = ContentType('application', 'x-ns-proxy-autoconfig', charset: 'utf-8');
+        r.response.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
+        r.response.write(script);
+        await r.response.close();
+      } catch (_) {
+        // Программа оборвала запрос, не дочитав файл, — спросит снова.
+      }
+    }, onError: (_) {});
     // Windows и браузеры запоминают файл по адресу — у каждого подключения он свой.
     final tag = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
     return PacServer._(server, 'http://127.0.0.1:${server.port}$path?$tag');

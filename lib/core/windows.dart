@@ -122,6 +122,10 @@ class WinSys {
 
   /// [bypass] — свой список исключений (пусто — стандартный).
   static Future<void> setProxy(String server, {String bypass = ''}) async {
+    // Свой файл автонастройки (остался от «Смешанного») Windows и браузеры ставят выше «ручного» прокси — убираем.
+    if (PacServer.isOwn(await _regQuery(_internetSettingsKey, 'AutoConfigURL') ?? '')) {
+      await _regDelete(_internetSettingsKey, 'AutoConfigURL');
+    }
     await _regSet(_internetSettingsKey, 'ProxyServer', 'REG_SZ', server);
     await _regSet(_internetSettingsKey, 'ProxyOverride', 'REG_SZ', bypass.isEmpty ? defaultProxyBypass : bypass);
     await _regSet(_internetSettingsKey, 'ProxyEnable', 'REG_DWORD', '1');
@@ -635,15 +639,7 @@ class WinSys {
       _refreshInternetSettings();
     }
     final port = localProxyPort(proxy);
-    if (port != null) {
-      try {
-        final s = await Socket.connect(InternetAddress.loopbackIPv4, port,
-            timeout: const Duration(milliseconds: 400));
-        s.destroy();
-      } catch (_) {
-        await restoreProxy(null);
-      }
-    }
+    if (port != null && !await _listening(port)) await restoreProxy(null);
   }
 
   /// Слушает ли кто-нибудь локальный порт [port].

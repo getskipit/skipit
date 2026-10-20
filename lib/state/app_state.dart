@@ -2096,6 +2096,8 @@ class AppState extends ChangeNotifier {
           final ours = WinSys.localProxyPort(now) == session.httpPort || PacServer.isOwn(now.autoConfig ?? '');
           settings.previousProxy = ours ? null : now;
         }
+        // Отмечаем до записи в реестр: если она сорвётся на полпути, отключение всё равно вернёт прежний прокси.
+        settings.systemProxyActive = true;
         if (settings.mode == ConnectionMode.mixed) {
           // Через файл автонастройки: его понимают браузеры, а программы, которые знают только «ручной» прокси
           // (игры на Python вроде Мира танков ломаются, увидев его), идут через адаптер (см. PacServer).
@@ -2104,7 +2106,6 @@ class AppState extends ChangeNotifier {
         } else {
           await WinSys.setProxy('127.0.0.1:${session.httpPort}', bypass: settings.proxyBypass);
         }
-        settings.systemProxyActive = true;
       }
       await saveNow();
 
