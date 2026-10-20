@@ -13,7 +13,7 @@ void main() {
     expect(s, contains('shExpMatch(host, "192.168.*")'));
     expect(s, contains('isPlainHostName(host)'));
     expect(s, contains('return "DIRECT"'));
-    expect(s, contains('return "PROXY 127.0.0.1:10809"'));
+    expect(s, contains('return "PROXY 127.0.0.1:10809; DIRECT"'));
   });
 
   test('без своих исключений — стандартный список Windows', () {

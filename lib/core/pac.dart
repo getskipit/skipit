@@ -43,6 +43,9 @@ class PacServer {
 
   /// Текст файла: всё через HTTP-порт ядра [httpPort], кроме «Исключений системного прокси» [bypass]
   /// (пусто — стандартный список). Исключения — в том же виде, что у Windows: «*.example;192.168.*;<local>».
+  /// Если прокси недоступен, программа подключается без него («DIRECT»), то есть через адаптер VPN — по тем
+  /// же правилам, что и в режиме TUN. Так работают приложения из Microsoft Store: Windows не пускает их к
+  /// 127.0.0.1, и без запасного пути они оставались без сети (Xbox не запускался).
   static String script(int httpPort, String bypass) {
     final conditions = <String>[];
     for (final raw in (bypass.isEmpty ? WinSys.defaultProxyBypass : bypass).split(RegExp(r'[;,\s]+'))) {
@@ -54,7 +57,7 @@ class PacServer {
     return 'function FindProxyForURL(url, host) {\n'
         '  host = host.toLowerCase();\n'
         '$direct'
-        '  return "PROXY 127.0.0.1:$httpPort";\n'
+        '  return "PROXY 127.0.0.1:$httpPort; DIRECT";\n'
         '}\n';
   }
 }
