@@ -933,45 +933,80 @@ class _SettingsHeader extends StatelessWidget {
       ),
     );
     const big = TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, height: 1.2);
-    final title = g == null
-        ? Column(
-            key: const ValueKey('grid'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Настройки', maxLines: 1, style: big),
-              const SizedBox(height: 2),
-              Text(hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 13)),
-            ],
-          )
-        : Column(
-            key: ValueKey(g.title),
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Настройки', style: TextStyle(color: C.muted, fontSize: 13, fontWeight: FontWeight.w600)),
-              Text(g.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: big),
-            ],
-          );
+    // «Настройки» плавно уменьшается из заголовка в надпись над группой (и обратно), а строка под ним —
+    // подпись страницы или название группы — выезжает снизу и проявляется; высота строк меняется плавно.
+    final title = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          // На основе общего стиля: иначе у надписи пропал бы шрифт программы.
+          style: DefaultTextStyle.of(context).style.merge(g == null
+              ? big.copyWith(color: C.text)
+              : TextStyle(color: C.muted, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0, height: 1.2)),
+          child: const Text('Настройки', maxLines: 1),
+        ),
+        const SizedBox(height: 2),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          height: g == null ? 17 : 34,
+          clipBehavior: Clip.hardEdge,
+          decoration: const BoxDecoration(),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder: (current, previous) =>
+                Stack(alignment: Alignment.topLeft, children: [...previous, if (current != null) current]),
+            // Старая строка гаснет за первую половину, новая выезжает и проявляется во второй — не накладываются.
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: CurvedAnimation(parent: anim, curve: const Interval(0.45, 1)),
+              child: SlideTransition(
+                position: Tween(begin: const Offset(0, 0.35), end: Offset.zero).animate(anim),
+                child: child,
+              ),
+            ),
+            child: g == null
+                ? Text(hint,
+                    key: const ValueKey('hint'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: C.muted, fontSize: 13, height: 1.3))
+                : Text(g.title, key: ValueKey(g.title), maxLines: 1, overflow: TextOverflow.ellipsis, style: big),
+          ),
+        ),
+      ],
+    );
     final heading = SizedBox(
       height: 58,
       child: Row(children: [
-        AnimatedSize(
-          duration: const Duration(milliseconds: 240),
+        // Место под стрелку растёт, а сама круглая кнопка не обрезается: она проявляется и подрастает
+        // из своего центра (обрезка по прямоугольнику показывала её «квадратом»).
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: g == null ? 0 : 1),
+          duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
-          child: g == null ? const SizedBox(height: 40) : back,
+          child: back,
+          builder: (context, t, child) => t == 0
+              ? const SizedBox.shrink()
+              : SizedBox(
+                  width: 54 * t,
+                  height: 40,
+                  child: OverflowBox(
+                    alignment: Alignment.centerLeft,
+                    minWidth: 54,
+                    maxWidth: 54,
+                    child: Opacity(
+                      opacity: t,
+                      child: Transform.scale(scale: 0.7 + 0.3 * t, alignment: const Alignment(-0.26, 0), child: child),
+                    ),
+                  ),
+                ),
         ),
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            layoutBuilder: (current, previous) =>
-                Stack(alignment: Alignment.centerLeft, children: [...previous, if (current != null) current]),
-            // Старая надпись гаснет, потом проявляется новая — без наложения.
-            transitionBuilder: (child, anim) =>
-                FadeTransition(opacity: CurvedAnimation(parent: anim, curve: const Interval(0.5, 1)), child: child),
-            child: title,
-          ),
-        ),
+        Expanded(child: title),
       ]),
     );
     return Padding(
