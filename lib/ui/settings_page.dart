@@ -70,6 +70,9 @@ class _SettingsPageState extends State<SettingsPage> {
   final _search = TextEditingController();
   String _query = '';
 
+  /// Открытая группа настроек; null — плитки всех групп.
+  int? _group;
+
 
   @override
   void dispose() {
@@ -179,8 +182,13 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         );
 
-    final sections = <Widget>[
-        _Section('Подключение', [
+    final groups = <_Group>[
+      _Group(
+        Icons.bolt_rounded,
+        'Подключение',
+        '${s.killSwitch ? 'Kill Switch включён' : 'Kill Switch выключен'} · режим TUN ${s.tunCore == TunCore.xray ? 'Xray' : 'sing-box'}',
+        [
+        _Section('', [
           toggle('Подключаться при запуске', 'Автоматически включать VPN при автозапуске', s.connectOnStart,
               (v) => s.connectOnStart = v),
           toggle('Переподключаться при сбое', 'Перезапускать ядро, если оно упало', s.autoReconnect,
@@ -230,58 +238,14 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
         ]),
-        _Section('Подписки', [
-          toggle('Обновлять при запуске', 'Загружать свежий список серверов при старте', s.updateSubsOnStart,
-              (v) => s.updateSubsOnStart = v),
-          toggle('Обновлять через VPN', 'Если подключено — качать подписку через туннель', s.updateViaProxy,
-              (v) => s.updateViaProxy = v),
-          _Row(
-            title: 'User-Agent',
-            subtitle: 'Некоторые панели отдают разный формат по User-Agent',
-            trailing: SizedBox(
-              width: 340,
-              child: _UserAgentField(
-                value: s.userAgent,
-                onChanged: (v) {
-                  // Пустое поле — это стандартное значение, а не пустой заголовок в запросе.
-                  s.userAgent = v.isEmpty ? AppSettings.defaultUserAgent : v;
-                  state.changed();
-                },
-              ),
-            ),
-          ),
-          toggle('Отправлять HWID', 'Заголовки x-hwid / x-device-os для лимита устройств у провайдера', s.sendHwid,
-              (v) => s.sendHwid = v),
-          _Row(
-            title: 'HWID устройства',
-            subtitle: s.hwid,
-            trailing: IconButton(
-              icon: const Icon(Icons.copy_rounded),
-              onPressed: () => Clipboard.setData(ClipboardData(text: s.hwid)),
-            ),
-          ),
-        ]),
-        _Section('Проверка задержки', [
-          _Row(
-            title: 'Тип проверки',
-            subtitle: switch (s.pingType) {
-              PingType.realDelay => 'Реальная: через каждый сервер открывается адрес проверки — видно, работает ли '
-                  'сервер на самом деле и сколько ждать ответа. Точнее, но дольше',
-              PingType.tcp => 'TCP: только стучится в порт сервера напрямую — быстро, но сервер может отвечать '
-                  'и при этом не пропускать трафик',
-            },
-            trailing: Segmented<PingType>(
-              value: s.pingType,
-              items: const {PingType.realDelay: 'Реальная', PingType.tcp: 'TCP'},
-              onChanged: (v) {
-                s.pingType = v;
-                state.changed();
-              },
-            ),
-          ),
-          text('Адрес для проверки', 'Должен отвечать быстро (204)', s.testUrl, (v) => s.testUrl = v),
-        ]),
-        _Section('Программа', [
+      ]),
+      _Group(
+        Icons.palette_rounded,
+        'Внешний вид',
+        '${switch (s.theme) { AppTheme.dark => 'Тёмная тема', AppTheme.light => 'Светлая тема', AppTheme.system => 'Тема как в Windows' }} · '
+            '${s.uiScale} % · меню ${s.navTop ? 'сверху' : 'слева'}',
+        [
+        _Section('', [
           _Row(
             title: 'Тема',
             subtitle: '«Как в системе» следует за настройкой Windows',
@@ -333,6 +297,47 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           toggle('Меньше анимаций', 'Списки, меню и переходы срабатывают сразу, без плавного движения. Для слабых компьютеров',
               s.reduceMotion, (v) => s.reduceMotion = v),
+        ]),
+      ]),
+      _Group(
+        Icons.cloud_sync_rounded,
+        'Подписки и серверы',
+        '${s.updateSubsOnStart ? 'Обновляются при запуске' : 'Не обновляются при запуске'} · проверка задержки '
+            '${s.pingType == PingType.realDelay ? 'реальная' : 'TCP'}',
+        [
+        _Section('Подписки', [
+          toggle('Обновлять при запуске', 'Загружать свежий список серверов при старте', s.updateSubsOnStart,
+              (v) => s.updateSubsOnStart = v),
+          toggle('Обновлять через VPN', 'Если подключено — качать подписку через туннель', s.updateViaProxy,
+              (v) => s.updateViaProxy = v),
+        ]),
+        _Section('Проверка задержки', [
+          _Row(
+            title: 'Тип проверки',
+            subtitle: switch (s.pingType) {
+              PingType.realDelay => 'Реальная: через каждый сервер открывается адрес проверки — видно, работает ли '
+                  'сервер на самом деле и сколько ждать ответа. Точнее, но дольше',
+              PingType.tcp => 'TCP: только стучится в порт сервера напрямую — быстро, но сервер может отвечать '
+                  'и при этом не пропускать трафик',
+            },
+            trailing: Segmented<PingType>(
+              value: s.pingType,
+              items: const {PingType.realDelay: 'Реальная', PingType.tcp: 'TCP'},
+              onChanged: (v) {
+                s.pingType = v;
+                state.changed();
+              },
+            ),
+          ),
+          text('Адрес для проверки', 'Должен отвечать быстро (204)', s.testUrl, (v) => s.testUrl = v),
+        ]),
+      ]),
+      _Group(
+        Icons.desktop_windows_rounded,
+        'Программа',
+        '${state.autostart ? 'Автозапуск включён' : 'Автозапуск выключен'} · трей, уведомления, перенос, «Починить сеть»',
+        [
+        _Section('', [
           toggle('Запускать вместе с Windows', 'Запускать приложение при входе в Windows', state.autostart,
               (v) => state.setAutostart(v)),
           toggle('Сворачивать в трей при закрытии', 'Крестик прячет окно в трей, VPN продолжает работать. Выход — через меню значка в трее',
@@ -341,7 +346,150 @@ class _SettingsPageState extends State<SettingsPage> {
                   'И напоминать, что программа осталась в трее',
               s.notifications, (v) => s.notifications = v),
         ]),
-        _CollapsibleSection('Сеть', 'IPv6, MTU, сниффинг, исключения системного прокси, доступ из локальной сети — обычно менять не нужно', [
+        _Section('Данные', [
+          _Row(
+            title: 'Папка данных',
+            subtitle: 'Настройки, подписки и журнал (папка logs)',
+            trailing: GhostButton(
+              label: 'Открыть',
+              icon: Icons.folder_open_rounded,
+              onPressed: () => Process.run(AppPaths.explorer, [AppPaths.dataDir.path]),
+            ),
+          ),
+          // Подписки на диске зашифрованы для этой учётной записи Windows: перенести их на другой
+          // компьютер копированием папки нельзя — для этого экспорт и импорт.
+          _Row(
+            title: 'Перенос настроек',
+            subtitle: 'Подписки хранятся зашифрованными для вашей учётной записи Windows. '
+                'Для переноса на другой компьютер сохраните их в файл',
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              GhostButton(
+                label: 'Экспорт',
+                icon: Icons.upload_rounded,
+                onPressed: () async {
+                  final ok = await confirm(context, 'Сохранить настройки в файл?',
+                      'В файле будут ссылки подписок и ключи серверов открытым текстом. '
+                          'Храните его как пароль и удалите после переноса.');
+                  if (!ok) return;
+                  final dir = await WinSys.pickFolder();
+                  if (dir == null) return;
+                  try {
+                    final path = await state.exportData(dir);
+                    state.toast('Сохранено: ${path.split(r'\').last}');
+                  } catch (e) {
+                    state.toast('Не удалось сохранить файл: ${describeNetError(e)}');
+                  }
+                },
+              ),
+              const SizedBox(width: 8),
+              GhostButton(
+                label: 'Импорт',
+                icon: Icons.download_rounded,
+                onPressed: () async {
+                  final path = await WinSys.pickFile(filter: 'Настройки SkipIt (*.json)|*.json');
+                  if (path == null || !context.mounted) return;
+                  final ok = await confirm(context, 'Заменить настройки?',
+                      'Текущие подписки, серверы и настройки будут заменены содержимым файла.');
+                  if (!ok) return;
+                  final error = await state.importData(path);
+                  state.toast(error ?? 'Настройки загружены из файла',
+                      kind: error == null ? ToastKind.success : ToastKind.error);
+                },
+              ),
+            ]),
+          ),
+        ]),
+        _Section('Сброс', [
+          _Row(
+            title: 'Сбросить настройки',
+            subtitle: 'Все настройки вернутся к стандартным. Подписки, серверы, профили маршрутизации, правила '
+                'программ, HWID и пароль портов останутся',
+            trailing: GhostButton(
+              label: 'Сбросить',
+              icon: Icons.restart_alt_rounded,
+              onPressed: () async {
+                final ok = await confirm(context, 'Сбросить настройки?',
+                    'Все настройки вернутся к стандартным. Подписки, серверы, профили и правила программ останутся.',
+                    ok: 'Сбросить');
+                if (!ok) return;
+                final error = await state.resetSettings();
+                state.toast(error ?? 'Настройки сброшены', kind: error == null ? ToastKind.success : ToastKind.error);
+              },
+            ),
+          ),
+          _Row(
+            title: 'Починить сеть',
+            subtitle: 'Если интернет пропал или VPN «застрял»: отключает VPN, закрывает зависшие ядра, возвращает '
+                'прокси Windows, убирает адаптеры SkipIt и фильтры Kill Switch, очищает кэш DNS',
+            trailing: GhostButton(
+              label: 'Починить',
+              icon: Icons.build_rounded,
+              busy: state.repairing,
+              onPressed: state.isBusy
+                  ? null
+                  : () async {
+                      final ok = await confirm(context, 'Починить сеть?', 'VPN отключится, если он подключён.',
+                          ok: 'Починить');
+                      if (!ok) return;
+                      await state.repairNetwork();
+                      state.toast('Готово: сеть приведена в порядок', kind: ToastKind.success);
+                    },
+            ),
+          ),
+          _Row(
+            title: 'Удалить все данные',
+            subtitle: 'Удаляет подписки, серверы, профили, правила и настройки — как после новой установки. HWID '
+                'останется, поэтому провайдер не посчитает компьютер новым устройством',
+            trailing: GhostButton(
+              label: 'Удалить',
+              icon: Icons.delete_forever_rounded,
+              onPressed: () async {
+                final ok = await confirm(context, 'Удалить все данные?',
+                    'Подписки, серверы, профили, правила программ и настройки будут удалены без возможности '
+                        'вернуть. Чтобы сохранить их, сначала нажмите «Экспорт» выше, в разделе «Данные».');
+                if (!ok) return;
+                final error = await state.deleteAllData();
+                state.toast(error ?? 'Все данные удалены', kind: error == null ? ToastKind.success : ToastKind.error);
+              },
+            ),
+          ),
+        ]),
+      ]),
+      _Group(
+        Icons.construction_rounded,
+        'Для опытных',
+        [s.fragment ? 'фрагментация' : '', s.noise ? 'шумы' : '', s.mux ? 'Mux' : ''].any((e) => e.isNotEmpty)
+            ? 'Включено: ${[s.fragment ? 'фрагментация' : '', s.noise ? 'шумы' : '', s.mux ? 'Mux' : ''].where((e) => e.isNotEmpty).join(', ')}'
+            : 'Сеть, порты, фрагментация, шумы, Mux, User-Agent',
+        [
+        _Section('Подписки', [
+          _Row(
+            title: 'User-Agent',
+            subtitle: 'Некоторые панели отдают разный формат по User-Agent',
+            trailing: SizedBox(
+              width: 340,
+              child: _UserAgentField(
+                value: s.userAgent,
+                onChanged: (v) {
+                  // Пустое поле — это стандартное значение, а не пустой заголовок в запросе.
+                  s.userAgent = v.isEmpty ? AppSettings.defaultUserAgent : v;
+                  state.changed();
+                },
+              ),
+            ),
+          ),
+          toggle('Отправлять HWID', 'Заголовки x-hwid / x-device-os для лимита устройств у провайдера', s.sendHwid,
+              (v) => s.sendHwid = v),
+          _Row(
+            title: 'HWID устройства',
+            subtitle: s.hwid,
+            trailing: IconButton(
+              icon: const Icon(Icons.copy_rounded),
+              onPressed: () => Clipboard.setData(ClipboardData(text: s.hwid)),
+            ),
+          ),
+        ]),
+        _Section('Сеть', [
           toggle('IPv6', 'Включить IPv6 в туннеле и DNS', s.ipv6, (v) => s.ipv6 = v),
           number('MTU TUN-адаптера', 'Обычно 1500 или 9000', s.mtu, (v) => s.mtu = v),
           toggle('Сниффинг', 'Определять домен по TLS/HTTP/QUIC — нужен для маршрутизации по сайтам', s.sniffing,
@@ -356,7 +504,7 @@ class _SettingsPageState extends State<SettingsPage> {
           toggle('Разрешить подключения из локальной сети', 'Раздавать прокси другим устройствам (0.0.0.0)', s.allowLan,
               (v) => s.allowLan = v),
         ]),
-        _CollapsibleSection('Соединение с сервером', 'Фрагментация, шумы и мультиплексирование (Mux) — для серверов из ссылок', [
+        _Section('Соединение с сервером', [
           toggle(
               'Фрагментация',
               'Отправлять начало соединения с сервером частями — помогает, если интернет-провайдер не пускает '
@@ -433,7 +581,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 '0 — вместе с TCP. Обычно 16', s.muxXudp, (v) => s.muxXudp = v),
           ],
         ]),
-        _CollapsibleSection('Локальные порты', 'SOCKS и HTTP, пароль на порты, порт статистики — обычно менять не нужно', [
+        _Section('Локальные порты', [
           number('SOCKS-порт', 'Локальный SOCKS5-прокси', s.socksPort, (v) => s.socksPort = v),
           number('HTTP-порт', 'Используется системным прокси', s.httpPort, (v) => s.httpPort = v),
           toggle(
@@ -459,7 +607,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
           number('Порт API статистики', 'Для счётчиков трафика', s.apiPort, (v) => s.apiPort = v),
         ]),
-        _Section('Журнал и данные', [
+        _Section('Журнал', [
           _Row(
             title: 'Уровень логов',
             subtitle: 'debug — максимум подробностей',
@@ -472,59 +620,15 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
-          _Row(
-            title: 'Папка данных',
-            subtitle: 'Настройки, подписки и журнал (папка logs)',
-            trailing: GhostButton(
-              label: 'Открыть',
-              icon: Icons.folder_open_rounded,
-              onPressed: () => Process.run(AppPaths.explorer, [AppPaths.dataDir.path]),
-            ),
-          ),
-          // Подписки на диске зашифрованы для этой учётной записи Windows: перенести их на другой
-          // компьютер копированием папки нельзя — для этого экспорт и импорт.
-          _Row(
-            title: 'Перенос настроек',
-            subtitle: 'Подписки хранятся зашифрованными для вашей учётной записи Windows. '
-                'Для переноса на другой компьютер сохраните их в файл',
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              GhostButton(
-                label: 'Экспорт',
-                icon: Icons.upload_rounded,
-                onPressed: () async {
-                  final ok = await confirm(context, 'Сохранить настройки в файл?',
-                      'В файле будут ссылки подписок и ключи серверов открытым текстом. '
-                          'Храните его как пароль и удалите после переноса.');
-                  if (!ok) return;
-                  final dir = await WinSys.pickFolder();
-                  if (dir == null) return;
-                  try {
-                    final path = await state.exportData(dir);
-                    state.toast('Сохранено: ${path.split(r'\').last}');
-                  } catch (e) {
-                    state.toast('Не удалось сохранить файл: ${describeNetError(e)}');
-                  }
-                },
-              ),
-              const SizedBox(width: 8),
-              GhostButton(
-                label: 'Импорт',
-                icon: Icons.download_rounded,
-                onPressed: () async {
-                  final path = await WinSys.pickFile(filter: 'Настройки SkipIt (*.json)|*.json');
-                  if (path == null || !context.mounted) return;
-                  final ok = await confirm(context, 'Заменить настройки?',
-                      'Текущие подписки, серверы и настройки будут заменены содержимым файла.');
-                  if (!ok) return;
-                  final error = await state.importData(path);
-                  state.toast(error ?? 'Настройки загружены из файла',
-                      kind: error == null ? ToastKind.success : ToastKind.error);
-                },
-              ),
-            ]),
-          ),
         ]),
-        _Section('О приложении', [
+      ]),
+      _Group(
+        Icons.info_rounded,
+        'О программе',
+        state.appUpdate != null ? 'Доступна версия ${state.appUpdate!.version}' : 'Версия $appVersion',
+        alert: SettingsPage._coresMissing(state) ? C.red : (state.appUpdate != null ? C.orange : null),
+        [
+        _Section('', [
           _Row(
             title: 'Версия SkipIt',
             subtitle: [
@@ -586,112 +690,217 @@ class _SettingsPageState extends State<SettingsPage> {
                 : const SizedBox.shrink(),
           ),
         ]),
-        _Section('Сброс', [
-          _Row(
-            title: 'Сбросить настройки',
-            subtitle: 'Все настройки вернутся к стандартным. Подписки, серверы, профили маршрутизации, правила '
-                'программ, HWID и пароль портов останутся',
-            trailing: GhostButton(
-              label: 'Сбросить',
-              icon: Icons.restart_alt_rounded,
-              onPressed: () async {
-                final ok = await confirm(context, 'Сбросить настройки?',
-                    'Все настройки вернутся к стандартным. Подписки, серверы, профили и правила программ останутся.',
-                    ok: 'Сбросить');
-                if (!ok) return;
-                final error = await state.resetSettings();
-                state.toast(error ?? 'Настройки сброшены', kind: error == null ? ToastKind.success : ToastKind.error);
-              },
-            ),
-          ),
-          _Row(
-            title: 'Починить сеть',
-            subtitle: 'Если интернет пропал или VPN «застрял»: отключает VPN, закрывает зависшие ядра, возвращает '
-                'прокси Windows, убирает адаптеры SkipIt и фильтры Kill Switch, очищает кэш DNS',
-            trailing: GhostButton(
-              label: 'Починить',
-              icon: Icons.build_rounded,
-              busy: state.repairing,
-              onPressed: state.isBusy
-                  ? null
-                  : () async {
-                      final ok = await confirm(context, 'Починить сеть?', 'VPN отключится, если он подключён.',
-                          ok: 'Починить');
-                      if (!ok) return;
-                      await state.repairNetwork();
-                      state.toast('Готово: сеть приведена в порядок', kind: ToastKind.success);
-                    },
-            ),
-          ),
-          _Row(
-            title: 'Удалить все данные',
-            subtitle: 'Удаляет подписки, серверы, профили, правила и настройки — как после новой установки. HWID '
-                'останется, поэтому провайдер не посчитает компьютер новым устройством',
-            trailing: GhostButton(
-              label: 'Удалить',
-              icon: Icons.delete_forever_rounded,
-              onPressed: () async {
-                final ok = await confirm(context, 'Удалить все данные?',
-                    'Подписки, серверы, профили, правила программ и настройки будут удалены без возможности '
-                        'вернуть. Чтобы сохранить их, сначала нажмите «Экспорт» в разделе «О приложении».');
-                if (!ok) return;
-                final error = await state.deleteAllData();
-                state.toast(error ?? 'Все данные удалены', kind: error == null ? ToastKind.success : ToastKind.error);
-              },
-            ),
-          ),
-        ]),
+      ]),
     ];
 
-    // Ушли в другой раздел меню — поиск сбрасывается: вернувшись, человек видит все настройки.
-    if (state.pageIndex != AppState.settingsPage && _query.isNotEmpty) {
+    // Ушли в другой раздел меню — поиск сбрасывается, открытая группа закрывается: вернувшись, человек
+    // видит плитки всех групп.
+    if (state.pageIndex != AppState.settingsPage && (_query.isNotEmpty || _group != null)) {
       _search.clear();
       _query = '';
+      _group = null;
     }
     final query = _query.trim().toLowerCase();
-    final found = sections.any((s) => switch (s) {
-          _Section s => _found(s.title, s.children, query).isNotEmpty,
-          _CollapsibleSection s => _found(s.title, s.children, query).isNotEmpty,
-          _ => true,
-        });
+    final search = SizedBox(
+      width: 260,
+      child: TextField(
+        controller: _search,
+        onChanged: (v) => setState(() => _query = v),
+        decoration: InputDecoration(
+          hintText: 'Поиск по настройкам',
+          isDense: true,
+          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Очистить',
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: () => setState(() {
+                    _search.clear();
+                    _query = '';
+                  }),
+                ),
+        ),
+      ),
+    );
+    const hint = 'Изменения портов и ядра применяются при следующем подключении';
+
+    void openGroup(int? i) {
+      setState(() => _group = i);
+      final scroll = PrimaryScrollController.maybeOf(context);
+      if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
+    }
+
+    final List<Widget> body;
+    if (query.isNotEmpty) {
+      // Поиск — по всем группам сразу; у раздела без своего названия подписью служит название группы.
+      final sections = [
+        for (final g in groups)
+          for (final sec in g.sections) _Section(sec.title.isEmpty ? g.title : '${g.title} · ${sec.title}', sec.children),
+      ];
+      final found = sections.any((s) => _found(s.title, s.children, query).isNotEmpty);
+      body = [
+        PageHeader('Настройки', subtitle: hint, actions: [search]),
+        ...sections,
+        if (!found)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text('Ничего не найдено. Попробуйте другое слово — например, «порт» или «трей».',
+                style: TextStyle(color: C.muted, fontSize: 13)),
+          ),
+      ];
+    } else if (_group != null) {
+      final g = groups[_group!];
+      body = [
+        _GroupHeader(group: g, search: search, onBack: () => openGroup(null)),
+        ...g.sections,
+      ];
+    } else {
+      body = [
+        PageHeader('Настройки', subtitle: hint, actions: [search]),
+        _GroupGrid(groups: groups, onOpen: openGroup),
+      ];
+    }
     return _SettingsQuery(
       query: query,
-      child: ListView(
-        primary: true,
-        padding: const EdgeInsets.only(bottom: 28),
-        children: [
-          PageHeader('Настройки', subtitle: 'Изменения портов и ядра применяются при следующем подключении', actions: [
-            SizedBox(
-              width: 260,
-              child: TextField(
-                controller: _search,
-                onChanged: (v) => setState(() => _query = v),
-                decoration: InputDecoration(
-                  hintText: 'Поиск по настройкам',
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Очистить',
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: () => setState(() {
-                            _search.clear();
-                            _query = '';
-                          }),
-                        ),
+      child: ListView(primary: true, padding: const EdgeInsets.only(bottom: 28), children: body),
+    );
+  }
+}
+
+/// Группа настроек: плитка на первой странице «Настроек» и своя страница с разделами.
+class _Group {
+  const _Group(this.icon, this.title, this.summary, this.sections, {this.alert});
+  final IconData icon;
+  final String title;
+
+  /// Коротко, что сейчас выбрано в группе, — подпись плитки.
+  final String summary;
+  final List<_Section> sections;
+
+  /// Цвет отметки на плитке, если в группе есть что-то важное (доступно обновление, ядро не найдено).
+  final Color? alert;
+}
+
+/// Плитки групп: три в ряд, в узком окне — две.
+class _GroupGrid extends StatelessWidget {
+  const _GroupGrid({required this.groups, required this.onOpen});
+  final List<_Group> groups;
+  final ValueChanged<int> onOpen;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(28, 4, 28, 18),
+        child: LayoutBuilder(builder: (context, c) {
+          const gap = 14.0;
+          final columns = c.maxWidth >= 720 ? 3 : 2;
+          final width = ((c.maxWidth - gap * (columns - 1)) / columns).floorToDouble();
+          return Wrap(spacing: gap, runSpacing: gap, children: [
+            for (var i = 0; i < groups.length; i++)
+              SizedBox(width: width, child: _GroupTile(group: groups[i], onTap: () => onOpen(i))),
+          ]);
+        }),
+      );
+}
+
+class _GroupTile extends StatelessWidget {
+  const _GroupTile({required this.group, required this.onTap});
+  final _Group group;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Hover(
+        builder: (context, hovered) => GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            height: 148,
+            padding: const EdgeInsets.fromLTRB(18, 18, 14, 16),
+            decoration: BoxDecoration(
+              color: hovered ? Color.alphaBlend(C.hover, C.surface) : C.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.6) : C.border),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: C.orange.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(group.icon, size: 22, color: C.orange),
                 ),
+                const Spacer(),
+                if (group.alert != null)
+                  Container(
+                    width: 9,
+                    height: 9,
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(color: group.alert, shape: BoxShape.circle),
+                  ),
+                Icon(Icons.chevron_right_rounded, color: hovered ? C.orange : C.muted),
+              ]),
+              const Spacer(),
+              Text(group.title, maxLines: 1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text(group.summary,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: C.muted, fontSize: 12.5, height: 1.3)),
+            ]),
+          ),
+        ),
+      );
+}
+
+/// Заголовок открытой группы: стрелка назад к плиткам, «Настройки» мелко над названием группы, поиск.
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({required this.group, required this.search, required this.onBack});
+  final _Group group;
+  final Widget search;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final heading = Row(children: [
+      Tooltip(
+        message: 'Все настройки',
+        child: Hover(
+          builder: (context, hovered) => GestureDetector(
+            onTap: onBack,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: hovered ? C.orange.withValues(alpha: 0.14) : C.surface2,
+                shape: BoxShape.circle,
+                border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.6) : C.border),
               ),
+              child: Icon(Icons.arrow_back_rounded, size: 20, color: hovered ? C.orange : C.muted),
             ),
-          ]),
-          ...sections,
-          if (!found)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text('Ничего не найдено. Попробуйте другое слово — например, «порт» или «трей».',
-                  style: TextStyle(color: C.muted, fontSize: 13)),
-            ),
-        ],
+          ),
+        ),
+      ),
+      const SizedBox(width: 14),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Настройки', style: TextStyle(color: C.muted, fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(group.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+        ]),
+      ),
+    ]);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 22, 28, 16),
+      child: LayoutBuilder(
+        builder: (context, c) => c.maxWidth >= 680
+            ? Row(children: [Expanded(child: heading), search])
+            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [heading, const SizedBox(height: 14), search]),
       ),
     );
   }
@@ -799,6 +1008,8 @@ class _Section extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Раздел без названия — единственный или первый в своей группе: заголовок ему не нужен.
+        if (title.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(title.toUpperCase(),
@@ -999,83 +1210,3 @@ class _PartChips extends StatelessWidget {
       ]);
 }
 
-/// Секция, свёрнутая по умолчанию — для технических параметров.
-class _CollapsibleSection extends StatefulWidget {
-  const _CollapsibleSection(this.title, this.hint, this.children);
-  final String title;
-  final String hint;
-  final List<Widget> children;
-
-  @override
-  State<_CollapsibleSection> createState() => _CollapsibleSectionState();
-}
-
-class _CollapsibleSectionState extends State<_CollapsibleSection> {
-  /// Раскрытые разделы — общие на весь запуск: ушли в другой раздел меню и вернулись — они раскрыты.
-  static final _opened = <String>{};
-
-  bool get _open => _opened.contains(widget.title);
-  set _open(bool v) => v ? _opened.add(widget.title) : _opened.remove(widget.title);
-
-  @override
-  Widget build(BuildContext context) {
-    // При поиске раздел раскрыт сам и показывает только подходящие строки.
-    final query = _SettingsQuery.of(context);
-    final rows = _found(widget.title, widget.children, query);
-    if (rows.isEmpty) return const SizedBox.shrink();
-    final open = _open || query.isNotEmpty;
-    return _card(rows, open);
-  }
-
-  Widget _card(List<Widget> rows, bool open) => Padding(
-        padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
-        // Заголовок и содержимое — одна карточка: раскрытый список не «отрывается» от своего заголовка.
-        child: Container(
-          decoration: BoxDecoration(
-            color: C.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: C.border),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Hover(
-              builder: (context, hovered) => GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => setState(() => _open = !_open),
-                child: Container(
-                  color: hovered ? C.hover : Colors.transparent,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                  child: Row(children: [
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(widget.title.toUpperCase(),
-                            style: const TextStyle(
-                                color: C.orange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
-                        const SizedBox(height: 3),
-                        Text(widget.hint, style: TextStyle(color: C.muted, fontSize: 12)),
-                      ]),
-                    ),
-                    AnimatedRotation(
-                      turns: open ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 260),
-                      curve: Curves.easeOutCubic,
-                      child: Icon(Icons.expand_more_rounded, color: hovered ? C.orange : C.muted),
-                    ),
-                  ]),
-                ),
-              ),
-            ),
-            Reveal(
-              open: open,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: Column(children: [
-                  for (final child in rows) ...[const Divider(height: 1), child],
-                  const SizedBox(height: 4),
-                ]),
-              ),
-            ),
-          ]),
-        ),
-      );
-}

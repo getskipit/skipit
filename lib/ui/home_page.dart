@@ -91,7 +91,7 @@ class _HomePageState extends State<HomePage> {
                       )
                     : null;
 
-    // Части, которые можно спрятать в Настройках → Программа → «На главной».
+    // Части, которые можно спрятать в Настройках → Внешний вид → «На главной».
     final show = state.settings.homeShows;
     final stage = Column(mainAxisSize: MainAxisSize.min, children: [
       ConnectGlow(
@@ -165,7 +165,7 @@ class _HomePageState extends State<HomePage> {
             ConnectionMode.proxyOnly =>
               'Система не меняется · SOCKS :${state.settings.socksPort} · HTTP :${state.settings.httpPort}'
                   // Порты под паролем: без подсказки непонятно, почему программа с одним адресом не подключается.
-                  '${state.settings.portAuth ? '\nс логином и паролем — Настройки → Локальные порты' : ''}',
+                  '${state.settings.portAuth ? '\nс логином и паролем — Настройки → Для опытных' : ''}',
           },
           textAlign: TextAlign.center,
           maxLines: 2,

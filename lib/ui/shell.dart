@@ -539,7 +539,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
       );
 }
 
-/// Меню разделов вдоль верхнего края окна (Настройки → Программа → «Расположение меню»). Узкое окно —
+/// Меню разделов вдоль верхнего края окна (Настройки → Внешний вид → «Расположение меню»). Узкое окно —
 /// подписи остаются только у выбранного раздела, у остальных значок с подсказкой.
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.index, required this.items, required this.onSelect});

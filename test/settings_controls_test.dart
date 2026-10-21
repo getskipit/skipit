@@ -38,6 +38,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byIcon(Icons.tune_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Подключение'));
+    await tester.pump(const Duration(milliseconds: 400));
     final scroll = find.descendant(of: find.byType(SettingsPage), matching: find.byType(Scrollable)).first;
 
 
@@ -63,19 +65,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(state.settings.killSwitch, isFalse);
 
-    // Свёрнутая «Сеть» раскрывается без ошибок; уровень логов меняется через выпадающий список.
+    // «Для опытных» открывается без ошибок; уровень логов меняется через выпадающий список.
     Future<void> show(Finder f) async {
       await tester.scrollUntilVisible(f, 200, scrollable: scroll);
       await Scrollable.ensureVisible(tester.element(f), alignment: 0.4);
       await tester.pump(const Duration(milliseconds: 300));
     }
 
-    await show(find.text('СЕТЬ'));
-    await tester.tap(find.text('СЕТЬ'));
+    await tester.tap(find.byTooltip('Все настройки'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Для опытных'));
     for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 80));
       expect(tester.takeException(), isNull);
     }
+    expect(find.text('СЕТЬ'), findsOneWidget);
     await show(find.text('Уровень логов'));
     await tester.tap(find.byType(AppDropdown<String>).first);
     await tester.pump(const Duration(milliseconds: 300));

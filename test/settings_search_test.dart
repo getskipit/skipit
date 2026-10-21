@@ -9,7 +9,7 @@ import 'package:skipit/ui/theme.dart';
 
 /// Поиск по настройкам: по названию строки, по подписи и по ключевым словам.
 void main() {
-  testWidgets('поиск оставляет подходящие строки и сам раскрывает свёрнутые разделы', (tester) async {
+  testWidgets('плитки групп; поиск ищет во всех группах сразу', (tester) async {
     await tester.runAsync(AppPaths.init);
     C.use(Palette.dark);
     tester.view.physicalSize = const Size(1100, 3000);
@@ -32,18 +32,29 @@ void main() {
       }
     }
 
-    // Частые разделы раскрыты, редкие свёрнуты: видны заголовок и что в нём лежит.
-    expect(find.text('Тема').hitTestable(), findsOneWidget);
-    expect(find.textContaining('SOCKS и HTTP'), findsOneWidget);
-    expect(find.text('SOCKS-порт').hitTestable(), findsNothing);
+    // Сначала — плитки групп, самих настроек не видно.
+    expect(find.text('Внешний вид'), findsOneWidget);
+    expect(find.text('Для опытных'), findsOneWidget);
+    expect(find.text('Тема'), findsNothing);
 
-    // По ключевому слову: в названии и подписи строки слова «бэкап» нет.
+    // Плитка открывает группу, стрелка возвращает к плиткам.
+    await tester.tap(find.text('Внешний вид'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Тема').hitTestable(), findsOneWidget);
+    expect(find.text('Kill Switch'), findsNothing);
+    await tester.tap(find.byTooltip('Все настройки'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Тема'), findsNothing);
+    expect(find.text('Внешний вид'), findsOneWidget);
+
+    // По ключевому слову: в названии и подписи строки слова «бэкап» нет. Раздел без своего названия
+    // подписан названием группы.
     await search('бэкап');
     expect(find.text('Перенос настроек').hitTestable(), findsOneWidget);
+    expect(find.text('ПРОГРАММА · ДАННЫЕ'), findsOneWidget);
     expect(find.text('Тема'), findsNothing);
-    expect(find.text('ПРОГРАММА'), findsNothing);
 
-    // По названию; строки свёрнутого раздела находятся тоже.
+    // По названию; строки из «Для опытных» находятся тоже.
     await search('порт');
     expect(find.text('SOCKS-порт'), findsOneWidget);
     expect(find.text('HTTP-порт'), findsOneWidget);
@@ -54,28 +65,33 @@ void main() {
     expect(find.text('Пароль на локальные порты'), findsOneWidget);
     expect(find.text('Порт API статистики'), findsNothing);
 
-    // По названию раздела — весь раздел.
-    await search('программа');
+    // По названию группы — вся группа.
+    await search('внешний вид');
     expect(find.text('Тема'), findsOneWidget);
     expect(find.text('Меньше анимаций'), findsOneWidget);
 
     await search('ъъъ');
     expect(find.textContaining('Ничего не найдено'), findsOneWidget);
 
-    // Ушли в другой раздел и вернулись — поиск сброшен.
+    // Ушли в другой раздел и вернулись — поиск сброшен, группа закрыта.
+    await search('');
+    await tester.tap(find.text('Подключение'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Kill Switch'), findsOneWidget);
     await search('порт');
     await tester.tap(find.byIcon(Icons.bolt_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byIcon(Icons.tune_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Тема'), findsOneWidget);
+    expect(find.text('Внешний вид'), findsOneWidget);
+    expect(find.text('Kill Switch'), findsNothing);
     expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Поиск по настройкам')).controller!.text, isEmpty);
 
     await search('ъъъ');
     await tester.tap(find.byTooltip('Очистить'));
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.text('ПРОГРАММА'), findsOneWidget);
-    expect(find.text('ЖУРНАЛ И ДАННЫЕ'), findsOneWidget);
+    expect(find.text('Программа'), findsOneWidget);
+    expect(find.text('О программе'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
   });
 }
