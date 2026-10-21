@@ -864,7 +864,8 @@ class _Sidebar extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 6),
               child: Row(children: [
-                const AppBadge(size: 36),
+                // В свёрнутом меню значок SkipIt — кнопка «Развернуть меню»: при наведении на нём стрелки.
+                collapsed ? _ExpandBadge(onTap: toggle) : const AppBadge(size: 36),
                 // Свернули и анимация закончилась — надпись убираем совсем, чтобы не выглядывала.
                 if (!collapsed || wide)
                 Expanded(
@@ -882,12 +883,24 @@ class _Sidebar extends StatelessWidget {
                         child: AnimatedOpacity(
                           opacity: collapsed ? 0 : 1,
                           duration: const Duration(milliseconds: 200),
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 11),
-                            child: Text(AppPaths.appName,
-                                maxLines: 1,
-                                softWrap: false,
-                                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+                          // Название и справа от него кнопка «Свернуть меню»: они уезжают и гаснут вместе,
+                          // пункты меню при этом не сдвигаются. Ширина — как у места под ними в развёрнутом меню.
+                          child: SizedBox(
+                            width: _expandedWidth - 22 - 6 - 36,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 11),
+                              child: Row(children: [
+                                Expanded(
+                                  child: Text(AppPaths.appName,
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      overflow: TextOverflow.fade,
+                                      style: const TextStyle(
+                                          fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+                                ),
+                                _CollapseButton(onTap: toggle),
+                              ]),
+                            ),
                           ),
                         ),
                       ),
@@ -898,7 +911,7 @@ class _Sidebar extends StatelessWidget {
               ]),
             ),
             // Одинаковый отступ в обоих состояниях — пункты меню не сдвигаются при сворачивании.
-            const SizedBox(height: 20),
+            const SizedBox(height: 26),
             // Подсветка выбранного пункта — одна на всё меню и «скользит» к новому пункту,
             // как у переключателей режимов.
             Stack(fit: StackFit.passthrough, children: [
@@ -937,16 +950,6 @@ class _Sidebar extends StatelessWidget {
               ]),
             ]),
             const Spacer(),
-            // Свернуть / развернуть — обычный пункт внизу меню: значок стоит на месте, подпись выезжает,
-            // в свёрнутом меню она переезжает в подсказку.
-            _NavItem(
-              icon: collapsed ? Icons.keyboard_double_arrow_right_rounded : Icons.keyboard_double_arrow_left_rounded,
-              label: 'Свернуть меню',
-              tooltip: 'Развернуть меню',
-              selected: false,
-              collapsed: collapsed,
-              onTap: toggle,
-            ),
             // Статус: одна раскладка в обоих состояниях — точка на месте, текст выезжает.
             Tooltip(
               // В подсказке флаг — картинкой (в тексте Windows вместо него показала бы буквы «DE»).
@@ -1006,6 +1009,68 @@ class _Sidebar extends StatelessWidget {
   }
 }
 
+/// Кнопка «Свернуть меню» справа от названия SkipIt.
+class _CollapseButton extends StatelessWidget {
+  const _CollapseButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: 'Свернуть меню',
+        waitDuration: const Duration(milliseconds: 300),
+        child: Hover(
+          builder: (context, hovered) => GestureDetector(
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: hovered ? C.orange.withValues(alpha: 0.14) : Colors.transparent,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(Icons.keyboard_double_arrow_left_rounded, size: 18, color: hovered ? C.orange : C.muted),
+            ),
+          ),
+        ),
+      );
+}
+
+/// Значок SkipIt в свёрнутом меню: при наведении на нём стрелки «развернуть», нажатие разворачивает меню.
+class _ExpandBadge extends StatelessWidget {
+  const _ExpandBadge({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: 'Развернуть меню',
+        waitDuration: const Duration(milliseconds: 300),
+        child: Hover(
+          builder: (context, hovered) => GestureDetector(
+            onTap: onTap,
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 160),
+                child: hovered
+                    ? Container(
+                        key: const ValueKey('expand'),
+                        decoration: BoxDecoration(
+                          color: C.orange.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: C.orange.withValues(alpha: 0.5)),
+                        ),
+                        child: Icon(Icons.keyboard_double_arrow_right_rounded, size: 20, color: C.orange),
+                      )
+                    : const AppBadge(key: ValueKey('badge'), size: 36),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
@@ -1013,13 +1078,9 @@ class _NavItem extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.collapsed = false,
-    this.tooltip,
   });
   final IconData icon;
   final String label;
-
-  /// Подсказка в свёрнутом меню, если она не совпадает с названием.
-  final String? tooltip;
   final bool selected;
   final bool collapsed;
   final VoidCallback onTap;
@@ -1072,7 +1133,7 @@ class _NavItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: extent - height),
       child: Tooltip(
-        message: collapsed ? (tooltip ?? label) : '',
+        message: collapsed ? label : '',
         waitDuration: const Duration(milliseconds: 300),
         child: item,
       ),
