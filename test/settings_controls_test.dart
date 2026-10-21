@@ -40,6 +40,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text('Подключение'));
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
     final scroll = find.descendant(of: find.byType(SettingsPage), matching: find.byType(Scrollable)).first;
 
 

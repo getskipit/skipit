@@ -40,11 +40,12 @@ void main() {
     // Плитка открывает группу, стрелка возвращает к плиткам.
     await tester.tap(find.text('Внешний вид'));
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Тема').hitTestable(), findsOneWidget);
     expect(find.text('Kill Switch'), findsNothing);
     await tester.tap(find.byTooltip('Все настройки'));
     await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Тема'), findsNothing);
     expect(find.text('Внешний вид'), findsOneWidget);
 
@@ -78,13 +79,14 @@ void main() {
     await search('');
     await tester.tap(find.text('Подключение'));
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Kill Switch'), findsOneWidget);
     await search('порт');
     await tester.tap(find.byIcon(Icons.bolt_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byIcon(Icons.tune_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Внешний вид'), findsOneWidget);
     expect(find.text('Kill Switch'), findsNothing);
     expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Поиск по настройкам')).controller!.text, isEmpty);
