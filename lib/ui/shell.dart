@@ -127,6 +127,7 @@ Future<bool> _askAboutZapret(BuildContext context, AppState state, String zapret
             const SizedBox(height: 10),
             InkWell(
               borderRadius: BorderRadius.circular(8),
+              mouseCursor: SystemMouseCursors.click,
               onTap: () => setLocal(() => dontAsk = !dontAsk),
               child: Row(children: [
                 Checkbox(
@@ -223,8 +224,6 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   StreamSubscription<ToastMessage>? _sub;
-
-  final _pagesKey = GlobalKey();
 
   static const _items = [
     (Icons.bolt_rounded, 'Главная'),
@@ -361,20 +360,26 @@ class _ShellState extends State<Shell> {
           actions: {_PasteIntent: _PasteAction(() => importFromClipboard(context))},
           child: Focus(
             autofocus: true,
-            child: Flex(
-              direction: AppScope.of(context).settings.navTop ? Axis.vertical : Axis.horizontal,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-          AppScope.of(context).settings.navTop
-              ? _TopBar(index: _index, items: _items, onSelect: go)
-              : _Sidebar(index: _index, items: _items, onSelect: go),
+            // Оба меню всегда на своих местах: при смене «слева / сверху» одно плавно сворачивается,
+            // другое разворачивается, а разделы между ними не строятся заново. Боковое — на всю высоту
+            // окна, верхнее — только над разделами: пока оба видны, верхнее не отнимает высоту у бокового.
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              _MenuSlot(
+                shown: !AppScope.of(context).settings.navTop,
+                axis: Axis.horizontal,
+                child: _Sidebar(index: _index, items: _items, onSelect: go),
+              ),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _MenuSlot(
+            shown: AppScope.of(context).settings.navTop,
+            axis: Axis.vertical,
+            child: _TopBar(index: _index, items: _items, onSelect: go),
+          ),
           // Спрятанные разделы слушают «спящий» источник и не перестраиваются от каждого изменения состояния
           // (раньше любое изменение перестраивало все шесть, вместе с полной копией списка серверов
           // в «Серверах»). Открытый раздел перестраивается сразу при переходе: у него меняется источник.
           Expanded(
-            // Ключ держит разделы при смене места меню (слева / сверху): иначе они строились бы заново
-            // и теряли прокрутку и набранное.
-            key: _pagesKey,
             child: IndexedStack(index: _index, children: [
               for (var i = 0; i < pages.length; i++)
                 AppScope(
@@ -385,6 +390,8 @@ class _ShellState extends State<Shell> {
             ]),
           ),
         ]),
+              ),
+            ]),
           ),
         ),
       ),
@@ -567,18 +574,7 @@ class _TopBar extends StatelessWidget {
           const SizedBox(width: 10),
           Text(AppPaths.appName, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
           const SizedBox(width: 18),
-          Expanded(
-            child: Row(children: [
-              for (var i = 0; i < items.length; i++)
-                _TopItem(
-                  icon: items[i].$1,
-                  label: items[i].$2,
-                  selected: i == index,
-                  showLabel: wide || i == index,
-                  onTap: () => onSelect(i),
-                ),
-            ]),
-          ),
+          Expanded(child: _TopNav(index: index, items: items, wide: wide, onSelect: onSelect)),
           Tooltip(
             richMessage: TextSpan(children: [
               TextSpan(text: '$statusText\n'),
@@ -608,14 +604,103 @@ class _TopBar extends StatelessWidget {
 }
 
 /// Пункт верхнего меню: значок и, если хватает места, название.
+/// Пункты верхнего меню и одна общая подсветка выбранного, которая «едет» к новому пункту — как
+/// в боковом меню. Пункты бывают разной ширины (а в узком окне подпись у выбранного выезжает),
+/// поэтому место подсветки берётся из раскладки и обновляется каждый кадр, пока она едет.
+class _TopNav extends StatefulWidget {
+  const _TopNav({required this.index, required this.items, required this.wide, required this.onSelect});
+  final int index;
+  final List<(IconData, String)> items;
+  final bool wide;
+  final ValueChanged<int> onSelect;
+
+  @override
+  State<_TopNav> createState() => _TopNavState();
+}
+
+class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
+  final _stack = GlobalKey();
+  late final _keys = [for (final _ in widget.items) GlobalKey()];
+  late final _move = AnimationController(vsync: this, duration: const Duration(milliseconds: 260), value: 1);
+
+  /// Откуда едет подсветка и где она нарисована сейчас.
+  Rect? _from;
+  Rect? _drawn;
+
+  Rect? _target() {
+    final stack = _stack.currentContext?.findRenderObject() as RenderBox?;
+    final item = _keys[widget.index].currentContext?.findRenderObject() as RenderBox?;
+    if (stack == null || item == null || !stack.hasSize || !item.hasSize) return null;
+    return item.localToGlobal(Offset.zero, ancestor: stack) & item.size;
+  }
+
+  @override
+  void didUpdateWidget(_TopNav old) {
+    super.didUpdateWidget(old);
+    if (old.index != widget.index) {
+      _from = _drawn;
+      _move.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _move.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // После раскладки (первый кадр, смена ширины окна) подсветка встаёт на место пункта.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_move.isAnimating && _target() != _drawn) setState(() {});
+    });
+    return Stack(key: _stack, alignment: Alignment.centerLeft, children: [
+      AnimatedBuilder(
+        animation: _move,
+        builder: (context, _) {
+          final to = _target();
+          if (to == null) return const SizedBox.shrink();
+          final rect = _from == null ? to : Rect.lerp(_from, to, Curves.easeOutCubic.transform(_move.value))!;
+          _drawn = rect;
+          return Positioned.fromRect(
+            rect: rect,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: C.orange.withValues(alpha: 0.14),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+      Row(children: [
+        for (var i = 0; i < widget.items.length; i++)
+          _TopItem(
+            boxKey: _keys[i],
+            icon: widget.items[i].$1,
+            label: widget.items[i].$2,
+            selected: i == widget.index,
+            showLabel: widget.wide || i == widget.index,
+            onTap: () => widget.onSelect(i),
+          ),
+      ]),
+    ]);
+  }
+}
+
 class _TopItem extends StatelessWidget {
   const _TopItem({
+    required this.boxKey,
     required this.icon,
     required this.label,
     required this.selected,
     required this.showLabel,
     required this.onTap,
   });
+  final GlobalKey boxKey;
   final IconData icon;
   final String label;
   final bool selected;
@@ -632,31 +717,68 @@ class _TopItem extends StatelessWidget {
             builder: (context, hovered) => GestureDetector(
               onTap: onTap,
               child: AnimatedContainer(
+                key: boxKey,
                 duration: const Duration(milliseconds: 160),
                 height: 40,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  color: selected ? C.orange.withValues(alpha: 0.14) : (hovered ? C.hover : Colors.transparent),
+                  // Фон выбранного пункта рисует общая подсветка в [_TopNav].
+                  color: !selected && hovered ? C.hover : Colors.transparent,
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(icon, size: 20, color: selected || hovered ? C.orange : C.muted),
-                  if (showLabel) ...[
-                    const SizedBox(width: 8),
-                    Text(label,
-                        maxLines: 1,
-                        softWrap: false,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: selected || hovered ? C.text : C.muted,
-                        )),
-                  ],
+                  // В узком окне подпись у выбранного пункта плавно выезжает, у прежнего — уезжает.
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.centerLeft,
+                    child: showLabel
+                        ? Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Text(label,
+                                maxLines: 1,
+                                softWrap: false,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: selected || hovered ? C.text : C.muted,
+                                )),
+                          )
+                        : const SizedBox(height: 20),
+                  ),
                 ]),
               ),
             ),
           ),
         ),
+      );
+}
+
+/// Место меню (слева или сверху): когда меню переезжает, оно здесь плавно сворачивается по ширине
+/// или высоте и гаснет, а на новом месте так же разворачивается.
+class _MenuSlot extends StatelessWidget {
+  const _MenuSlot({required this.shown, required this.axis, required this.child});
+  final bool shown;
+  final Axis axis;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+        tween: Tween(end: shown ? 1 : 0),
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        child: child,
+        builder: (context, t, child) => t == 0
+            ? const SizedBox.shrink()
+            : ClipRect(
+                child: Align(
+                  alignment: axis == Axis.horizontal ? Alignment.centerRight : Alignment.bottomCenter,
+                  widthFactor: axis == Axis.horizontal ? t : null,
+                  heightFactor: axis == Axis.vertical ? t : null,
+                  child: Opacity(opacity: t, child: child),
+                ),
+              ),
       );
 }
 

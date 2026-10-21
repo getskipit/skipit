@@ -72,6 +72,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// Открытая группа настроек; null — плитки всех групп.
   int? _group;
+  final _searchKey = GlobalKey();
 
 
   @override
@@ -186,7 +187,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _Group(
         Icons.bolt_rounded,
         'Подключение',
-        '${s.killSwitch ? 'Kill Switch включён' : 'Kill Switch выключен'} · режим TUN ${s.tunCore == TunCore.xray ? 'Xray' : 'sing-box'}',
+        'Kill Switch, переподключение при сбое, автовыбор сервера, режим TUN',
+        'Kill Switch ${s.killSwitch ? 'включён' : 'выключен'} · TUN: ${s.tunCore == TunCore.xray ? 'Xray' : 'sing-box'}',
         [
         _Section('', [
           toggle('Подключаться при запуске', 'Автоматически включать VPN при автозапуске', s.connectOnStart,
@@ -242,7 +244,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _Group(
         Icons.palette_rounded,
         'Внешний вид',
-        '${switch (s.theme) { AppTheme.dark => 'Тёмная тема', AppTheme.light => 'Светлая тема', AppTheme.system => 'Тема как в Windows' }} · '
+        'Тема, масштаб, где стоит меню, что показывать на главной, анимации',
+        '${switch (s.theme) { AppTheme.dark => 'Тёмная', AppTheme.light => 'Светлая', AppTheme.system => 'Как в Windows' }} · '
             '${s.uiScale} % · меню ${s.navTop ? 'сверху' : 'слева'}',
         [
         _Section('', [
@@ -302,8 +305,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _Group(
         Icons.cloud_sync_rounded,
         'Подписки и серверы',
-        '${s.updateSubsOnStart ? 'Обновляются при запуске' : 'Не обновляются при запуске'} · проверка задержки '
-            '${s.pingType == PingType.realDelay ? 'реальная' : 'TCP'}',
+        'Когда обновлять подписки, как проверять задержку серверов',
+        'Проверка: ${s.pingType == PingType.realDelay ? 'реальная' : 'TCP'}',
         [
         _Section('Подписки', [
           toggle('Обновлять при запуске', 'Загружать свежий список серверов при старте', s.updateSubsOnStart,
@@ -335,7 +338,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _Group(
         Icons.desktop_windows_rounded,
         'Программа',
-        '${state.autostart ? 'Автозапуск включён' : 'Автозапуск выключен'} · трей, уведомления, перенос, «Починить сеть»',
+        'Автозапуск, трей, уведомления, перенос настроек, «Починить сеть» и сброс',
+        'Автозапуск ${state.autostart ? 'включён' : 'выключен'}',
         [
         _Section('', [
           toggle('Запускать вместе с Windows', 'Запускать приложение при входе в Windows', state.autostart,
@@ -458,9 +462,10 @@ class _SettingsPageState extends State<SettingsPage> {
       _Group(
         Icons.construction_rounded,
         'Для опытных',
+        'User-Agent и HWID, IPv6, MTU, фрагментация, шумы, Mux, локальные порты, уровень логов',
         [s.fragment ? 'фрагментация' : '', s.noise ? 'шумы' : '', s.mux ? 'Mux' : ''].any((e) => e.isNotEmpty)
             ? 'Включено: ${[s.fragment ? 'фрагментация' : '', s.noise ? 'шумы' : '', s.mux ? 'Mux' : ''].where((e) => e.isNotEmpty).join(', ')}'
-            : 'Сеть, порты, фрагментация, шумы, Mux, User-Agent',
+            : 'Обычно менять не нужно',
         [
         _Section('Подписки', [
           _Row(
@@ -625,6 +630,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _Group(
         Icons.info_rounded,
         'О программе',
+        'Версия, обновления и их канал, версии ядер',
         state.appUpdate != null ? 'Доступна версия ${state.appUpdate!.version}' : 'Версия $appVersion',
         alert: SettingsPage._coresMissing(state) ? C.red : (state.appUpdate != null ? C.orange : null),
         [
@@ -701,7 +707,10 @@ class _SettingsPageState extends State<SettingsPage> {
       _group = null;
     }
     final query = _query.trim().toLowerCase();
+    // Ключ держит одно и то же поле поиска при смене заголовка (плитки ↔ группа ↔ поиск): иначе поле
+    // создавалось бы заново после первой же буквы и теряло фокус.
     final search = SizedBox(
+      key: _searchKey,
       width: 260,
       child: TextField(
         controller: _search,
@@ -731,6 +740,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
     }
 
+    final Widget header;
     final List<Widget> body;
     if (query.isNotEmpty) {
       // Поиск — по всем группам сразу; у раздела без своего названия подписью служит название группы.
@@ -739,8 +749,8 @@ class _SettingsPageState extends State<SettingsPage> {
           for (final sec in g.sections) _Section(sec.title.isEmpty ? g.title : '${g.title} · ${sec.title}', sec.children),
       ];
       final found = sections.any((s) => _found(s.title, s.children, query).isNotEmpty);
+      header = PageHeader('Настройки', subtitle: hint, actions: [search]);
       body = [
-        PageHeader('Настройки', subtitle: hint, actions: [search]),
         ...sections,
         if (!found)
           Padding(
@@ -751,28 +761,52 @@ class _SettingsPageState extends State<SettingsPage> {
       ];
     } else if (_group != null) {
       final g = groups[_group!];
-      body = [
-        _GroupHeader(group: g, search: search, onBack: () => openGroup(null)),
-        ...g.sections,
-      ];
+      header = _GroupHeader(group: g, search: search, onBack: () => openGroup(null));
+      body = g.sections;
     } else {
-      body = [
-        PageHeader('Настройки', subtitle: hint, actions: [search]),
-        _GroupGrid(groups: groups, onOpen: openGroup),
-      ];
+      header = PageHeader('Настройки', subtitle: hint, actions: [search]);
+      body = [_GroupGrid(groups: groups, onOpen: openGroup)];
     }
     return _SettingsQuery(
       query: query,
-      child: ListView(primary: true, padding: const EdgeInsets.only(bottom: 28), children: body),
+      child: ListView(primary: true, padding: const EdgeInsets.only(bottom: 28), children: [
+        header,
+        // Плитки, страница группы и результаты поиска сменяют друг друга плавно: старое гаснет,
+        // новое проявляется и чуть подъезжает (страница группы — справа, плитки — слева).
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 240),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          layoutBuilder: (current, previous) =>
+              Stack(alignment: Alignment.topCenter, children: [...previous, if (current != null) current]),
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween(
+                begin: Offset(child.key == const ValueKey('grid') ? -0.03 : 0.03, 0),
+                end: Offset.zero,
+              ).animate(anim),
+              child: child,
+            ),
+          ),
+          child: KeyedSubtree(
+            key: ValueKey(query.isNotEmpty ? 'search' : (_group == null ? 'grid' : 'group$_group')),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
+          ),
+        ),
+      ]),
     );
   }
 }
 
 /// Группа настроек: плитка на первой странице «Настроек» и своя страница с разделами.
 class _Group {
-  const _Group(this.icon, this.title, this.summary, this.sections, {this.alert});
+  const _Group(this.icon, this.title, this.description, this.summary, this.sections, {this.alert});
   final IconData icon;
   final String title;
+
+  /// Что лежит в группе — описание на плитке.
+  final String description;
 
   /// Коротко, что сейчас выбрано в группе, — подпись плитки.
   final String summary;
@@ -814,7 +848,7 @@ class _GroupTile extends StatelessWidget {
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            height: 148,
+            height: 172,
             padding: const EdgeInsets.fromLTRB(18, 18, 14, 16),
             decoration: BoxDecoration(
               color: hovered ? Color.alphaBlend(C.hover, C.surface) : C.surface,
@@ -845,10 +879,17 @@ class _GroupTile extends StatelessWidget {
               const Spacer(),
               Text(group.title, maxLines: 1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
-              Text(group.summary,
+              Text(group.description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: C.muted, fontSize: 12.5, height: 1.3)),
+              const SizedBox(height: 8),
+              // Что сейчас выбрано — одной строкой, акцентным цветом.
+              Text(group.summary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: C.isDark ? C.orangeLight : C.orange, fontSize: 12, fontWeight: FontWeight.w600)),
             ]),
           ),
         ),
@@ -1187,21 +1228,26 @@ class _PartChips extends StatelessWidget {
         for (final MapEntry(:key, :value) in items.entries)
           () {
             final on = selected.contains(key);
-            return Material(
-              color: on ? C.orange.withValues(alpha: 0.14) : C.surface2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: on ? C.orange.withValues(alpha: 0.6) : C.border),
-              ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
+            // Свой Hover, как у остальных кнопок: курсор-палец и подсветка при наведении.
+            return Hover(
+              builder: (context, hovered) => GestureDetector(
                 onTap: () => onToggle(key),
-                child: Padding(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
                   padding: const EdgeInsets.fromLTRB(8, 6, 10, 6),
+                  decoration: BoxDecoration(
+                    color: on
+                        ? C.orange.withValues(alpha: hovered ? 0.22 : 0.14)
+                        : (hovered ? Color.alphaBlend(C.hover, C.surface2) : C.surface2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: on || hovered ? C.orange.withValues(alpha: hovered ? 0.8 : 0.6) : C.border),
+                  ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(on ? Icons.check_rounded : Icons.add_rounded, size: 16, color: on ? C.orange : C.muted),
+                    Icon(on ? Icons.check_rounded : Icons.add_rounded,
+                        size: 16, color: on || hovered ? C.orange : C.muted),
                     const SizedBox(width: 4),
-                    Text(value, style: TextStyle(fontSize: 13, color: on ? C.text : C.muted)),
+                    Text(value, style: TextStyle(fontSize: 13, color: on || hovered ? C.text : C.muted)),
                   ]),
                 ),
               ),
