@@ -738,10 +738,15 @@ class _SubscriptionBar extends StatelessWidget {
             height: 28,
             child: Row(children: [
               if (hasTraffic) ...[
-                Text(
-                  total > 0 ? '${formatBytes(sub.used)} из ${formatBytes(total)}' : '${formatBytes(sub.used)} · безлимит',
-                  style: small.copyWith(color: C.text, fontWeight: FontWeight.w600),
-                ),
+                Icon(Icons.data_usage_rounded, size: 15, color: C.muted),
+                const SizedBox(width: 6),
+                Text.rich(TextSpan(children: [
+                  TextSpan(text: 'Трафик: ', style: small),
+                  TextSpan(
+                    text: total > 0 ? '${formatBytes(sub.used)} из ${formatBytes(total)}' : '${formatBytes(sub.used)}, без лимита',
+                    style: small.copyWith(color: C.text, fontWeight: FontWeight.w600),
+                  ),
+                ])),
                 const SizedBox(width: 10),
                 Expanded(
                   child: ClipRRect(
@@ -757,9 +762,11 @@ class _SubscriptionBar extends StatelessWidget {
               ] else
                 const Spacer(),
               if (expire != null) ...[
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
+                Icon(Icons.event_rounded, size: 15, color: (daysLeft ?? 99) < 3 ? C.red : C.muted),
+                const SizedBox(width: 6),
                 Text(
-                  'до ${formatDate(expire)}',
+                  'До ${formatDate(expire)}${daysLeft == null || daysLeft < 0 ? '' : ' · ${daysLeft == 0 ? 'последний день' : '$daysLeft дн.'}'}',
                   style: small.copyWith(color: (daysLeft ?? 99) < 3 ? C.red : C.muted),
                 ),
               ],
@@ -771,15 +778,25 @@ class _SubscriptionBar extends StatelessWidget {
                 ),
             ]),
           ),
-        if (announce != null && announce.isNotEmpty)
+        // Объявление провайдера — отдельным текстом под чертой: это слова провайдера, а не SkipIt.
+        if (announce != null && announce.isNotEmpty) ...[
+          if (hasTraffic || expire != null || sub.supportUrl != null)
+            Padding(padding: const EdgeInsets.only(top: 4, bottom: 6), child: Divider(height: 1, color: C.border)),
           Tooltip(
             message: announce,
             waitDuration: const Duration(milliseconds: 500),
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2, right: 6),
-              child: FlagText(announce, maxLines: 2, overflow: TextOverflow.ellipsis, style: small.copyWith(height: 1.35)),
-            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(Icons.campaign_rounded, size: 15, color: C.muted),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: FlagText(announce, maxLines: 2, overflow: TextOverflow.ellipsis, style: small.copyWith(height: 1.35)),
+              ),
+            ]),
           ),
+        ],
       ]),
     );
   }
