@@ -2007,19 +2007,22 @@ class AppState extends ChangeNotifier {
       // Без прав администратора через службу идут оба ядра, даже если адаптер держит sing-box: иначе Xray
       // с правами пользователя не узнаёт программу соединений, которые ему передаёт sing-box (у того права
       // системы), — «Access is denied», и правила по программам не срабатывают.
-      if (viaService) {
-        await _xray.startViaService('xray', assets: AppPaths.geoDir.path, input: configText);
-      } else {
-        await _xray.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'],
-            env: {'XRAY_LOCATION_ASSET': AppPaths.geoDir.path}, input: configText);
+      Future<void> startXray() async {
+        if (viaService) {
+          await _xray.startViaService('xray', assets: AppPaths.geoDir.path, input: configText);
+        } else {
+          await _xray.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'],
+              env: {'XRAY_LOCATION_ASSET': AppPaths.geoDir.path}, input: configText);
+        }
+        settings.lastXrayPid = _xray.pid;
+        await saveNow();
+        if (!await waitForPort(session.socksPort, alive: () => _xray.running)) {
+          _checkCancel();
+          throw CoreException('Xray не запустился:\n${log.tail(8, source: 'xray')}');
+        }
       }
-      settings.lastXrayPid = _xray.pid;
-      await saveNow();
 
-      if (!await waitForPort(session.socksPort, alive: () => _xray.running)) {
-        _checkCancel();
-        throw CoreException('Xray не запустился:\n${log.tail(8, source: 'xray')}');
-      }
+      await startXray();
       // Ядро могло открыть порт и тут же упасть на следующей ошибке конфига — проверяем, что оно живо.
       await Future.delayed(const Duration(milliseconds: 250));
       _checkCancel();
@@ -2027,11 +2030,25 @@ class AppState extends ChangeNotifier {
 
       if (xrayTun) {
         // Адаптер поднимает сам Xray: ждём, пока трафик пойдёт через него.
-        final deadline = DateTime.now().add(Duration(seconds: ignoreOtherVpn ? 5 : 12));
-        while (_xray.running && !WinSys.ownTunActive() && DateTime.now().isBefore(deadline)) {
-          await Future.delayed(const Duration(milliseconds: 100));
+        Future<void> waitTun(int seconds) async {
+          final deadline = DateTime.now().add(Duration(seconds: seconds));
+          while (_xray.running && !WinSys.ownTunActive() && DateTime.now().isBefore(deadline)) {
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
+          _checkCancel();
         }
-        _checkCancel();
+
+        await waitTun(ignoreOtherVpn ? 5 : 4);
+        // Windows иногда зависает на создании адаптера: ядро пишет «Creating adapter» и молчит. Следующая
+        // попытка обычно проходит за доли секунды (так было у пользователей: отменили — подключились
+        // сразу), поэтому зависшее ядро один раз перезапускается, а не держит человека до ошибки.
+        if (!ignoreOtherVpn && _xray.running && !WinSys.ownTunActive() && _xrayAdapterStuck()) {
+          log.add('app', 'Предупреждение: Windows не включила адаптер VPN за 4 с — перезапускаю ядро и пробую ещё раз');
+          await _xray.stop();
+          _checkCancel();
+          await startXray();
+          await waitTun(8);
+        }
         if (!_xray.running || (!ignoreOtherVpn && !WinSys.ownTunActive())) {
           tunFailed = true;
           throw CoreException(_tunFailure('xray'));
@@ -2063,25 +2080,43 @@ class AppState extends ChangeNotifier {
         final tunText = const JsonEncoder.withIndent('  ').convert(tun);
         await _debugCopy(AppPaths.tunConfigFile, tunText);
         _reportSingbox = tun;
-        final logStart = log.lines.length;
+        var logStart = log.lines.length;
         _checkCancel();
-        if (viaService) {
-          await _singbox.startViaService('sing-box', input: tunText);
-        } else {
-          await _singbox.start(AppPaths.singboxExe, ['run', '-c', 'stdin'], input: tunText);
+        Future<void> startSingbox() async {
+          if (viaService) {
+            await _singbox.startViaService('sing-box', input: tunText);
+          } else {
+            await _singbox.start(AppPaths.singboxExe, ['run', '-c', 'stdin'], input: tunText);
+          }
+          settings.lastSingboxPid = _singbox.pid;
         }
-        settings.lastSingboxPid = _singbox.pid;
+
+        await startSingbox();
         // «Подключено» сообщаем, только когда трафик действительно пошёл через наш адаптер. Обычно это
         // доли секунды. Если Windows не может включить адаптер, sing-box через 10 секунд пишет об этом
         // предупреждение — дальше не ждём и сразу сообщаем об ошибке, а не держим человека минуту.
         // (Если пользователь решил подключаться при чужом VPN, маршрут может остаться за тем VPN —
         // тогда достаточно, что sing-box жив.)
-        final deadline = DateTime.now().add(Duration(seconds: ignoreOtherVpn ? 5 : 12));
         bool stuck() => log.lines.skip(logStart).any((l) => l.source == 'sing-box' && _adapterTrouble(l.text));
-        while (_singbox.running && !WinSys.ownTunActive() && !stuck() && DateTime.now().isBefore(deadline)) {
-          await Future.delayed(const Duration(milliseconds: 100));
+        Future<void> waitTun(int seconds) async {
+          final deadline = DateTime.now().add(Duration(seconds: seconds));
+          while (_singbox.running && !WinSys.ownTunActive() && !stuck() && DateTime.now().isBefore(deadline)) {
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
+          _checkCancel();
         }
-        _checkCancel();
+
+        await waitTun(ignoreOtherVpn ? 5 : 4);
+        // Как и у Xray: Windows иногда зависает на создании адаптера, а повторная попытка проходит сразу.
+        // sing-box сам сообщает о зависании только через 10 секунд — перезапускаем его раньше, один раз.
+        if (!ignoreOtherVpn && _singbox.running && !WinSys.ownTunActive()) {
+          log.add('app', 'Предупреждение: Windows не включила адаптер VPN за 4 с — перезапускаю sing-box и пробую ещё раз');
+          await _singbox.stop();
+          _checkCancel();
+          logStart = log.lines.length;
+          await startSingbox();
+          await waitTun(8);
+        }
         if (!_singbox.running || stuck() || (!ignoreOtherVpn && !WinSys.ownTunActive())) {
           tunFailed = true;
           throw CoreException(_tunFailure('sing-box'));
