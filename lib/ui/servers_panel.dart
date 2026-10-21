@@ -712,7 +712,8 @@ class _GroupCardState extends State<_GroupCard> {
   }
 }
 
-/// Трафик, срок действия, поддержка и объявление провайдера.
+/// Трафик, срок действия, поддержка и объявление провайдера — компактно, без отдельной плашки: одна строка
+/// «использовано · тонкая полоса · срок», под ней объявление провайдера (до двух строк, целиком — в подсказке).
 class _SubscriptionBar extends StatelessWidget {
   const _SubscriptionBar(this.sub);
   final Subscription sub;
@@ -728,51 +729,57 @@ class _SubscriptionBar extends StatelessWidget {
     if (!hasTraffic && expire == null && sub.supportUrl == null && (announce == null || announce.isEmpty)) {
       return const SizedBox.shrink();
     }
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-      decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(12)),
-      child: Column(children: [
+    final small = TextStyle(fontSize: 12, color: C.muted);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (hasTraffic || expire != null || sub.supportUrl != null)
-          Row(children: [
-            if (hasTraffic)
-              Expanded(
-                child: Stack(alignment: Alignment.center, children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
+          SizedBox(
+            height: 28,
+            child: Row(children: [
+              if (hasTraffic) ...[
+                Text(
+                  total > 0 ? '${formatBytes(sub.used)} из ${formatBytes(total)}' : '${formatBytes(sub.used)} · безлимит',
+                  style: small.copyWith(color: C.text, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
                     child: LinearProgressIndicator(
                       value: total > 0 ? progress : 0,
-                      minHeight: 18,
+                      minHeight: 5,
                       backgroundColor: C.border,
-                      color: progress > 0.9 ? C.red : C.orange.withValues(alpha: 0.75),
+                      color: progress > 0.9 ? C.red : C.orange,
                     ),
                   ),
-                  Text(
-                    total > 0 ? '${formatBytes(sub.used)} / ${formatBytes(total)}' : '${formatBytes(sub.used)} · безлимит',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: C.text),
-                  ),
-                ]),
-              )
-            else
-              const Spacer(),
-            if (expire != null) ...[
-              const SizedBox(width: 12),
-              Text(
-                'Истекает: ${formatDate(expire)}',
-                style: TextStyle(fontSize: 12, color: (daysLeft ?? 99) < 3 ? C.red : C.muted),
-              ),
-            ],
-            if (sub.supportUrl != null)
-              _IconAction(
-                tooltip: 'Поддержка',
-                icon: Icons.support_agent_rounded,
-                onTap: () => WinSys.openUrl(sub.supportUrl!),
-              ),
-          ]),
-        if (announce != null && announce.isNotEmpty) ...[
-          if (hasTraffic || expire != null || sub.supportUrl != null) const SizedBox(height: 8),
-          FlagText(announce, textAlign: TextAlign.center, style: TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
-        ],
+                ),
+              ] else
+                const Spacer(),
+              if (expire != null) ...[
+                const SizedBox(width: 12),
+                Text(
+                  'до ${formatDate(expire)}',
+                  style: small.copyWith(color: (daysLeft ?? 99) < 3 ? C.red : C.muted),
+                ),
+              ],
+              if (sub.supportUrl != null)
+                _IconAction(
+                  tooltip: 'Поддержка',
+                  icon: Icons.support_agent_rounded,
+                  onTap: () => WinSys.openUrl(sub.supportUrl!),
+                ),
+            ]),
+          ),
+        if (announce != null && announce.isNotEmpty)
+          Tooltip(
+            message: announce,
+            waitDuration: const Duration(milliseconds: 500),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2, right: 6),
+              child: FlagText(announce, maxLines: 2, overflow: TextOverflow.ellipsis, style: small.copyWith(height: 1.35)),
+            ),
+          ),
       ]),
     );
   }
