@@ -124,6 +124,26 @@ class AppSettings {
 
   /// «Меньше анимаций»: всё в окне переключается мгновенно (для слабых компьютеров).
   bool reduceMotion = false;
+
+  /// Части главной, которые человек спрятал (Настройки → Программа → «На главной»): ключи из [homeParts].
+  Set<String> homeHidden = {};
+  static const homeParts = {
+    'timer': 'Время и страна',
+    'mode': 'Режим',
+    'speed': 'Скорость',
+    'routing': 'Маршрутизация',
+  };
+  bool homeShows(String part) => !homeHidden.contains(part);
+
+  /// Меню разделов вдоль верхнего края окна, а не слева.
+  bool navTop = false;
+
+  /// Масштаб интерфейса в процентах: 80, 90 или 100.
+  int uiScale = 100;
+  static const uiScales = [80, 90, 100];
+
+  /// Предупреждать о запущенном zapret перед подключением (выключает галочка «Больше не спрашивать»).
+  bool zapretWarn = true;
   bool preferJson = true;
   UpdateChannel updateChannel = UpdateChannel.stable;
 
@@ -198,6 +218,10 @@ class AppSettings {
         'closeToTray': closeToTray,
         'notifications': notifications,
         'reduceMotion': reduceMotion,
+        'zapretWarn': zapretWarn,
+        'uiScale': uiScale,
+        'navTop': navTop,
+        'homeHidden': homeHidden.toList(),
         'preferJson': preferJson,
         'updateChannel': updateChannel.name,
         'updateNotified': updateNotified,
@@ -268,6 +292,12 @@ class AppSettings {
     s.closeToTray = parseBool(j['closeToTray'], s.closeToTray);
     s.notifications = parseBool(j['notifications'], s.notifications);
     s.reduceMotion = parseBool(j['reduceMotion'], s.reduceMotion);
+    s.zapretWarn = parseBool(j['zapretWarn'], s.zapretWarn);
+    s.navTop = parseBool(j['navTop'], s.navTop);
+    final uiScale = asInt(j['uiScale']);
+    if (uiScales.contains(uiScale)) s.uiScale = uiScale!;
+    final homeHidden = j['homeHidden'];
+    if (homeHidden is List) s.homeHidden = {for (final p in homeHidden) if (homeParts.containsKey(p)) p as String};
     s.preferJson = parseBool(j['preferJson'], s.preferJson);
     s.updateChannel = UpdateChannel.values.asNameMap()[j['updateChannel']] ?? s.updateChannel;
     s.updateNotified = j['updateNotified'] as String?;

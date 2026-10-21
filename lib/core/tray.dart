@@ -65,6 +65,7 @@ class Tray {
     required bool? killSwitch,
     required List<Map<String, String>> servers,
     required int selectedServer,
+    required double uiScale,
   }) =>
       _call('update', {
         'modeLabel': 'РЕЖИМ',
@@ -89,6 +90,8 @@ class Tray {
         'toggle': connected ? 'Отключить' : 'Подключить',
         'exit': 'Выход',
         'closeToTray': closeToTray,
+        // Масштаб интерфейса: во столько же раз меньше наименьший размер окна.
+        'uiScale': uiScale,
         // Уведомление при закрытии окна крестиком (раз за запуск); пустая строка его выключает.
         'closeHint': notifications ? 'Продолжает работать в трее' : '',
       });

@@ -2,6 +2,7 @@
 
 #include <flutter/standard_method_codec.h>
 
+#include <algorithm>
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -336,6 +337,27 @@ void FlutterWindow::HandleTrayCall(
       if (it != args->end()) {
         if (const auto* b = std::get_if<bool>(&it->second)) close_to_tray_ = *b;
       }
+      auto ui = args->find(flutter::EncodableValue("uiScale"));
+      if (ui != args->end()) {
+        const auto* d = std::get_if<double>(&ui->second);
+        if (d && *d >= 0.5 && *d <= 2.0 && *d != ui_scale_) {
+          ui_scale_ = *d;
+          // Масштаб увеличили — окно, ставшее меньше нового наименьшего размера, дотягиваем до него.
+          HWND hwnd = GetHandle();
+          RECT rect;
+          if (!IsZoomed(hwnd) && GetWindowRect(hwnd, &rect)) {
+            const double scale = GetDpiForWindow(hwnd) / 96.0 * ui_scale_;
+            const LONG min_w = static_cast<LONG>(kMinWidth * scale);
+            const LONG min_h = static_cast<LONG>(kMinHeight * scale);
+            const LONG w = rect.right - rect.left;
+            const LONG h = rect.bottom - rect.top;
+            if (w < min_w || h < min_h) {
+              SetWindowPos(hwnd, nullptr, 0, 0, (std::max)(w, min_w), (std::max)(h, min_h),
+                           SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+          }
+        }
+      }
     }
     result->Success();
   } else if (method == "notify") {
@@ -382,8 +404,8 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   switch (message) {
     case WM_GETMINMAXINFO: {
       // Меньше этого окно не сжимается: иначе интерфейс разваливается (подписи в столбик, пустая полоска).
-      // Размер задан для масштаба 100 % и умножается на масштаб монитора.
-      const double scale = GetDpiForWindow(hwnd) / 96.0;
+      // Размер задан для масштаба 100 % и умножается на масштаб монитора и масштаб интерфейса SkipIt.
+      const double scale = GetDpiForWindow(hwnd) / 96.0 * ui_scale_;
       auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
       info->ptMinTrackSize.x = static_cast<LONG>(kMinWidth * scale);
       info->ptMinTrackSize.y = static_cast<LONG>(kMinHeight * scale);

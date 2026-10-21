@@ -768,8 +768,11 @@ class _SegmentedState<T> extends State<Segmented<T>> {
     // Края плашки ставятся ровно на точки экрана. Ширина пунктов зависит от текста, и край обычно
     // попадает между точками (особенно при масштабе экрана 125–150 %): такая точка закрашивается
     // наполовину, и вдоль края плашки видна тёмно-оранжевая полоска.
-    final ratio = View.of(context).devicePixelRatio;
-    final origin = stack.localToGlobal(Offset.zero);
+    // Масштаб интерфейса (Настройки → «Масштаб») уменьшает окно целиком: точка экрана — это ratio × k
+    // единиц раскладки, а начало отсчёта переводится в те же единицы.
+    final k = stack.getTransformTo(null).getMaxScaleOnAxis();
+    final ratio = View.of(context).devicePixelRatio * k;
+    final origin = stack.localToGlobal(Offset.zero) / k;
     double snap(double v) => (v * ratio).roundToDouble() / ratio;
     final onScreen = raw.shift(origin);
     final rect = Rect.fromLTRB(snap(onScreen.left), snap(onScreen.top), snap(onScreen.right), snap(onScreen.bottom))

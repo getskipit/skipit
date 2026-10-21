@@ -102,7 +102,62 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
   return choice ?? _ConflictChoice.cancel;
 }
 
-/// Подключение: сначала проверка на другие VPN (с вопросом пользователю), затем запрос прав
+/// Окно-предупреждение о запущенном zapret: подключаться ли всё равно. Галочка «Больше не спрашивать»
+/// выключает окно насовсем (вернуть — «Сбросить настройки»).
+Future<bool> _askAboutZapret(BuildContext context, AppState state, String zapret) async {
+  var dontAsk = false;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) => AlertDialog(
+        title: Row(children: [
+          Icon(Icons.warning_amber_rounded, color: C.isDark ? C.orangeLight : C.orange),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Запущен $zapret')),
+        ]),
+        content: SizedBox(
+          width: 460,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              '$zapret меняет соединения компьютера, и с VPN это может мешать: соединение с VPN-сервером '
+              'не установится, или часть сайтов перестанет открываться. Если так случится — добавьте адрес '
+              'VPN-сервера в исключения $zapret или закройте его.',
+              style: TextStyle(color: C.muted, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => setLocal(() => dontAsk = !dontAsk),
+              child: Row(children: [
+                Checkbox(
+                  value: dontAsk,
+                  activeColor: C.orange,
+                  onChanged: (v) => setLocal(() => dontAsk = v ?? false),
+                ),
+                const Text('Больше не спрашивать'),
+              ]),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          GradientButton(
+            label: 'Подключиться всё равно',
+            icon: Icons.power_settings_new_rounded,
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (ok == true && dontAsk) {
+    state.settings.zapretWarn = false;
+    state.changed();
+  }
+  return ok == true;
+}
+
+/// Подключение: сначала проверка на zapret и другие VPN (с вопросом пользователю), затем запрос прав
 /// администратора для TUN, если их нет.
 Future<void> connectOrToggle(BuildContext context) async {
   final state = AppScope.read(context);
@@ -110,6 +165,11 @@ Future<void> connectOrToggle(BuildContext context) async {
   if (state.closingOtherVpn) return;
   var ignoreOtherVpn = false;
   if (!state.isConnected && !state.isBusy) {
+    final zapret = state.settings.zapretWarn ? WinSys.zapretRunning() : null;
+    if (zapret != null) {
+      if (!await _askAboutZapret(context, state, zapret)) return;
+      if (!context.mounted) return;
+    }
     final conflicts = state.findVpnConflicts();
     if (conflicts.isNotEmpty) {
       switch (await _askAboutConflicts(context, conflicts)) {
@@ -163,6 +223,8 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   StreamSubscription<ToastMessage>? _sub;
+
+  final _pagesKey = GlobalKey();
 
   static const _items = [
     (Icons.bolt_rounded, 'Главная'),
@@ -299,12 +361,20 @@ class _ShellState extends State<Shell> {
           actions: {_PasteIntent: _PasteAction(() => importFromClipboard(context))},
           child: Focus(
             autofocus: true,
-            child: Row(children: [
-          _Sidebar(index: _index, items: _items, onSelect: go),
+            child: Flex(
+              direction: AppScope.of(context).settings.navTop ? Axis.vertical : Axis.horizontal,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+          AppScope.of(context).settings.navTop
+              ? _TopBar(index: _index, items: _items, onSelect: go)
+              : _Sidebar(index: _index, items: _items, onSelect: go),
           // Спрятанные разделы слушают «спящий» источник и не перестраиваются от каждого изменения состояния
           // (раньше любое изменение перестраивало все шесть, вместе с полной копией списка серверов
           // в «Серверах»). Открытый раздел перестраивается сразу при переходе: у него меняется источник.
           Expanded(
+            // Ключ держит разделы при смене места меню (слева / сверху): иначе они строились бы заново
+            // и теряли прокрутку и набранное.
+            key: _pagesKey,
             child: IndexedStack(index: _index, children: [
               for (var i = 0; i < pages.length; i++)
                 AppScope(
@@ -469,6 +539,152 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
       );
 }
 
+/// Меню разделов вдоль верхнего края окна (Настройки → Программа → «Расположение меню»). Узкое окно —
+/// подписи остаются только у выбранного раздела, у остальных значок с подсказкой.
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.index, required this.items, required this.onSelect});
+  final int index;
+  final List<(IconData, String)> items;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final (dotColor, statusText) = _statusOf(state);
+    return Container(
+      height: 64,
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: C.border),
+      ),
+      child: LayoutBuilder(builder: (context, c) {
+        final wide = c.maxWidth >= 1180;
+        return Row(children: [
+          const AppBadge(size: 34),
+          const SizedBox(width: 10),
+          Text(AppPaths.appName, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Row(children: [
+              for (var i = 0; i < items.length; i++)
+                _TopItem(
+                  icon: items[i].$1,
+                  label: items[i].$2,
+                  selected: i == index,
+                  showLabel: wide || i == index,
+                  onTap: () => onSelect(i),
+                ),
+            ]),
+          ),
+          Tooltip(
+            richMessage: TextSpan(children: [
+              TextSpan(text: '$statusText\n'),
+              Flags.span(state.selectedServer?.name ?? 'Сервер не выбран', size: 12),
+            ]),
+            child: Container(
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: C.surface2,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: state.isConnected ? C.green.withValues(alpha: 0.45) : C.border),
+              ),
+              child: Row(children: [
+                _StatusDot(dotColor),
+                const SizedBox(width: 9),
+                Text(statusText, maxLines: 1, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              ]),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const SizedBox(width: 46, child: _VersionRow(collapsed: true)),
+        ]);
+      }),
+    );
+  }
+}
+
+/// Пункт верхнего меню: значок и, если хватает места, название.
+class _TopItem extends StatelessWidget {
+  const _TopItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.showLabel,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool showLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: Tooltip(
+          message: showLabel ? '' : label,
+          waitDuration: const Duration(milliseconds: 300),
+          child: Hover(
+            builder: (context, hovered) => GestureDetector(
+              onTap: onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: selected ? C.orange.withValues(alpha: 0.14) : (hovered ? C.hover : Colors.transparent),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(icon, size: 20, color: selected || hovered ? C.orange : C.muted),
+                  if (showLabel) ...[
+                    const SizedBox(width: 8),
+                    Text(label,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: selected || hovered ? C.text : C.muted,
+                        )),
+                  ],
+                ]),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+/// Цвет точки и слово статуса подключения — для бокового и верхнего меню.
+(Color, String) _statusOf(AppState state) => switch (state.status) {
+      ConnStatus.connected => (C.green, 'Подключено'),
+      ConnStatus.connecting => (C.orangeLight, 'Подключение…'),
+      ConnStatus.disconnecting => (C.orangeLight, 'Отключение…'),
+      ConnStatus.disconnected => (C.muted, 'Не подключено'),
+    };
+
+/// Светящаяся точка статуса подключения.
+class _StatusDot extends StatelessWidget {
+  const _StatusDot(this.color);
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 9,
+        height: 9,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 8)],
+        ),
+      );
+}
+
 /// Боковое меню — «плавающая» карточка; сворачивается до полоски с иконками.
 class _Sidebar extends StatelessWidget {
   const _Sidebar({required this.index, required this.items, required this.onSelect});
@@ -483,26 +699,13 @@ class _Sidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final collapsed = state.settings.sidebarCollapsed;
-    final (dotColor, statusText) = switch (state.status) {
-      ConnStatus.connected => (C.green, 'Подключено'),
-      ConnStatus.connecting => (C.orangeLight, 'Подключение…'),
-      ConnStatus.disconnecting => (C.orangeLight, 'Отключение…'),
-      ConnStatus.disconnected => (C.muted, 'Не подключено'),
-    };
+    final (dotColor, statusText) = _statusOf(state);
     void toggle() {
       state.settings.sidebarCollapsed = !collapsed;
       state.changed();
     }
 
-    final dot = Container(
-      width: 9,
-      height: 9,
-      decoration: BoxDecoration(
-        color: dotColor,
-        shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: dotColor.withValues(alpha: 0.7), blurRadius: 8)],
-      ),
-    );
+    final dot = _StatusDot(dotColor);
 
     // Меню + «ручка» сворачивания на его правой границе. Ручка всегда на одной высоте (напротив значка),
     // поэтому при сворачивании ничего не переезжает. Внешняя рамка шире меню на половину ручки,

@@ -264,7 +264,12 @@ class _SettingsPageState extends State<SettingsPage> {
         _Section('Проверка задержки', [
           _Row(
             title: 'Тип проверки',
-            subtitle: 'Реальная — запрос через сервер, TCP — только доступность порта',
+            subtitle: switch (s.pingType) {
+              PingType.realDelay => 'Реальная: через каждый сервер открывается адрес проверки — видно, работает ли '
+                  'сервер на самом деле и сколько ждать ответа. Точнее, но дольше',
+              PingType.tcp => 'TCP: только стучится в порт сервера напрямую — быстро, но сервер может отвечать '
+                  'и при этом не пропускать трафик',
+            },
             trailing: Segmented<PingType>(
               value: s.pingType,
               items: const {PingType.realDelay: 'Реальная', PingType.tcp: 'TCP'},
@@ -285,6 +290,43 @@ class _SettingsPageState extends State<SettingsPage> {
               items: const {AppTheme.dark: 'Тёмная', AppTheme.light: 'Светлая', AppTheme.system: 'Как в системе'},
               onChanged: (v) {
                 s.theme = v;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'Масштаб',
+            subtitle: 'Размер всего окна: текста, значков и отступов. Меньше — больше помещается на экране',
+            trailing: Segmented<int>(
+              value: s.uiScale,
+              items: {for (final p in AppSettings.uiScales) p: '$p %'},
+              onChanged: (v) {
+                s.uiScale = v;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'Расположение меню',
+            subtitle: 'Где стоят разделы программы: слева или вдоль верхнего края окна',
+            trailing: Segmented<bool>(
+              value: s.navTop,
+              items: const {false: 'Слева', true: 'Сверху'},
+              onChanged: (v) {
+                s.navTop = v;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'На главной',
+            subtitle: 'Что показывать под кнопкой подключения. Ошибки и подсказки видны всегда',
+            trailing: const SizedBox.shrink(),
+            below: _PartChips(
+              items: AppSettings.homeParts,
+              selected: {for (final p in AppSettings.homeParts.keys) if (s.homeShows(p)) p},
+              onToggle: (p) {
+                s.homeHidden.contains(p) ? s.homeHidden.remove(p) : s.homeHidden.add(p);
                 state.changed();
               },
             ),
@@ -671,6 +713,9 @@ class _SettingsQuery extends InheritedWidget {
 /// названии и подписи их нет.
 const _keywords = <String, String>{
   'Тема': 'оформление цвет тёмная темная светлая ночная dark light вид',
+  'Масштаб': 'размер крупнее мельче меньше уменьшить увеличить шрифт текст zoom интерфейс',
+  'Расположение меню': 'вёрстка верстка меню сверху слева сбоку панель навигация разделы',
+  'На главной': 'главная экран скрыть спрятать показать скорость трафик режим маршрутизация таймер время страна',
   'Меньше анимаций': 'анимация плавность тормозит лагает производительность слабый компьютер',
   'Запускать вместе с Windows': 'автозапуск автозагрузка старт включение компьютера',
   'Сворачивать в трей при закрытии': 'трей значок крестик закрыть фон свернуть',
@@ -682,7 +727,7 @@ const _keywords = <String, String>{
   'Kill Switch': 'килл свитч защита утечка обрыв блокировка интернета',
   'Автовыбор сервера': 'лучший быстрый пинг авто',
   'Разрешить подключения из локальной сети': 'lan wifi роутер телефон раздать другим устройствам',
-  'Тип проверки': 'пинг задержка ping tcp скорость',
+  'Тип проверки': 'пинг задержка ping tcp скорость реальная real delay',
   'Обновлять при запуске': 'подписка серверы список',
   'Обновлять через VPN': 'подписка прокси',
   'SOCKS-порт': 'порт прокси proxy socks5 10808',
@@ -885,10 +930,13 @@ class _RevealRow extends StatelessWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.title, required this.subtitle, required this.trailing, this.subtitleColor});
+  const _Row({required this.title, required this.subtitle, required this.trailing, this.subtitleColor, this.below});
   final String title;
   final String subtitle;
   final Widget trailing;
+
+  /// Широкий элемент под подписью (например, набор выключателей), а не справа от неё.
+  final Widget? below;
 
   /// Цвет подписи, если на неё нужно обратить внимание (по умолчанию — приглушённый).
   final Color? subtitleColor;
@@ -907,12 +955,48 @@ class _Row extends StatelessWidget {
                     fontSize: 12,
                     fontWeight: subtitleColor != null ? FontWeight.w600 : null,
                   )),
+              if (below != null) ...[const SizedBox(height: 10), below!],
             ]),
           ),
           const SizedBox(width: 16),
           trailing,
         ]),
       );
+}
+
+/// Набор выключателей-«таблеток»: каждый пункт включается и выключается отдельно.
+class _PartChips extends StatelessWidget {
+  const _PartChips({required this.items, required this.selected, required this.onToggle});
+  final Map<String, String> items;
+  final Set<String> selected;
+  final ValueChanged<String> onToggle;
+
+  @override
+  Widget build(BuildContext context) => Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final MapEntry(:key, :value) in items.entries)
+          () {
+            final on = selected.contains(key);
+            return Material(
+              color: on ? C.orange.withValues(alpha: 0.14) : C.surface2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(color: on ? C.orange.withValues(alpha: 0.6) : C.border),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => onToggle(key),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 10, 6),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(on ? Icons.check_rounded : Icons.add_rounded, size: 16, color: on ? C.orange : C.muted),
+                    const SizedBox(width: 4),
+                    Text(value, style: TextStyle(fontSize: 13, color: on ? C.text : C.muted)),
+                  ]),
+                ),
+              ),
+            );
+          }(),
+      ]);
 }
 
 /// Секция, свёрнутая по умолчанию — для технических параметров.

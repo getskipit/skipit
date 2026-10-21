@@ -91,6 +91,8 @@ class _HomePageState extends State<HomePage> {
                       )
                     : null;
 
+    // Части, которые можно спрятать в Настройках → Программа → «На главной».
+    final show = state.settings.homeShows;
     final stage = Column(mainAxisSize: MainAxisSize.min, children: [
       ConnectGlow(
         active: connected,
@@ -109,6 +111,7 @@ class _HomePageState extends State<HomePage> {
             letterSpacing: 2,
             color: connected ? C.text : C.muted,
           )),
+      if (show('timer')) ...[
       const SizedBox(height: 6),
       Text(
         connected && state.connectedAt != null
@@ -133,6 +136,8 @@ class _HomePageState extends State<HomePage> {
             ? _ExitInfo(country: state.linkDown ? null : state.exitCountry, killSwitch: state.killSwitchOn)
             : null,
       ),
+      ],
+      if (show('mode')) ...[
       const SizedBox(height: 12),
       Segmented<ConnectionMode>(
         value: state.settings.mode,
@@ -176,6 +181,8 @@ class _HomePageState extends State<HomePage> {
           child: _TunCorePicker(value: state.settings.tunCore, onChanged: state.setTunCore),
         ),
       ),
+      ],
+      if (show('speed')) ...[
       const SizedBox(height: 8),
       SizedBox(
         width: 360,
@@ -189,8 +196,11 @@ class _HomePageState extends State<HomePage> {
           ]),
         ),
       ),
+      ],
+      if (show('routing')) ...[
       const SizedBox(height: 10),
       SizedBox(width: 360, child: _RoutingInfo(summary: state.routingSummary, onTap: () => state.openPage(AppState.routingPage))),
+      ],
       // Kill Switch держит интернет закрытым без VPN — это видно, пока его не снимут или VPN не вернётся.
       if (state.killSwitchHolding) ...[
         const SizedBox(height: 14),

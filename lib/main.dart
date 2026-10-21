@@ -191,7 +191,7 @@ Future<void> main(List<String> rawArgs) async {
     final grouped = groups.toSet().length > 1;
     final key = '$tooltip|${state.status.name}|${state.settings.closeToTray}|${state.settings.notifications}|$dark|${state.settings.mode.name}|'
         '${state.usesTun ? '${state.settings.tunCore.name}|${state.settings.killSwitch}' : ''}|${grouped ? groups.join(',') : ''}|'
-        '${state.settings.selectedServerId}|${servers.map((s) => '${s.id}:${s.name}').join(',')}';
+        '${state.settings.selectedServerId}|${servers.map((s) => '${s.id}:${s.name}').join(',')}|${state.settings.uiScale}';
     if (key == lastTray) return;
     lastTray = key;
     trayServers = [for (final s in servers) s.id];
@@ -223,6 +223,7 @@ Future<void> main(List<String> rawArgs) async {
           }(),
       ],
       selectedServer: servers.indexWhere((s) => s.id == state.settings.selectedServerId),
+      uiScale: state.settings.uiScale / 100,
     );
   }
 
@@ -328,7 +329,42 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver {
         // Свои цвета окна (C) меняются сразу — тема Flutter тоже, иначе её цвет текста 200 мс догонял бы
         // фон и названия строк на середине перехода сливались с ним.
         themeAnimationDuration: Duration.zero,
+        builder: (context, child) => _UiScale(child: child!),
         home: const Shell(),
+      ),
+    );
+  }
+}
+/// Масштаб всего интерфейса (Настройки → Программа → «Масштаб»): окно раскладывается как более крупное
+/// и уменьшается целиком — шрифты, значки, отступы, диалоги и меню вместе. Дерево одинаковое при любом
+/// масштабе: иначе смена масштаба сбрасывала бы открытый раздел и всё, что в окне набрано.
+class _UiScale extends StatelessWidget {
+  const _UiScale({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = AppScope.of(context).settings.uiScale / 100;
+    final mq = MediaQuery.of(context);
+    final size = mq.size / scale;
+    return OverflowBox(
+      alignment: Alignment.topLeft,
+      minWidth: size.width,
+      maxWidth: size.width,
+      minHeight: size.height,
+      maxHeight: size.height,
+      child: Transform.scale(
+        scale: scale,
+        alignment: Alignment.topLeft,
+        child: MediaQuery(
+          data: mq.copyWith(
+            size: size,
+            padding: mq.padding / scale,
+            viewPadding: mq.viewPadding / scale,
+            viewInsets: mq.viewInsets / scale,
+          ),
+          child: child,
+        ),
       ),
     );
   }

@@ -31,14 +31,17 @@ void main() {
     await loader.load();
   });
 
-  for (final collapsed in [false, true]) {
-    testWidgets('наименьшее окно, меню ${collapsed ? 'свёрнуто' : 'развёрнуто'}', (tester) async {
+  for (final (collapsed, top) in [(false, false), (true, false), (false, true)]) {
+    final layout = top ? 'top' : (collapsed ? 'collapsed' : 'expanded');
+    testWidgets('наименьшее окно, меню ${top ? 'сверху' : (collapsed ? 'свёрнуто' : 'развёрнуто')}', (tester) async {
       C.use(Palette.dark);
       tester.view.physicalSize = minClient;
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
 
-      final state = AppState()..settings.sidebarCollapsed = collapsed;
+      final state = AppState()
+        ..settings.sidebarCollapsed = collapsed
+        ..settings.navTop = top;
       state.routingProfiles.addAll([RoutingProfile.global(), ...RoutingProfile.templates()]);
       final sub = Subscription(url: 'https://panel.example/sub', name: 'SkipIt VPN')
         ..total = 650 * 1024 * 1024 * 1024
@@ -77,7 +80,7 @@ void main() {
       Future<void> shot(String name) async {
         if (shots.isEmpty) return;
         await expectLater(find.byType(RepaintBoundary).first,
-            matchesGoldenFile(Uri.file('$shots\\${collapsed ? 'collapsed' : 'expanded'}_$name.png')));
+            matchesGoldenFile(Uri.file('$shots\\${layout}_$name.png')));
       }
 
       await shot('home');

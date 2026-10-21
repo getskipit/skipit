@@ -1844,11 +1844,12 @@ class AppState extends ChangeNotifier {
     log.startSession(selectedServer?.name ?? 'Сервер не выбран', detail: xrayTun ? '${settings.mode.label} · Xray' : settings.mode.label);
     log.add('app', 'Подключение…');
     try {
-      // С запущенным zapret не подключаемся вовсе: он правит пакеты, в том числе на пути к VPN-серверу.
+      // zapret правит пакеты, в том числе на пути к VPN-серверу, — с ним VPN может не заработать.
+      // Подключаемся всё равно (пользователя спросили при нажатии кнопки), но оставляем след в журнале.
       final zapret = WinSys.zapretRunning();
       if (zapret != null) {
-        throw CoreException('Запущен $zapret — с ним VPN не подключается: он вмешивается в соединения, '
-            'в том числе с VPN-сервером. Закройте $zapret и подключитесь снова.');
+        log.add('app', 'Предупреждение: запущен $zapret — он меняет соединения и может мешать VPN. Если VPN-сервер '
+            'не отвечает или сайты не открываются, добавьте адрес VPN-сервера в исключения $zapret или закройте его');
       }
       // Без прав администратора ядра с адаптером, Kill Switch и уборку адаптеров берёт на себя служба SkipIt.
       final viaService = usesTun && !isAdmin;

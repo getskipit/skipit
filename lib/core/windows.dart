@@ -393,7 +393,7 @@ class WinSys {
   }
 
   /// Запущенный zapret (обход блокировок, который вмешивается в пакеты): его название или null.
-  /// С ним VPN не подключается: zapret правит и соединение с VPN-сервером.
+  /// Перед подключением о нём предупреждают: zapret правит и соединение с VPN-сервером.
   static String? zapretRunning() {
     try {
       return zapretIn(processNames());

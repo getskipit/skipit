@@ -67,6 +67,8 @@ class FlutterWindow : public Win32Window {
   bool start_maximized_ = false;
   // Идёт перетаскивание/изменение размера — сохраняем только в конце.
   bool in_size_move_ = false;
+  // Масштаб интерфейса из настроек SkipIt (0,8–1): во столько же раз меньше и наименьший размер окна.
+  double ui_scale_ = 1.0;
   // Содержимое меню значка (подписи, статус, тема) приходит из Dart; до этого — запасные английские подписи.
   TrayMenuModel tray_menu_;
 };

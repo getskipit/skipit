@@ -74,6 +74,8 @@ class LogLine {
     }
     // Xray пишет «[Warning] core: Xray … started» при обычном запуске — это не предупреждение.
     if (t.contains('warn') && !t.contains('started')) return 1;
+    // Предупреждения самой SkipIt.
+    if (t.startsWith('предупреждение:')) return 1;
     return 0;
   }
 }
