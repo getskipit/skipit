@@ -73,6 +73,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Открытая группа настроек; null — плитки всех групп.
   int? _group;
 
+  /// Выбранная группа в виде «Списком».
+  int _listGroup = 0;
+
   /// Счётчик повторных нажатий на раздел в меню ([AppState.pageReselected]), который страница уже видела.
   int? _seenReselect;
   final _searchKey = GlobalKey();
@@ -291,7 +294,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _Row(
             title: 'Вид настроек',
             subtitle: s.settingsList
-                ? 'Списком: все настройки на одной странице, по группам'
+                ? 'Списком: слева группы, справа настройки выбранной'
                 : 'Плитки: сначала группы, у каждой своя страница',
             trailing: Segmented<bool>(
               value: s.settingsList,
@@ -766,9 +769,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final Widget header;
     final List<Widget> body;
-    if (query.isNotEmpty || s.settingsList) {
+    // Вид «Списком»: слева группы, справа настройки выбранной (поиск и в нём ищет по всем группам).
+    final listMode = s.settingsList && query.isEmpty;
+    final listGroup = _listGroup.clamp(0, groups.length - 1);
+    if (query.isNotEmpty) {
       // Поиск — по всем группам сразу; у раздела без своего названия подписью служит название группы.
-      // Так же выглядит вид «Списком»: все настройки на одной странице.
       final sections = [
         for (final g in groups)
           for (final sec in g.sections) _Section(sec.title.isEmpty ? g.title : '${g.title} · ${sec.title}', sec.children),
@@ -784,6 +789,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: TextStyle(color: C.muted, fontSize: 13)),
           ),
       ];
+    } else if (listMode) {
+      header = _SettingsHeader(group: null, hint: hint, search: search, onBack: () => openGroup(null));
+      body = groups[listGroup].sections;
     } else if (_group != null) {
       final g = groups[_group!];
       header = _SettingsHeader(group: g, hint: hint, search: search, onBack: () => openGroup(null));
@@ -798,7 +806,15 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         header,
         Expanded(
-          child: ListView(primary: true, padding: const EdgeInsets.only(top: 2, bottom: 28), children: [
+          child: _ListLayout(
+            groups: listMode ? groups : null,
+            selected: listGroup,
+            onSelect: (i) {
+              setState(() => _listGroup = i);
+              final scroll = PrimaryScrollController.maybeOf(context);
+              if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
+            },
+            child: ListView(primary: true, padding: const EdgeInsets.only(top: 2, bottom: 28), children: [
         // Плитки, страница группы и результаты поиска сменяют друг друга плавно: старое гаснет,
         // новое проявляется и чуть подъезжает (страница группы — справа, плитки — слева).
         AnimatedSwitcher(
@@ -819,15 +835,112 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           child: KeyedSubtree(
-            key: ValueKey(query.isNotEmpty ? 'search' : (_group == null ? 'grid' : 'group$_group')),
+            key: ValueKey(query.isNotEmpty
+                ? 'search'
+                : listMode
+                    ? 'list$listGroup'
+                    : (_group == null ? 'grid' : 'group$_group')),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
           ),
         ),
           ]),
+          ),
         ),
       ]),
     );
   }
+}
+
+/// Вид «Списком»: слева — группы настроек (как в «Параметрах» Windows), справа — [child] с настройками
+/// выбранной. Список групп не прокручивается вместе с настройками; в узком окне от него остаются значки.
+/// [groups] = null — обычный вид, [child] на всю ширину.
+class _ListLayout extends StatelessWidget {
+  const _ListLayout({required this.groups, required this.selected, required this.onSelect, required this.child});
+  final List<_Group>? groups;
+  final int selected;
+  final ValueChanged<int> onSelect;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = groups;
+    if (list == null) return child;
+    return LayoutBuilder(builder: (context, c) {
+      final wide = c.maxWidth >= 820;
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 2, 0, 0),
+          child: SizedBox(
+            width: wide ? 220 : 44,
+            child: Column(children: [
+              for (var i = 0; i < list.length; i++)
+                _GroupNavItem(
+                  group: list[i],
+                  selected: i == selected,
+                  showLabel: wide,
+                  onTap: () => onSelect(i),
+                ),
+            ]),
+          ),
+        ),
+        Expanded(child: child),
+      ]);
+    });
+  }
+}
+
+class _GroupNavItem extends StatelessWidget {
+  const _GroupNavItem({required this.group, required this.selected, required this.showLabel, required this.onTap});
+  final _Group group;
+  final bool selected;
+  final bool showLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Tooltip(
+          message: showLabel ? '' : group.title,
+          waitDuration: const Duration(milliseconds: 300),
+          child: Hover(
+            builder: (context, hovered) => GestureDetector(
+              onTap: onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: selected
+                      ? C.orange.withValues(alpha: 0.14)
+                      : (hovered ? C.hover : Colors.transparent),
+                ),
+                child: Row(children: [
+                  Icon(group.icon, size: 20, color: selected || hovered ? C.orange : C.muted),
+                  if (showLabel) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(group.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: selected || hovered ? C.text : C.muted)),
+                    ),
+                    if (group.alert != null)
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(color: group.alert, shape: BoxShape.circle),
+                      ),
+                  ],
+                ]),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 /// Группа настроек: плитка на первой странице «Настроек» и своя страница с разделами.
