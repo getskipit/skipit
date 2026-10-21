@@ -749,7 +749,7 @@ class _SettingsPageState extends State<SettingsPage> {
           for (final sec in g.sections) _Section(sec.title.isEmpty ? g.title : '${g.title} · ${sec.title}', sec.children),
       ];
       final found = sections.any((s) => _found(s.title, s.children, query).isNotEmpty);
-      header = PageHeader('Настройки', subtitle: hint, actions: [search]);
+      header = _SettingsHeader(group: null, hint: hint, search: search, onBack: () => openGroup(null));
       body = [
         ...sections,
         if (!found)
@@ -761,10 +761,10 @@ class _SettingsPageState extends State<SettingsPage> {
       ];
     } else if (_group != null) {
       final g = groups[_group!];
-      header = _GroupHeader(group: g, search: search, onBack: () => openGroup(null));
+      header = _SettingsHeader(group: g, hint: hint, search: search, onBack: () => openGroup(null));
       body = g.sections;
     } else {
-      header = PageHeader('Настройки', subtitle: hint, actions: [search]);
+      header = _SettingsHeader(group: null, hint: hint, search: search, onBack: () => openGroup(null));
       body = [_GroupGrid(groups: groups, onOpen: openGroup)];
     }
     return _SettingsQuery(
@@ -774,13 +774,14 @@ class _SettingsPageState extends State<SettingsPage> {
         // Плитки, страница группы и результаты поиска сменяют друг друга плавно: старое гаснет,
         // новое проявляется и чуть подъезжает (страница группы — справа, плитки — слева).
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 240),
+          duration: const Duration(milliseconds: 320),
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
           layoutBuilder: (current, previous) =>
               Stack(alignment: Alignment.topCenter, children: [...previous, if (current != null) current]),
+          // Без наложения: старая страница гаснет за первую половину, новая проявляется во второй.
           transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
+            opacity: CurvedAnimation(parent: anim, curve: const Interval(0.5, 1)),
             child: SlideTransition(
               position: Tween(
                 begin: Offset(child.key == const ValueKey('grid') ? -0.03 : 0.03, 0),
@@ -896,17 +897,22 @@ class _GroupTile extends StatelessWidget {
       );
 }
 
-/// Заголовок открытой группы: стрелка назад к плиткам, «Настройки» мелко над названием группы, поиск.
-class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({required this.group, required this.search, required this.onBack});
-  final _Group group;
+/// Заголовок «Настроек» — один на плитки, страницы групп и поиск: высота и место поля поиска не меняются,
+/// поэтому при переходах ничего не прыгает. В группе слева плавно выезжает стрелка назад, а надпись
+/// «Настройки» с подписью сменяется на «Настройки» мелко над названием группы.
+class _SettingsHeader extends StatelessWidget {
+  const _SettingsHeader({required this.group, required this.hint, required this.search, required this.onBack});
+  final _Group? group;
+  final String hint;
   final Widget search;
   final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    final heading = Row(children: [
-      Tooltip(
+    final g = group;
+    final back = Padding(
+      padding: const EdgeInsets.only(right: 14),
+      child: Tooltip(
         message: 'Все настройки',
         child: Hover(
           builder: (context, hovered) => GestureDetector(
@@ -925,19 +931,51 @@ class _GroupHeader extends StatelessWidget {
           ),
         ),
       ),
-      const SizedBox(width: 14),
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Настройки', style: TextStyle(color: C.muted, fontSize: 13, fontWeight: FontWeight.w600)),
-          Text(group.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-        ]),
-      ),
-    ]);
+    );
+    const big = TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, height: 1.2);
+    final title = g == null
+        ? Column(
+            key: const ValueKey('grid'),
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Настройки', maxLines: 1, style: big),
+              const SizedBox(height: 2),
+              Text(hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 13)),
+            ],
+          )
+        : Column(
+            key: ValueKey(g.title),
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Настройки', style: TextStyle(color: C.muted, fontSize: 13, fontWeight: FontWeight.w600)),
+              Text(g.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: big),
+            ],
+          );
+    final heading = SizedBox(
+      height: 58,
+      child: Row(children: [
+        AnimatedSize(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          child: g == null ? const SizedBox(height: 40) : back,
+        ),
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            layoutBuilder: (current, previous) =>
+                Stack(alignment: Alignment.centerLeft, children: [...previous, if (current != null) current]),
+            // Старая надпись гаснет, потом проявляется новая — без наложения.
+            transitionBuilder: (child, anim) =>
+                FadeTransition(opacity: CurvedAnimation(parent: anim, curve: const Interval(0.5, 1)), child: child),
+            child: title,
+          ),
+        ),
+      ]),
+    );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 22, 28, 16),
+      padding: const EdgeInsets.fromLTRB(28, 22, 28, 14),
       child: LayoutBuilder(
         builder: (context, c) => c.maxWidth >= 680
             ? Row(children: [Expanded(child: heading), search])
