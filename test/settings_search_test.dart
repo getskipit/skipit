@@ -91,6 +91,17 @@ void main() {
     expect(find.text('Kill Switch'), findsNothing);
     expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Поиск по настройкам')).controller!.text, isEmpty);
 
+    // Повторное нажатие на «Настройки» в меню из группы — назад к плиткам.
+    await tester.tap(find.text('Внешний вид'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Тема'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.tune_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Тема'), findsNothing);
+    expect(find.text('Внешний вид'), findsOneWidget);
+
     await search('ъъъ');
     await tester.tap(find.byTooltip('Очистить'));
     await tester.pump(const Duration(milliseconds: 600));

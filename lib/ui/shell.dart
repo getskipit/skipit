@@ -328,7 +328,7 @@ class _ShellState extends State<Shell> {
   // Через of: раздел может открыть и другая часть окна (например, плитка маршрутизации на главной).
   int get _index => AppScope.of(context).pageIndex.clamp(0, _items.length - 1);
 
-  void go(int i) => AppScope.read(context).openPage(i);
+  void go(int i) => AppScope.read(context).selectPage(i);
 
   /// Источник обновлений спрятанных разделов: никогда не срабатывает.
   static final _asleep = ChangeNotifier();
@@ -829,9 +829,7 @@ class _Sidebar extends StatelessWidget {
 
     final dot = _StatusDot(dotColor);
 
-    // Меню + «ручка» сворачивания на его правой границе. Ручка всегда на одной высоте (напротив значка),
-    // поэтому при сворачивании ничего не переезжает. Внешняя рамка шире меню на половину ручки,
-    // чтобы ручка целиком принимала клики.
+    // Справа от меню — отступ до разделов (прежде на этой границе висела круглая ручка сворачивания).
     const handle = 32.0;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
@@ -843,18 +841,13 @@ class _Sidebar extends StatelessWidget {
           right: handle / 2,
           top: 12,
           bottom: 12,
-          child: _panel(context, state, collapsed, dot, statusText),
-        ),
-        Positioned(
-          top: 12 + 18 + (36 - handle) / 2,
-          right: 0,
-          child: _CollapseButton(collapsed: collapsed, onTap: toggle, size: handle),
+          child: _panel(context, state, collapsed, dot, statusText, toggle),
         ),
       ]),
     );
   }
 
-  Widget _panel(BuildContext context, AppState state, bool collapsed, Widget dot, String statusText) {
+  Widget _panel(BuildContext context, AppState state, bool collapsed, Widget dot, String statusText, VoidCallback toggle) {
     return Container(
       padding: const EdgeInsets.fromLTRB(11, 18, 11, 14),
       decoration: BoxDecoration(
@@ -905,7 +898,7 @@ class _Sidebar extends StatelessWidget {
               ]),
             ),
             // Одинаковый отступ в обоих состояниях — пункты меню не сдвигаются при сворачивании.
-            const SizedBox(height: 26),
+            const SizedBox(height: 20),
             // Подсветка выбранного пункта — одна на всё меню и «скользит» к новому пункту,
             // как у переключателей режимов.
             Stack(fit: StackFit.passthrough, children: [
@@ -944,6 +937,16 @@ class _Sidebar extends StatelessWidget {
               ]),
             ]),
             const Spacer(),
+            // Свернуть / развернуть — обычный пункт внизу меню: значок стоит на месте, подпись выезжает,
+            // в свёрнутом меню она переезжает в подсказку.
+            _NavItem(
+              icon: collapsed ? Icons.keyboard_double_arrow_right_rounded : Icons.keyboard_double_arrow_left_rounded,
+              label: 'Свернуть меню',
+              tooltip: 'Развернуть меню',
+              selected: false,
+              collapsed: collapsed,
+              onTap: toggle,
+            ),
             // Статус: одна раскладка в обоих состояниях — точка на месте, текст выезжает.
             Tooltip(
               // В подсказке флаг — картинкой (в тексте Windows вместо него показала бы буквы «DE»).
@@ -1003,40 +1006,6 @@ class _Sidebar extends StatelessWidget {
   }
 }
 
-class _CollapseButton extends StatelessWidget {
-  const _CollapseButton({required this.collapsed, required this.onTap, this.size = 32});
-  final bool collapsed;
-  final VoidCallback onTap;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: collapsed ? 'Развернуть меню' : 'Свернуть меню',
-        child: Hover(
-          builder: (context, hovered) => GestureDetector(
-            onTap: onTap,
-            // Круглая «ручка» на границе меню; фон непрозрачный, чтобы перекрывать рамку.
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: hovered ? Color.alphaBlend(C.orange.withValues(alpha: 0.15), C.surface2) : C.surface2,
-                shape: BoxShape.circle,
-                border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.7) : C.border),
-                boxShadow: [BoxShadow(color: C.palette.shadow, blurRadius: 8)],
-              ),
-              child: Icon(
-                collapsed ? Icons.chevron_right_rounded : Icons.chevron_left_rounded,
-                size: 20,
-                color: hovered ? C.orange : C.muted,
-              ),
-            ),
-          ),
-        ),
-      );
-}
-
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
@@ -1044,9 +1013,13 @@ class _NavItem extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.collapsed = false,
+    this.tooltip,
   });
   final IconData icon;
   final String label;
+
+  /// Подсказка в свёрнутом меню, если она не совпадает с названием.
+  final String? tooltip;
   final bool selected;
   final bool collapsed;
   final VoidCallback onTap;
@@ -1099,7 +1072,7 @@ class _NavItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: extent - height),
       child: Tooltip(
-        message: collapsed ? label : '',
+        message: collapsed ? (tooltip ?? label) : '',
         waitDuration: const Duration(milliseconds: 300),
         child: item,
       ),

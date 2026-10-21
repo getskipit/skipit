@@ -72,6 +72,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// Открытая группа настроек; null — плитки всех групп.
   int? _group;
+
+  /// Счётчик повторных нажатий на раздел в меню ([AppState.pageReselected]), который страница уже видела.
+  int? _seenReselect;
   final _searchKey = GlobalKey();
 
 
@@ -281,6 +284,20 @@ class _SettingsPageState extends State<SettingsPage> {
               items: const {false: 'Слева', true: 'Сверху'},
               onChanged: (v) {
                 s.navTop = v;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'Вид настроек',
+            subtitle: s.settingsList
+                ? 'Списком: все настройки на одной странице, по группам'
+                : 'Плитки: сначала группы, у каждой своя страница',
+            trailing: Segmented<bool>(
+              value: s.settingsList,
+              items: const {false: 'Плитки', true: 'Списком'},
+              onChanged: (v) {
+                s.settingsList = v;
                 state.changed();
               },
             ),
@@ -701,10 +718,17 @@ class _SettingsPageState extends State<SettingsPage> {
 
     // Ушли в другой раздел меню — поиск сбрасывается, открытая группа закрывается: вернувшись, человек
     // видит плитки всех групп.
-    if (state.pageIndex != AppState.settingsPage && (_query.isNotEmpty || _group != null)) {
+    // То же, когда «Настройки» нажали в меню ещё раз, уже находясь в них.
+    final reselected = _seenReselect != null && _seenReselect != state.pageReselected;
+    _seenReselect = state.pageReselected;
+    if ((state.pageIndex != AppState.settingsPage || reselected) && (_query.isNotEmpty || _group != null)) {
       _search.clear();
       _query = '';
       _group = null;
+      if (reselected) {
+        final scroll = PrimaryScrollController.maybeOf(context);
+        if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
+      }
     }
     final query = _query.trim().toLowerCase();
     // Ключ держит одно и то же поле поиска при смене заголовка (плитки ↔ группа ↔ поиск): иначе поле
@@ -742,8 +766,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final Widget header;
     final List<Widget> body;
-    if (query.isNotEmpty) {
+    if (query.isNotEmpty || s.settingsList) {
       // Поиск — по всем группам сразу; у раздела без своего названия подписью служит название группы.
+      // Так же выглядит вид «Списком»: все настройки на одной странице.
       final sections = [
         for (final g in groups)
           for (final sec in g.sections) _Section(sec.title.isEmpty ? g.title : '${g.title} · ${sec.title}', sec.children),
@@ -769,8 +794,11 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     return _SettingsQuery(
       query: query,
-      child: ListView(primary: true, padding: const EdgeInsets.only(bottom: 28), children: [
+      // Заголовок со стрелкой назад и поиском закреплён: прокручиваются только настройки под ним.
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         header,
+        Expanded(
+          child: ListView(primary: true, padding: const EdgeInsets.only(top: 2, bottom: 28), children: [
         // Плитки, страница группы и результаты поиска сменяют друг друга плавно: старое гаснет,
         // новое проявляется и чуть подъезжает (страница группы — справа, плитки — слева).
         AnimatedSwitcher(
@@ -794,6 +822,8 @@ class _SettingsPageState extends State<SettingsPage> {
             key: ValueKey(query.isNotEmpty ? 'search' : (_group == null ? 'grid' : 'group$_group')),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
           ),
+        ),
+          ]),
         ),
       ]),
     );
@@ -939,14 +969,26 @@ class _SettingsHeader extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          // На основе общего стиля: иначе у надписи пропал бы шрифт программы.
-          style: DefaultTextStyle.of(context).style.merge(g == null
-              ? big.copyWith(color: C.text)
-              : TextStyle(color: C.muted, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0, height: 1.2)),
-          child: const Text('Настройки', maxLines: 1),
+        // В группе надпись «Настройки» — тоже путь назад к плиткам, как стрелка.
+        Hover(
+          enabled: g != null,
+          builder: (context, hovered) => GestureDetector(
+            onTap: g == null ? null : onBack,
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              // На основе общего стиля: иначе у надписи пропал бы шрифт программы.
+              style: DefaultTextStyle.of(context).style.merge(g == null
+                  ? big.copyWith(color: C.text)
+                  : TextStyle(
+                      color: hovered ? C.orange : C.muted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
+                      height: 1.2)),
+              child: const Text('Настройки', maxLines: 1),
+            ),
+          ),
         ),
         const SizedBox(height: 2),
         AnimatedContainer(
@@ -1038,6 +1080,7 @@ const _keywords = <String, String>{
   'Тема': 'оформление цвет тёмная темная светлая ночная dark light вид',
   'Масштаб': 'размер крупнее мельче меньше уменьшить увеличить шрифт текст zoom интерфейс',
   'Расположение меню': 'вёрстка верстка меню сверху слева сбоку панель навигация разделы',
+  'Вид настроек': 'настройки плитки список списком одной страницей вёрстка верстка группы',
   'На главной': 'главная экран скрыть спрятать показать скорость трафик режим маршрутизация таймер время страна',
   'Меньше анимаций': 'анимация плавность тормозит лагает производительность слабый компьютер',
   'Запускать вместе с Windows': 'автозапуск автозагрузка старт включение компьютера',

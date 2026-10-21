@@ -138,6 +138,9 @@ class AppSettings {
   /// Меню разделов вдоль верхнего края окна, а не слева.
   bool navTop = false;
 
+  /// Настройки одной страницей по группам, а не плитками.
+  bool settingsList = false;
+
   /// Масштаб интерфейса в процентах: 80, 90 или 100.
   int uiScale = 100;
   static const uiScales = [80, 90, 100];
@@ -221,6 +224,7 @@ class AppSettings {
         'zapretWarn': zapretWarn,
         'uiScale': uiScale,
         'navTop': navTop,
+        'settingsList': settingsList,
         'homeHidden': homeHidden.toList(),
         'preferJson': preferJson,
         'updateChannel': updateChannel.name,
@@ -294,6 +298,7 @@ class AppSettings {
     s.reduceMotion = parseBool(j['reduceMotion'], s.reduceMotion);
     s.zapretWarn = parseBool(j['zapretWarn'], s.zapretWarn);
     s.navTop = parseBool(j['navTop'], s.navTop);
+    s.settingsList = parseBool(j['settingsList'], s.settingsList);
     final uiScale = asInt(j['uiScale']);
     if (uiScales.contains(uiScale)) s.uiScale = uiScale!;
     final homeHidden = j['homeHidden'];
