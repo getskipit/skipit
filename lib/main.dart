@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' show AppExitResponse;
+import 'dart:ui' show AppExitResponse, lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -246,7 +246,32 @@ class SkipItApp extends StatefulWidget {
   State<SkipItApp> createState() => _SkipItAppState();
 }
 
-class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver {
+class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  /// Плавная смена скругления углов: всё окно меняет углы разом, а не часть сразу, а часть — догоняя.
+  late final _corners = AnimationController(vsync: this, duration: const Duration(milliseconds: 260))
+    ..addListener(_stepCorners);
+  double _cornersFrom = 1;
+
+  /// Палитра на шаге перехода скругления; null — перехода нет.
+  Palette? _live;
+
+  void _stepCorners() {
+    final t = Curves.easeOutCubic.transform(_corners.value);
+    _live = _corners.isCompleted ? null : _palette.withCorners(lerpDouble(_cornersFrom, _palette.corners, t)!);
+    C.use(_live ?? _palette);
+    _rebuildAll();
+  }
+
+  /// Перестраивает все виджеты окна, не пересоздавая их: цвета и радиусы читаются при построении.
+  void _rebuildAll() {
+    void rebuild(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(rebuild);
+    }
+
+    (context as Element).visitChildren(rebuild);
+  }
+
   late final AppLifecycleListener _lifecycle;
   late Palette _palette = _resolvePalette();
 
@@ -296,14 +321,17 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver {
     if (identical(p, _palette)) return;
     void apply() {
       if (!mounted) return;
+      final from = (_live ?? _palette).corners;
       setState(() => _palette = p);
       C.use(p);
-      void rebuild(Element e) {
-        e.markNeedsBuild();
-        e.visitChildren(rebuild);
+      _rebuildAll();
+      if (from != p.corners && !widget.state.settings.reduceMotion) {
+        _cornersFrom = from;
+        _corners.forward(from: 0);
+      } else {
+        _corners.stop();
+        _live = null;
       }
-
-      (context as Element).visitChildren(rebuild);
     }
 
     // Во время построения кадра помечать виджеты нельзя — откладываем до его конца.
@@ -343,13 +371,14 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.state.removeListener(_syncTheme);
+    _corners.dispose();
     _lifecycle.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    C.use(_palette);
+    C.use(_live ?? _palette);
     return AppScope(
       state: widget.state,
       child: MaterialApp(
@@ -378,7 +407,17 @@ class _UiScale extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scale = AppScope.of(context).settings.uiScale / 100;
+    // Смена масштаба — плавно: окно уменьшается или увеличивается, а не встаёт сразу в новый размер.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: AppScope.of(context).settings.uiScale / 100),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      builder: (context, scale, child) => _scaled(context, scale, child!),
+      child: child,
+    );
+  }
+
+  static Widget _scaled(BuildContext context, double scale, Widget child) {
     final mq = MediaQuery.of(context);
     final size = mq.size / scale;
     return OverflowBox(

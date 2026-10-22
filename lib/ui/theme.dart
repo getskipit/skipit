@@ -130,6 +130,29 @@ class Palette {
     shadow: Color(0x1F000000),
   );
 
+  /// Копия палитры с промежуточным скруглением — для плавного перехода между ступенями (не запоминается).
+  Palette withCorners(double value) => Palette(
+        brightness: brightness,
+        bg: bg,
+        surface: surface,
+        surface2: surface2,
+        border: border,
+        text: text,
+        muted: muted,
+        cyan: cyan,
+        green: green,
+        red: red,
+        hover: hover,
+        tileTop: tileTop,
+        tileBottom: tileBottom,
+        tileActiveTop: tileActiveTop,
+        tileActiveBottom: tileActiveBottom,
+        markMuted: markMuted,
+        shadow: shadow,
+        accent: accent,
+        corners: value,
+      );
+
   static final _styled = <(Palette, Accent, double), Palette>{};
 
   /// Та же тема с другим цветом акцента и скруглением. Один и тот же объект на одно сочетание: смена
