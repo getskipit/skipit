@@ -210,7 +210,10 @@ void main() {
     expect(state.pageIndex, 4);
     state.settings.menuHidden = {};
     state.changed();
-    await tester.pump(const Duration(milliseconds: 600));
+    // Пункт выезжает плавно.
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
     expect(find.text('Проверка'), findsOneWidget);
   });
 
