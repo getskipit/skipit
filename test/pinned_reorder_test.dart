@@ -49,6 +49,25 @@ void main() {
 
   List<String> names(AppState state) => [for (final s in state.subscriptions) s.name];
 
+  testWidgets('кнопки в заголовке закреплённой подписки нажимаются и с дрожащей рукой — карточка не сворачивается',
+      (tester) async {
+    final state = await open(tester);
+    final alpha = state.subscriptions.first;
+    final expanded = alpha.expanded;
+    // Кнопка «Ещё» в заголовке Alpha; клик со сдвигом на 4 точки, как у живой руки.
+    final button = find.byTooltip('Ещё').at(1);
+    final gesture = await tester.startGesture(tester.getCenter(button), kind: PointerDeviceKind.mouse);
+    await tester.pump(const Duration(milliseconds: 40));
+    await gesture.moveBy(const Offset(0, 4));
+    await tester.pump(const Duration(milliseconds: 40));
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 300));
+    // Нажатие дошло до кнопки — открылось меню подписки; карточка не свернулась.
+    expect(find.text('Изменить'), findsOneWidget);
+    expect(alpha.expanded, expanded);
+    await tester.pump(const Duration(seconds: 9));
+  });
+
   testWidgets('закреплённая подписка встаёт на место другой закреплённой', (tester) async {
     final state = await open(tester);
     await drag(tester, 'Alpha', 'Delta');

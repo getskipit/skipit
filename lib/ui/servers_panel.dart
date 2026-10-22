@@ -594,46 +594,52 @@ class _GroupCardState extends State<_GroupCard> {
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        // Заголовок группы.
-        dragHandle(Hover(
+        // Заголовок группы. Перетаскивается только левая часть — стрелка и название: если бы за перенос
+        // можно было взяться и на кнопках справа, чуть дрогнувший клик по ним становился бы переносом —
+        // нажатие терялось, а карточка сворачивалась.
+        Hover(
           builder: (context, hovered) => GestureDetector(
             onTap: toggle,
             child: Container(
               color: hovered ? C.hover : Colors.transparent,
               padding: const EdgeInsets.fromLTRB(10, 12, 8, 12),
               child: Row(children: [
-                AnimatedRotation(
-                  turns: expanded ? 0 : -0.25,
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                  child: Icon(Icons.expand_more_rounded, color: C.muted),
-                ),
-                const SizedBox(width: 6),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Flexible(
-                        child: FlagText(sub?.displayName ?? 'Мои серверы',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                      ),
-                      // Значок закреплённой подписки.
-                      if (sub?.pinned ?? false) ...[
-                        const SizedBox(width: 6),
-                        Tooltip(
-                          message: widget.draggable
-                              ? 'Закреплена вверху списка. Перетащите заголовок на другую закреплённую подписку, '
-                                  'чтобы поменять их местами'
-                              : 'Закреплена вверху списка',
-                          child: Icon(Icons.push_pin_rounded, size: 14, color: C.orange),
-                        ),
-                      ],
-                      if (sub?.hidden ?? false) ...[const SizedBox(width: 8), const Tag('скрыта')],
-                    ]),
-                    const SizedBox(height: 2),
-                    Text(subtitle, maxLines: 1, style: TextStyle(color: C.muted, fontSize: 11.5)),
-                  ]),
+                  child: dragHandle(Row(children: [
+                    AnimatedRotation(
+                      turns: expanded ? 0 : -0.25,
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOutCubic,
+                      child: Icon(Icons.expand_more_rounded, color: C.muted),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Flexible(
+                            child: FlagText(sub?.displayName ?? 'Мои серверы',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                          ),
+                          // Значок закреплённой подписки.
+                          if (sub?.pinned ?? false) ...[
+                            const SizedBox(width: 6),
+                            Tooltip(
+                              message: widget.draggable
+                                  ? 'Закреплена вверху списка. Перетащите заголовок на другую закреплённую подписку, '
+                                      'чтобы поменять их местами'
+                                  : 'Закреплена вверху списка',
+                              child: Icon(Icons.push_pin_rounded, size: 14, color: C.orange),
+                            ),
+                          ],
+                          if (sub?.hidden ?? false) ...[const SizedBox(width: 8), const Tag('скрыта')],
+                        ]),
+                        const SizedBox(height: 2),
+                        Text(subtitle, maxLines: 1, style: TextStyle(color: C.muted, fontSize: 11.5)),
+                      ]),
+                    ),
+                  ])),
                 ),
                 if (sub != null)
                   _IconAction(
@@ -695,7 +701,7 @@ class _GroupCardState extends State<_GroupCard> {
               ]),
             ),
           ),
-        )),
+        ),
         if (sub != null) state.settings.subDetailed ? _SubscriptionDetails(sub) : _SubscriptionBar(sub),
         if (sub?.error != null)
           Padding(
