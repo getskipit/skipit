@@ -781,6 +781,8 @@ class _SegmentedState<T> extends State<Segmented<T>> {
     // единиц раскладки, а начало отсчёта переводится в те же единицы.
     final k = stack.getTransformTo(null).getMaxScaleOnAxis();
     final ratio = View.of(context).devicePixelRatio * k;
+    // Переключатель сжат в ноль (FittedBox в нулевом месте, например на кадре смены страниц) — мерить нечего.
+    if (!(ratio > 0) || !ratio.isFinite) return;
     final origin = stack.localToGlobal(Offset.zero) / k;
     double snap(double v) => (v * ratio).roundToDouble() / ratio;
     final onScreen = raw.shift(origin);

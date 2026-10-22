@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
 
 import '../core/paths.dart';
@@ -81,9 +83,22 @@ class _SettingsPageState extends State<SettingsPage> {
   int? _seenReselect;
   final _searchKey = GlobalKey();
 
+  /// Прокрутка к началу при смене страницы (плитки ↔ группа ↔ поиск). Не сразу, а когда прежняя
+  /// страница уже погасла (первая половина смены, см. AnimatedSwitcher ниже): иначе она на глазах
+  /// уезжала бы к своему началу. Новая к этому времени ещё не проявилась.
+  Timer? _toTop;
+  void _scrollToTop() {
+    _toTop?.cancel();
+    _toTop = Timer(const Duration(milliseconds: 160) * timeDilation, () {
+      if (!mounted) return;
+      final scroll = PrimaryScrollController.maybeOf(context);
+      if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
+    });
+  }
 
   @override
   void dispose() {
+    _toTop?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -839,10 +854,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _search.clear();
       _query = '';
       _group = null;
-      if (reselected) {
-        final scroll = PrimaryScrollController.maybeOf(context);
-        if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
-      }
+      if (reselected) _scrollToTop();
     }
     final query = _query.trim().toLowerCase();
     // Ключ держит одно и то же поле поиска при смене заголовка (плитки ↔ группа ↔ поиск): иначе поле
@@ -874,8 +886,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     void openGroup(int? i) {
       setState(() => _group = i);
-      final scroll = PrimaryScrollController.maybeOf(context);
-      if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
+      _scrollToTop();
     }
 
     final Widget header;
@@ -922,8 +933,7 @@ class _SettingsPageState extends State<SettingsPage> {
             selected: listGroup,
             onSelect: (i) {
               setState(() => _listGroup = i);
-              final scroll = PrimaryScrollController.maybeOf(context);
-              if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
+              _scrollToTop();
             },
             child: ListView(primary: true, padding: const EdgeInsets.only(top: 2, bottom: 28), children: [
         // Плитки, страница группы и результаты поиска сменяют друг друга плавно: старое гаснет,
