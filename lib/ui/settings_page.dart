@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
 
 import '../core/paths.dart';
@@ -83,22 +82,25 @@ class _SettingsPageState extends State<SettingsPage> {
   int? _seenReselect;
   final _searchKey = GlobalKey();
 
-  /// Прокрутка к началу при смене страницы (плитки ↔ группа ↔ поиск). Не сразу, а когда прежняя
-  /// страница уже погасла (первая половина смены, см. AnimatedSwitcher ниже): иначе она на глазах
-  /// уезжала бы к своему началу. Новая к этому времени ещё не проявилась.
-  Timer? _toTop;
+  /// Страница, показанная сейчас (ключ в AnimatedSwitcher ниже).
+  Key? _shownKey;
+
+  /// Прежняя страница и на сколько её сдвинуть вверх, пока она гаснет.
+  final _outShift = ValueNotifier<(Key?, double)>((null, 0));
+
+  /// Прокрутка к началу при смене страницы (плитки ↔ группа ↔ поиск): новая страница сразу стоит
+  /// в начале, а прежняя, пока гаснет, сдвигается на прежнюю прокрутку — остаётся на месте, а не
+  /// уезжает на глазах к своему началу.
   void _scrollToTop() {
-    _toTop?.cancel();
-    _toTop = Timer(const Duration(milliseconds: 160) * timeDilation, () {
-      if (!mounted) return;
-      final scroll = PrimaryScrollController.maybeOf(context);
-      if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
-    });
+    final scroll = PrimaryScrollController.maybeOf(context);
+    if (scroll == null || !scroll.hasClients) return;
+    _outShift.value = (_shownKey, scroll.offset);
+    scroll.jumpTo(0);
   }
 
   @override
   void dispose() {
-    _toTop?.cancel();
+    _outShift.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -952,11 +954,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 begin: Offset(child.key == const ValueKey('grid') ? -0.03 : 0.03, 0),
                 end: Offset.zero,
               ).animate(anim),
-              child: child,
+              child: ValueListenableBuilder<(Key?, double)>(
+                valueListenable: _outShift,
+                builder: (context, shift, child) => shift.$1 == child!.key && shift.$1 != _shownKey && shift.$2 != 0
+                    ? Transform.translate(offset: Offset(0, -shift.$2), child: child)
+                    : child,
+                child: child,
+              ),
             ),
           ),
           child: KeyedSubtree(
-            key: ValueKey(query.isNotEmpty
+            key: _shownKey = ValueKey(query.isNotEmpty
                 ? 'search'
                 : listMode
                     ? 'list$listGroup'
