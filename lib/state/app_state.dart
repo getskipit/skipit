@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -1757,7 +1758,51 @@ class AppState extends ChangeNotifier {
   Future<void> setAdBlock(bool on) async {
     settings.adBlock = on;
     changed();
-    if (isConnected) await reconnect();
+    if (isConnected) {
+      await reconnect();
+    } else if (status == ConnStatus.connecting) {
+      // Конфиг этого подключения уже собран — переподключимся, как только оно поднимется.
+      _reconnectWhenUp = true;
+    }
+  }
+
+  /// Переподключиться сразу после текущего подключения (см. [setAdBlock]).
+  bool _reconnectWhenUp = false;
+
+  /// Есть ли в гео-базе список рекламы [XrayConfig.adsList]. Ответ запоминается для того же файла
+  /// (размер и время изменения): база весит десятки мегабайт, читать её на каждом подключении незачем.
+  Future<bool> _geoHasAds() async {
+    final file = File(AppPaths.geositeFile);
+    try {
+      final stat = await file.stat();
+      final key = '${stat.size}|${stat.modified.millisecondsSinceEpoch}';
+      final known = _geoAdsChecked;
+      if (known != null && known.$1 == key) return known.$2;
+      final path = file.path;
+      final name = XrayConfig.adsList.substring('geosite:'.length).toUpperCase();
+      final found = await Isolate.run(() => bytesContain(File(path).readAsBytesSync(), ascii.encode(name)));
+      _geoAdsChecked = (key, found);
+      return found;
+    } catch (_) {
+      // Прочитать не вышло — пусть решит само ядро, как раньше.
+      return true;
+    }
+  }
+
+  (String, bool)? _geoAdsChecked;
+
+  @visibleForTesting
+  static bool bytesContain(List<int> data, List<int> needle) {
+    final first = needle.first;
+    for (var i = 0; i <= data.length - needle.length; i++) {
+      if (data[i] != first) continue;
+      var j = 1;
+      while (j < needle.length && data[i + j] == needle[j]) {
+        j++;
+      }
+      if (j == needle.length) return true;
+    }
+    return false;
   }
 
   Future<void> reconnect() async {
@@ -1896,6 +1941,7 @@ class AppState extends ChangeNotifier {
     // не выйдет, он так и останется закрытым.
     final held = KillSwitch.active;
     _cancelConnect = false;
+    _reconnectWhenUp = false;
     lastError = null;
     tunFailed = false;
     status = ConnStatus.connecting;
@@ -1960,6 +2006,13 @@ class AppState extends ChangeNotifier {
       taken.add(session.httpPort);
       session.apiPort = await _pickPort(settings.apiPort, taken, 'статистика');
       _session = session;
+      // Своя гео-база профиля может не знать списка рекламы — тогда Xray с таким правилом не запустился
+      // бы вовсе. Подключаемся без блокировки и говорим почему.
+      if (session.adBlock && !await _geoHasAds()) {
+        session.adBlock = false;
+        log.add('app', 'Предупреждение: в гео-базе нет списка рекламы (${XrayConfig.adsList}) — блокировка рекламы '
+            'в этом подключении не работает. Верните стандартную гео-базу в профиле маршрутизации');
+      }
       // Сама программа ходит через свой HTTP-порт (обновления, подписки, geo-базы) — с тем же паролем.
       Net.proxyAuth = session.httpAuth ? '${session.portUser}:${session.portPassword}' : null;
 
@@ -2226,6 +2279,11 @@ class AppState extends ChangeNotifier {
         if (visible) stats.changed();
       });
       notifyListeners();
+      // Пока шло подключение, переключили блокировку рекламы — применяем.
+      if (_reconnectWhenUp) {
+        _reconnectWhenUp = false;
+        unawaited(reconnect());
+      }
     } catch (e) {
       // Отмена пользователем — не ошибка: просто возвращаем всё как было.
       final cancelled = _cancelConnect;

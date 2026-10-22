@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -5,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/line_check.dart';
 import 'package:skipit/core/site_check.dart';
 import 'package:skipit/core/speed_test.dart';
+import 'package:skipit/state/app_state.dart';
 
 /// Раздел «Проверка»: несколько сайтов разом, стабильность связи и замер скорости — разбор ввода,
 /// подсчёт и выводы словами, без выхода в сеть.
@@ -181,6 +183,25 @@ void main() {
         .copyText
         .split('\n')
         .first, endsWith('(сервер замера: ${hosts[1]})'));
+  });
+
+  test('скорость: замеры с разных серверов не сравниваются', () {
+    final r = SpeedReport()
+      ..vpnMbit = 100
+      ..directMbit = 400
+      ..vpnHost = 'speedtest.selectel.ru'
+      ..directHost = 'proof.ovh.net';
+    expect(r.notes.single.kind, SiteNoteKind.info);
+    expect(r.notes.single.text, contains('серверы замера разные'));
+    r.directHost = 'speedtest.selectel.ru';
+    expect(r.notes.single.kind, SiteNoteKind.warn);
+  });
+
+  test('гео-база: поиск списка рекламы по байтам', () {
+    final data = ascii.encode('xxCATEGORY-ADS-ALLyy');
+    expect(AppState.bytesContain(data, ascii.encode('CATEGORY-ADS-ALL')), isTrue);
+    expect(AppState.bytesContain(data, ascii.encode('CATEGORY-ADS-ALZ')), isFalse);
+    expect(AppState.bytesContain(ascii.encode('CATEGORY-ADS'), ascii.encode('CATEGORY-ADS-ALL')), isFalse);
   });
 
   test('скорость: подпись у кнопки говорит, что происходит', () {

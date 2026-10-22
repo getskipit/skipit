@@ -44,6 +44,14 @@ class SpeedReport {
     final found = <SiteNote>[];
     void add(SiteNoteKind kind, String text) => found.add((kind: kind, text: text));
     final vpn = vpnMbit, direct = directMbit;
+    // Напрямую основной сервер замера не ответил, и файл качался с другого: разница скоростей тогда —
+    // это разные серверы и пути до них, а не VPN.
+    if (vpn != null && direct != null && vpnHost != null && directHost != null && vpnHost != directHost) {
+      add(SiteNoteKind.info,
+          'Через VPN — ${show(vpn)} (файл с $vpnHost), напрямую — ${show(direct)} (с $directHost): серверы замера '
+          'разные, поэтому, режет ли VPN скорость, по этому замеру не сказать');
+      return found;
+    }
     if (vpn == null) {
       add(SiteNoteKind.bad, 'Через VPN замер не удался${vpnError == null ? '' : ': $vpnError'}');
     } else if (direct == null) {
