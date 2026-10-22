@@ -335,13 +335,10 @@ class _ShellState extends State<Shell> {
 
   @override
   Widget build(BuildContext context) {
-    // Меню без спрятанных разделов (Настройки → Внешний вид → «Пункты меню»). Спрятанный раздел по-прежнему
-    // открывается ссылками из окна — тогда в меню ничего не подсвечено.
-    final hidden = AppScope.of(context).settings.menuHidden;
-    final visible = [for (var i = 0; i < _items.length; i++) if (!hidden.contains('$i')) i];
-    final items = [for (final i in visible) _items[i]];
-    final index = visible.indexOf(_index);
-    void select(int j) => go(visible[j]);
+    // Спрятанные разделы (Настройки → Внешний вид → «Пункты меню») меню плавно сворачивает. Спрятанный раздел
+    // по-прежнему открывается ссылками из окна.
+    final hiddenNames = AppScope.of(context).settings.menuHidden;
+    final hidden = {for (var i = 0; i < _items.length; i++) if (hiddenNames.contains('$i')) i};
     final pages = [
       const HomePage(),
       // Раздел «Серверы»: все подписки и серверы, включая скрытые с главной, на всю ширину окна.
@@ -374,14 +371,14 @@ class _ShellState extends State<Shell> {
               _MenuSlot(
                 shown: !AppScope.of(context).settings.navTop,
                 axis: Axis.horizontal,
-                child: _Sidebar(index: index, items: items, onSelect: select),
+                child: _Sidebar(index: _index, items: _items, hidden: hidden, onSelect: go),
               ),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _MenuSlot(
             shown: AppScope.of(context).settings.navTop,
             axis: Axis.vertical,
-            child: _TopBar(index: index, items: items, onSelect: select),
+            child: _TopBar(index: _index, items: _items, hidden: hidden, onSelect: go),
           ),
           // Спрятанные разделы слушают «спящий» источник и не перестраиваются от каждого изменения состояния
           // (раньше любое изменение перестраивало все шесть, вместе с полной копией списка серверов
@@ -556,9 +553,10 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
 /// Меню разделов вдоль верхнего края окна (Настройки → Внешний вид → «Расположение меню»). Узкое окно —
 /// подписи остаются только у выбранного раздела, у остальных значок с подсказкой.
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.index, required this.items, required this.onSelect});
+  const _TopBar({required this.index, required this.items, required this.hidden, required this.onSelect});
   final int index;
   final List<(IconData, String)> items;
+  final Set<int> hidden;
   final ValueChanged<int> onSelect;
 
   @override
@@ -581,7 +579,7 @@ class _TopBar extends StatelessWidget {
           const SizedBox(width: 10),
           Text(AppPaths.appName, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
           const SizedBox(width: 18),
-          Expanded(child: _TopNav(index: index, items: items, wide: wide, onSelect: onSelect)),
+          Expanded(child: _TopNav(index: index, items: items, hidden: hidden, wide: wide, onSelect: onSelect)),
           Tooltip(
             richMessage: TextSpan(children: [
               TextSpan(text: '$statusText\n'),
@@ -615,7 +613,9 @@ class _TopBar extends StatelessWidget {
 /// в боковом меню. Пункты бывают разной ширины (а в узком окне подпись у выбранного выезжает),
 /// поэтому место подсветки берётся из раскладки и обновляется каждый кадр, пока она едет.
 class _TopNav extends StatefulWidget {
-  const _TopNav({required this.index, required this.items, required this.wide, required this.onSelect});
+  const _TopNav(
+      {required this.index, required this.items, required this.hidden, required this.wide, required this.onSelect});
+  final Set<int> hidden;
   final int index;
   final List<(IconData, String)> items;
   final bool wide;
@@ -625,7 +625,14 @@ class _TopNav extends StatefulWidget {
   State<_TopNav> createState() => _TopNavState();
 }
 
-class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
+class _TopNavState extends State<_TopNav> with TickerProviderStateMixin {
+  /// Насколько виден каждый пункт: 1 — на месте, 0 — спрятан (сжат по ширине).
+  late final _shown = [
+    for (var i = 0; i < widget.items.length; i++)
+      AnimationController(
+          vsync: this, duration: const Duration(milliseconds: 240), value: widget.hidden.contains(i) ? 0 : 1),
+  ];
+
   final _stack = GlobalKey();
   /// Ключи пунктов по названию: набор пунктов меняется, когда их прячут в настройках.
   final _keys = <String, GlobalKey>{};
@@ -641,7 +648,18 @@ class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
     if (widget.index < 0) return null;
     final item = _key(widget.items[widget.index].$2).currentContext?.findRenderObject() as RenderBox?;
     if (stack == null || item == null || !stack.hasSize || !item.hasSize) return null;
-    return item.localToGlobal(Offset.zero, ancestor: stack) & item.size;
+    final at = item.localToGlobal(Offset.zero, ancestor: stack);
+    // Место по горизонтали — из ширины пунктов слева и того, насколько каждый сейчас виден: пока пункты
+    // сворачиваются, раскладка прошлого кадра отстаёт на кадр, а этот счёт — нет.
+    final first = _key(widget.items.first.$2).currentContext?.findRenderObject() as RenderBox?;
+    if (first == null || !first.hasSize || !_shown.any((c) => c.isAnimating)) return at & item.size;
+    var left = first.localToGlobal(Offset.zero, ancestor: stack).dx;
+    for (var j = 0; j < widget.index; j++) {
+      final box = _key(widget.items[j].$2).currentContext?.findRenderObject() as RenderBox?;
+      // + отступ справа у каждого пункта (_TopItem.gap).
+      if (box != null && box.hasSize) left += (box.size.width + _TopItem.gap) * _shown[j].value;
+    }
+    return Offset(left, at.dy) & item.size;
   }
 
   @override
@@ -651,11 +669,19 @@ class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
       _from = _drawn;
       _move.forward(from: 0);
     }
+    for (var i = 0; i < _shown.length; i++) {
+      if (old.hidden.contains(i) != widget.hidden.contains(i)) {
+        _shown[i].animateTo(widget.hidden.contains(i) ? 0 : 1, curve: Curves.easeOutCubic);
+      }
+    }
   }
 
   @override
   void dispose() {
     _move.dispose();
+    for (final c in _shown) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -666,8 +692,9 @@ class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
       if (mounted && !_move.isAnimating && _target() != _drawn) setState(() {});
     });
     return Stack(key: _stack, alignment: Alignment.centerLeft, children: [
+      // Подсветка пересчитывается и на каждом кадре сворачивания пунктов — едет вместе с соседями.
       AnimatedBuilder(
-        animation: _move,
+        animation: Listenable.merge([_move, ..._shown]),
         builder: (context, _) {
           final to = _target();
           if (to == null) return const SizedBox.shrink();
@@ -688,13 +715,29 @@ class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
       ),
       Row(children: [
         for (var i = 0; i < widget.items.length; i++)
-          _TopItem(
-            boxKey: _key(widget.items[i].$2),
-            icon: widget.items[i].$1,
-            label: widget.items[i].$2,
-            selected: i == widget.index,
-            showLabel: widget.wide || i == widget.index,
-            onTap: () => widget.onSelect(i),
+          // Спрятанный пункт плавно сжимается по ширине и гаснет, соседи подъезжают.
+          AnimatedBuilder(
+            animation: _shown[i],
+            builder: (context, child) {
+              final shown = _shown[i].value;
+              return shown == 1
+                  ? child!
+                  : ClipRect(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: shown,
+                        child: Opacity(opacity: shown, child: IgnorePointer(child: child)),
+                      ),
+                    );
+            },
+            child: _TopItem(
+              boxKey: _key(widget.items[i].$2),
+              icon: widget.items[i].$1,
+              label: widget.items[i].$2,
+              selected: i == widget.index,
+              showLabel: widget.wide || i == widget.index,
+              onTap: () => widget.onSelect(i),
+            ),
           ),
       ]),
     ]);
@@ -717,9 +760,12 @@ class _TopItem extends StatelessWidget {
   final bool showLabel;
   final VoidCallback onTap;
 
+  /// Отступ между пунктами.
+  static const gap = 4.0;
+
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(right: 4),
+        padding: const EdgeInsets.only(right: gap),
         child: Tooltip(
           message: showLabel ? '' : label,
           waitDuration: const Duration(milliseconds: 300),
@@ -819,9 +865,10 @@ class _StatusDot extends StatelessWidget {
 
 /// Боковое меню — «плавающая» карточка; сворачивается до полоски с иконками.
 class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.index, required this.items, required this.onSelect});
+  const _Sidebar({required this.index, required this.items, required this.hidden, required this.onSelect});
   final int index;
   final List<(IconData, String)> items;
+  final Set<int> hidden;
   final ValueChanged<int> onSelect;
 
   static const _expandedWidth = 224.0;
@@ -910,43 +957,7 @@ class _Sidebar extends StatelessWidget {
             ),
             // Одинаковый отступ в обоих состояниях — пункты меню не сдвигаются при сворачивании.
             const SizedBox(height: 26),
-            // Подсветка выбранного пункта — одна на всё меню и «скользит» к новому пункту,
-            // как у переключателей режимов.
-            Stack(fit: StackFit.passthrough, children: [
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                top: index * _NavItem.extent,
-                left: 0,
-                right: 0,
-                height: _NavItem.height,
-                child: IgnorePointer(
-                  child: Container(
-                    alignment: Alignment.centerLeft,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(C.r(12)),
-                      color: C.orange.withValues(alpha: 0.14),
-                    ),
-                    // Оранжевая метка слева у выбранного пункта.
-                    child: Container(
-                      width: 3,
-                      height: 18,
-                      decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(2)),
-                    ),
-                  ),
-                ),
-              ),
-              Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-                for (var i = 0; i < items.length; i++)
-                  _NavItem(
-                    icon: items[i].$1,
-                    label: items[i].$2,
-                    selected: i == index,
-                    collapsed: collapsed,
-                    onTap: () => onSelect(i),
-                  ),
-              ]),
-            ]),
+            _NavColumn(items: items, hidden: hidden, index: index, collapsed: collapsed, onSelect: onSelect),
             const Spacer(),
             // Статус: одна раскладка в обоих состояниях — точка на месте, текст выезжает.
             Tooltip(
@@ -1067,6 +1078,121 @@ class _MenuBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Пункты бокового меню с подсветкой выбранного. Подсветка одна на всё меню и «скользит» к новому пункту,
+/// как у переключателей режимов. Спрятанный в настройках пункт плавно сжимается и гаснет, остальные
+/// подъезжают, а подсветка едет вместе с ними: её место считается из тех же анимаций.
+class _NavColumn extends StatefulWidget {
+  const _NavColumn({
+    required this.items,
+    required this.hidden,
+    required this.index,
+    required this.collapsed,
+    required this.onSelect,
+  });
+  final List<(IconData, String)> items;
+  final Set<int> hidden;
+  final int index;
+  final bool collapsed;
+  final ValueChanged<int> onSelect;
+
+  @override
+  State<_NavColumn> createState() => _NavColumnState();
+}
+
+class _NavColumnState extends State<_NavColumn> with TickerProviderStateMixin {
+  /// Насколько виден каждый пункт: 1 — на месте, 0 — спрятан.
+  late final _shown = [
+    for (var i = 0; i < widget.items.length; i++)
+      AnimationController(
+          vsync: this, duration: const Duration(milliseconds: 240), value: widget.hidden.contains(i) ? 0 : 1),
+  ];
+
+  @override
+  void didUpdateWidget(_NavColumn old) {
+    super.didUpdateWidget(old);
+    for (var i = 0; i < _shown.length; i++) {
+      if (old.hidden.contains(i) != widget.hidden.contains(i)) {
+        _shown[i].animateTo(widget.hidden.contains(i) ? 0 : 1, curve: Curves.easeOutCubic);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _shown) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: Listenable.merge(_shown),
+        builder: (context, _) {
+          final shown = [for (final c in _shown) c.value];
+          final index = widget.index;
+          var top = 0.0;
+          for (var i = 0; i < index && i < shown.length; i++) {
+            top += _NavItem.extent * shown[i];
+          }
+          // Пока пункты сворачиваются, подсветка стоит ровно у своего пункта, а не догоняет его.
+          final moving = _shown.any((c) => c.isAnimating);
+          return Stack(fit: StackFit.passthrough, children: [
+            if (index >= 0 && index < shown.length)
+              AnimatedPositioned(
+                duration: moving ? Duration.zero : const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                top: top,
+                left: 0,
+                right: 0,
+                height: _NavItem.height,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: shown[index],
+                    child: Container(
+                      alignment: Alignment.centerLeft,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(C.r(12)),
+                        color: C.orange.withValues(alpha: 0.14),
+                      ),
+                      // Оранжевая метка слева у выбранного пункта.
+                      child: Container(
+                        width: 3,
+                        height: 18,
+                        decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(2)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+              for (var i = 0; i < widget.items.length; i++)
+                if (shown[i] > 0)
+                  ClipRect(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      heightFactor: shown[i],
+                      child: Opacity(
+                        opacity: shown[i],
+                        child: IgnorePointer(
+                          ignoring: shown[i] < 1,
+                          child: _NavItem(
+                            icon: widget.items[i].$1,
+                            label: widget.items[i].$2,
+                            selected: i == index,
+                            collapsed: widget.collapsed,
+                            onTap: () => widget.onSelect(i),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+            ]),
+          ]);
+        },
+      );
 }
 
 class _NavItem extends StatelessWidget {
