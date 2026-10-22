@@ -160,17 +160,17 @@ class Pinger {
       final ok = await waitForPort(base, alive: () => proc.running);
       if (cancel?.cancelled ?? false) return;
       if (!ok || !proc.running) return failAll('Xray не запустился для проверки задержки');
-      final results = List<int>.filled(servers.length, -1);
+      // Результат каждого сервера показывается сразу, как пришёл, — не ждём самый медленный.
+      var died = false;
       final indexed = List.generate(servers.length, (i) => i);
       await _pool(indexed, 12, (i) async {
-        results[i] = await _httpDelay(base + i, testUrl);
+        final ms = await _httpDelay(base + i, testUrl);
+        if (cancel?.cancelled ?? false) return;
+        // Тестовый Xray умер посреди проверки — ответ получен не от него: такому результату не верим.
+        if (!proc.running) died = true;
+        onResult(servers[i], died ? -1 : ms);
       }, cancel);
-      if (cancel?.cancelled ?? false) return;
-      // Если тестовый Xray умер посреди проверки, ответы получены не от него — результатам не верим.
-      if (!proc.running) return failAll('Тестовый Xray завершился во время проверки');
-      for (var i = 0; i < servers.length; i++) {
-        onResult(servers[i], results[i]);
-      }
+      if (died && !(cancel?.cancelled ?? false)) log.add('test', 'Тестовый Xray завершился во время проверки');
     } finally {
       await proc.stop();
     }

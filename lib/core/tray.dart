@@ -103,7 +103,7 @@ class Tray {
 
   static Future<void> show() => _call('show');
 
-  /// Свой значок окна, панели задач и трея: картинки RGBA нескольких размеров; пустой список — обычный.
+  /// Свой значок окна и трея: картинки RGBA нескольких размеров; пустой список — обычный.
   static Future<void> setIcon(List<({int size, Uint8List rgba})> images) =>
       _call('setIcon', [for (final i in images) {'size': i.size, 'rgba': i.rgba}]);
 

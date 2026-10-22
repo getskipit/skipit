@@ -61,7 +61,7 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> tray_channel_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> kill_switch_channel_;
   NOTIFYICONDATAW tray_icon_{};
-  // Свой значок (окно, панель задач, трей, уведомления); nullptr — из ресурсов exe. Удаляются при смене.
+  // Свой значок (окно, трей, уведомления; кнопку на панели задач Windows 11 берёт из exe); nullptr — из ресурсов exe. Удаляются при смене.
   HICON icon_small_ = nullptr;
   HICON icon_big_ = nullptr;
   bool tray_added_ = false;

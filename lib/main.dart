@@ -294,7 +294,7 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Sing
   /// Какой значок сейчас стоит у окна и в трее (вид и цвет акцента); null — ещё не ставили.
   String? _iconKey;
 
-  /// Значок окна, панели задач и трея по настройке «Значок». Классический — значок из ресурсов exe:
+  /// Значок окна и трея по настройке «Значок». Классический — значок из ресурсов exe:
   /// при запуске ничего делать не нужно.
   void _syncIcon() {
     final s = widget.state.settings;

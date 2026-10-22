@@ -312,7 +312,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           _Row(
             title: 'Значок',
-            subtitle: 'Значок окна, панели задач и трея. Ярлыки на рабочем столе и в «Пуске» остаются прежними',
+            subtitle: 'Значок окна и трея. На панели задач, рабочем столе и в «Пуске» Windows показывает прежний',
             trailing: _IconPicker(
               value: IconStyle.values.asNameMap()[s.iconStyle] ?? IconStyle.classic,
               onChanged: (v) {
