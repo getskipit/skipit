@@ -386,17 +386,44 @@ class AppState extends ChangeNotifier {
           report.progress = done;
           checkPulse.fire();
         };
+    // Одна попытка на одном сервере: подпись у кнопки говорит, что происходит (соединение, переход на
+    // запасной сервер, скачивание), — иначе 8 секунд ожидания молчащего сервера выглядят как зависание.
+    String? silent;
+    Future<SpeedResult> attempt(
+        SpeedServer server, List<double> samples, Future<SpeedResult> Function(SpeedProgress) run) async {
+      samples.clear();
+      report.step = silent == null
+          ? 'соединяюсь с ${server.host} — ждём ответа до ${SpeedTest.timeoutSeconds} с'
+          : '$silent не ответил — пробую ${server.host}…';
+      notifyListeners();
+      final show = live(samples);
+      var started = false;
+      final result = await run((mbit, done) {
+        if (!started) {
+          started = true;
+          report.step = 'качаю файл с ${server.host}…';
+          notifyListeners();
+        }
+        show(mbit, done);
+      });
+      silent = result.unreachable ? server.host : null;
+      return result;
+    }
+
     try {
       // Сервер не ответил — следующий из списка; столбики прошлой попытки убираются.
-      final vpn = await SpeedTest.firstReachable(SpeedTest.servers, (server) {
-        report.vpnSamples.clear();
-        return SpeedTest.viaVpn(server, port: port, onProgress: live(report.vpnSamples), keepGoing: alive);
-      }, alive);
+      final vpn = await SpeedTest.firstReachable(
+          SpeedTest.servers,
+          (server) => attempt(server, report.vpnSamples,
+              (onProgress) => SpeedTest.viaVpn(server, port: port, onProgress: onProgress, keepGoing: alive)),
+          alive);
+      silent = null;
       report
         ..vpnMbit = vpn.mbit
         ..vpnError = vpn.error
         ..vpnHost = vpn.unreachable ? null : vpn.host
         ..stage = 'напрямую…'
+        ..step = ''
         ..running = 1
         ..progress = 0;
       notifyListeners();
@@ -415,19 +442,20 @@ class AppState extends ChangeNotifier {
             ...SpeedTest.servers.where((s) => s.host == report.vpnHost),
             ...SpeedTest.servers.where((s) => s.host != report.vpnHost),
           ];
-          final direct = await SpeedTest.firstReachable(order, (server) async {
-            report.directSamples.clear();
-            final InternetAddress address;
-            try {
-              address = (await InternetAddress.lookup(server.host, type: InternetAddressType.IPv4)
-                      .timeout(const Duration(seconds: 4)))
-                  .first;
-            } catch (e) {
-              return (mbit: null, error: describeNetError(e), unreachable: true, host: server.host);
-            }
-            return SpeedTest.direct(server, address, source,
-                onProgress: live(report.directSamples), keepGoing: alive);
-          }, alive);
+          final direct = await SpeedTest.firstReachable(
+              order,
+              (server) => attempt(server, report.directSamples, (onProgress) async {
+                    final InternetAddress address;
+                    try {
+                      address = (await InternetAddress.lookup(server.host, type: InternetAddressType.IPv4)
+                              .timeout(const Duration(seconds: 4)))
+                          .first;
+                    } catch (e) {
+                      return (mbit: null, error: describeNetError(e), unreachable: true, host: server.host);
+                    }
+                    return SpeedTest.direct(server, address, source, onProgress: onProgress, keepGoing: alive);
+                  }),
+              alive);
           report
             ..directMbit = direct.mbit
             ..directError = direct.error
@@ -444,6 +472,7 @@ class AppState extends ChangeNotifier {
       }
       report
         ..running = null
+        ..step = ''
         ..done = true;
       checkingSpeed = false;
       notifyListeners();

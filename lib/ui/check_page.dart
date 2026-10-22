@@ -664,7 +664,7 @@ class _SpeedCard extends StatelessWidget {
               _blocked(state, state.checkingSpeed, 'замерить скорость') != null
                   ? _blocked(state, state.checkingSpeed, 'замерить скорость')!
                   : state.checkingSpeed
-                      ? 'Идёт замер ${r?.stage ?? ''}'
+                      ? (r?.status ?? 'Идёт замер')
                       : 'Замер идёт в четыре соединения и тратит трафик подписки: до 400 МБ за раз. Файл берётся с ${r?.vpnHost ?? r?.directHost ?? SpeedTest.servers.first.host} и не сохраняется'
                           '${state.killSwitchOn ? '. Включён Kill Switch: замер пойдёт только через VPN' : ''}',
               style: TextStyle(color: C.muted, fontSize: 12),

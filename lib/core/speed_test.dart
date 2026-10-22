@@ -15,8 +15,13 @@ typedef SpeedProgress = void Function(double mbit, double done);
 class SpeedReport {
   bool done = false;
 
-  /// Что идёт сейчас — для подписи у кнопки.
+  /// Что идёт сейчас — для подписи у кнопки: какой путь меряется ([stage]) и что именно происходит
+  /// ([step]: соединение с сервером, переход на запасной, скачивание).
   String stage = '';
+  String step = '';
+
+  /// Подпись у кнопки во время замера.
+  String get status => step.isEmpty ? 'Идёт замер $stage' : 'Идёт замер ${stage.replaceAll('…', '')}: $step';
 
   /// Какой путь меряется сейчас: 0 — через VPN, 1 — напрямую; null — замер не идёт.
   int? running;
@@ -100,6 +105,9 @@ class SpeedTest {
   /// Сколько длится один замер и сколько из этого идёт на разгон (в счёт не идёт).
   static const duration = Duration(seconds: 6), warmup = Duration(seconds: 1);
   static const _timeout = Duration(seconds: 8);
+
+  /// Сколько ждать ответа сервера замера, прежде чем перейти к следующему.
+  static int get timeoutSeconds => _timeout.inSeconds;
 
   /// Как часто замер сообщает скорость по ходу дела и сколько таких сообщений выходит за замер.
   static const tick = Duration(milliseconds: 250);

@@ -183,6 +183,13 @@ void main() {
         .first, endsWith('(сервер замера: ${hosts[1]})'));
   });
 
+  test('скорость: подпись у кнопки говорит, что происходит', () {
+    final r = SpeedReport()..stage = 'через VPN…';
+    expect(r.status, 'Идёт замер через VPN…');
+    r.step = 'speedtest.selectel.ru не ответил — пробую proof.ovh.net…';
+    expect(r.status, 'Идёт замер через VPN: speedtest.selectel.ru не ответил — пробую proof.ovh.net…');
+  });
+
   test('скорость: счёт без разгона и вывод — режет ли VPN', () {
     // 30 МБ за 6 с, из них 2 МБ за первую секунду разгона: считаются 28 МБ за 5 с.
     final speed = SpeedTest.mbit(
