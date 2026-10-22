@@ -95,6 +95,16 @@ void main() {
       expect(tester.takeException(), isNull);
     }
     expect(find.text('СЕТЬ'), findsOneWidget);
+    // При первом заходе — предупреждение; «Понятно» его убирает навсегда.
+    expect(find.text('Понятно'), findsOneWidget);
+    await tester.tap(find.text('Понятно'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(tester.takeException(), isNull);
+    }
+    expect(state.settings.advancedHintSeen, isTrue);
+    expect(AppSettings.fromJson(state.settings.toJson()).advancedHintSeen, isTrue);
+    expect(find.text('Понятно').hitTestable(), findsNothing);
     await show(find.text('Уровень логов'));
     await tester.tap(find.byType(AppDropdown<String>).first);
     await tester.pump(const Duration(milliseconds: 300));

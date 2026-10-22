@@ -611,6 +611,34 @@ class _SettingsPageState extends State<SettingsPage> {
         Icons.construction_rounded,
         'Для опытных',
         'User-Agent и HWID, IPv6, MTU, фрагментация, шумы, Mux, локальные порты, уровень логов',
+        banner: Reveal(
+          open: !s.advancedHintSeen,
+          child: Padding(
+            // Те же поля, что у разделов (_Section): плашка ровно по ширине карточек.
+            padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
+            child: Panel(
+              child: Row(children: [
+                Icon(Icons.info_rounded, color: C.orange),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Эти настройки нужны редко. Неверное значение может сломать подключение. Если что-то '
+                    'перестало работать — «Настройки → Программа → Сбросить настройки»',
+                    style: TextStyle(color: C.text, height: 1.4),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                TextButton(
+                  onPressed: () {
+                    s.advancedHintSeen = true;
+                    state.changed();
+                  },
+                  child: const Text('Понятно'),
+                ),
+              ]),
+            ),
+          ),
+        ),
         [s.fragment ? 'фрагментация' : '', s.noise ? 'шумы' : '', s.mux ? 'Mux' : ''].any((e) => e.isNotEmpty)
             ? 'Включено: ${[s.fragment ? 'фрагментация' : '', s.noise ? 'шумы' : '', s.mux ? 'Mux' : ''].where((e) => e.isNotEmpty).join(', ')}'
             : 'Обычно менять не нужно',
@@ -915,11 +943,11 @@ class _SettingsPageState extends State<SettingsPage> {
       ];
     } else if (listMode) {
       header = _SettingsHeader(group: null, hint: hint, search: search, onBack: () => openGroup(null));
-      body = groups[listGroup].sections;
+      body = [if (groups[listGroup].banner != null) groups[listGroup].banner!, ...groups[listGroup].sections];
     } else if (_group != null) {
       final g = groups[_group!];
       header = _SettingsHeader(group: g, hint: hint, search: search, onBack: () => openGroup(null));
-      body = g.sections;
+      body = [if (g.banner != null) g.banner!, ...g.sections];
     } else {
       header = _SettingsHeader(group: null, hint: hint, search: search, onBack: () => openGroup(null));
       body = [_GroupGrid(groups: groups, onOpen: openGroup)];
@@ -1074,7 +1102,7 @@ class _GroupNavItem extends StatelessWidget {
 
 /// Группа настроек: плитка на первой странице «Настроек» и своя страница с разделами.
 class _Group {
-  const _Group(this.icon, this.title, this.description, this.summary, this.sections, {this.alert});
+  const _Group(this.icon, this.title, this.description, this.summary, this.sections, {this.alert, this.banner});
   final IconData icon;
   final String title;
 
@@ -1087,6 +1115,9 @@ class _Group {
 
   /// Цвет отметки на плитке, если в группе есть что-то важное (доступно обновление, ядро не найдено).
   final Color? alert;
+
+  /// Плашка над настройками группы (в поиске не показывается).
+  final Widget? banner;
 }
 
 /// Плитки групп: три в ряд, в узком окне — две.

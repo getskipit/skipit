@@ -152,6 +152,9 @@ class AppSettings {
 
   /// Карточка подписки подробная (крупные цифры, кнопки, объявление целиком), а не компактная.
   bool subDetailed = false;
+
+  /// Предупреждение вверху «Для опытных» закрыто кнопкой «Понятно».
+  bool advancedHintSeen = false;
   static const menuPages = {'1': 'Серверы', '2': 'Маршрутизация', '3': 'Проверка', '4': 'Логи'};
 
   /// Меню разделов вдоль верхнего края окна, а не слева.
@@ -261,6 +264,7 @@ class AppSettings {
         'homeHidden': homeHidden.toList(),
         'menuHidden': menuHidden.toList(),
         'subDetailed': subDetailed,
+        'advancedHintSeen': advancedHintSeen,
         'preferJson': preferJson,
         'updateChannel': updateChannel.name,
         'updateNotified': updateNotified,
@@ -347,6 +351,7 @@ class AppSettings {
     final homeHidden = j['homeHidden'];
     if (homeHidden is List) s.homeHidden = {for (final p in homeHidden) if (homeParts.containsKey(p)) p as String};
     s.subDetailed = parseBool(j['subDetailed'], s.subDetailed);
+    s.advancedHintSeen = parseBool(j['advancedHintSeen'], s.advancedHintSeen);
     final menuHidden = j['menuHidden'];
     if (menuHidden is List) s.menuHidden = {for (final p in menuHidden) if (menuPages.containsKey(p)) p as String};
     s.preferJson = parseBool(j['preferJson'], s.preferJson);
