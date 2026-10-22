@@ -104,6 +104,17 @@ class AppSettings {
   /// При запуске просить права администратора (нужны для TUN и «Смешанного» режима).
   bool runAsAdmin = true;
   String testUrl = 'https://www.gstatic.com/generate_204';
+
+  /// Готовые адреса проверки задержки (Настройки → Подписки и серверы): адрес → подпись в списке.
+  static const testUrls = {
+    'https://www.gstatic.com/generate_204': 'Google',
+    'https://cp.cloudflare.com/generate_204': 'Cloudflare',
+    'https://captive.apple.com/hotspot-detect.html': 'Apple',
+    'https://detectportal.firefox.com/success.txt': 'Firefox',
+  };
+
+  /// Выбран «Свой адрес»: [testUrl] вписан вручную.
+  bool testUrlOwn = false;
   PingType pingType = PingType.realDelay;
   String logLevel = 'warning';
   /// User-Agent по умолчанию несёт версию программы: провайдер видит, каким SkipIt пользуется клиент.
@@ -212,6 +223,7 @@ class AppSettings {
         'connectOnStart': connectOnStart,
         'runAsAdmin': runAsAdmin,
         'testUrl': testUrl,
+        'testUrlOwn': testUrlOwn,
         'pingType': pingType.name,
         'logLevel': logLevel,
         'userAgent': userAgent,
@@ -285,6 +297,8 @@ class AppSettings {
     s.connectOnStart = parseBool(j['connectOnStart'], s.connectOnStart);
     s.runAsAdmin = parseBool(j['runAsAdmin'], s.runAsAdmin);
     s.testUrl = j['testUrl'] as String? ?? s.testUrl;
+    // Адрес, вписанный раньше вручную, — это «Свой адрес».
+    s.testUrlOwn = parseBool(j['testUrlOwn'], !testUrls.containsKey(s.testUrl));
     s.pingType = PingType.values.asNameMap()[j['pingType']] ?? s.pingType;
     s.logLevel = j['logLevel'] as String? ?? s.logLevel;
     // Сохранённое значение вида «SkipIt/<версия>» — это прежнее значение по умолчанию, а не выбор

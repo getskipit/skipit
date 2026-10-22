@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/kill_switch.dart';
 import 'package:skipit/core/paths.dart';
 import 'package:skipit/models/routing.dart';
+import 'package:skipit/models/settings.dart';
 import 'package:skipit/state/app_scope.dart';
 import 'package:skipit/state/app_state.dart';
 import 'package:skipit/ui/settings_page.dart';
@@ -66,6 +67,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(state.settings.killSwitch, isFalse);
 
+    // Блокировка рекламы: выключатель той же строкой; VPN не подключён — переподключения нет.
+    await tester.scrollUntilVisible(find.text('Блокировать рекламу и трекеры'), 200, scrollable: scroll);
+    await Scrollable.ensureVisible(tester.element(find.text('Блокировать рекламу и трекеры')), alignment: 0.4);
+    await tester.pump(const Duration(milliseconds: 300));
+    final adY = tester.getCenter(find.text('Блокировать рекламу и трекеры')).dy;
+    final switches = [for (final e in find.byType(AppSwitch).evaluate()) tester.getCenter(find.byWidget(e.widget))]
+      ..sort((a, b) => (a.dy - adY).abs().compareTo((b.dy - adY).abs()));
+    await tester.tapAt(switches.first);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(state.settings.adBlock, isTrue);
+    expect(state.isConnected, isFalse);
+
     // «Для опытных» открывается без ошибок; уровень логов меняется через выпадающий список.
     Future<void> show(Finder f) async {
       await tester.scrollUntilVisible(f, 200, scrollable: scroll);
@@ -93,5 +106,49 @@ void main() {
     expect(state.settings.logLevel, 'debug');
     expect(
         find.descendant(of: find.byType(AppDropdown<String>).first, matching: find.text('debug')), findsOneWidget);
+
+    // Адрес проверки: готовый из списка, затем «Свой адрес» — появляется поле, неверный адрес не сохраняется.
+    await tester.tap(find.byTooltip('Все настройки'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Подписки и серверы'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+    final urlBox = find.ancestor(of: find.text('Google'), matching: find.byType(AppDropdown<String>));
+    await show(urlBox);
+    await tester.tap(urlBox);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Cloudflare').last);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(state.settings.testUrl, 'https://cp.cloudflare.com/generate_204');
+    expect(state.settings.testUrlOwn, isFalse);
+
+    final ownBox = find.ancestor(of: find.text('Cloudflare'), matching: find.byType(AppDropdown<String>));
+    await tester.tap(ownBox);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Свой адрес').last);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(tester.takeException(), isNull);
+    }
+    expect(state.settings.testUrlOwn, isTrue);
+    final field = find.descendant(
+        of: find.ancestor(of: find.text('Свой адрес проверки'), matching: find.byType(Row)).first,
+        matching: find.byType(TextFormField));
+    await show(field);
+    expect(find.descendant(of: field, matching: find.text('https://cp.cloudflare.com/generate_204')), findsOneWidget);
+    await tester.enterText(field, 'not a url');
+    await tester.pump();
+    expect(state.settings.testUrl, 'https://cp.cloudflare.com/generate_204');
+    await tester.enterText(field, 'https://check.example/ok');
+    await tester.pump();
+    expect(state.settings.testUrl, 'https://check.example/ok');
+    await tester.pump(const Duration(milliseconds: 500));
+  });
+
+  test('адрес проверки, вписанный раньше вручную, открывается как «Свой адрес»', () {
+    expect(AppSettings.fromJson({'testUrl': 'https://check.example/ok'}).testUrlOwn, isTrue);
+    expect(AppSettings.fromJson({'testUrl': 'https://cp.cloudflare.com/generate_204'}).testUrlOwn, isFalse);
+    expect(AppSettings.fromJson({}).testUrlOwn, isFalse);
   });
 }

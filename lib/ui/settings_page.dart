@@ -193,7 +193,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _Group(
         Icons.bolt_rounded,
         'Подключение',
-        'Kill Switch, блокировка рекламы, переподключение при сбое, автовыбор сервера, режим TUN',
+        'Kill Switch, блокировка рекламы, автовыбор сервера, режим TUN',
         'Kill Switch ${s.killSwitch ? 'включён' : 'выключен'} · TUN: ${s.tunCore == TunCore.xray ? 'Xray' : 'sing-box'}',
         [
         _Section('', [
@@ -359,7 +359,42 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
-          text('Адрес для проверки', 'Должен отвечать быстро (204)', s.testUrl, (v) => s.testUrl = v),
+          _Row(
+            title: 'Адрес для проверки',
+            subtitle: 'Его открывает «Реальная» проверка через каждый сервер. Подойдёт любой адрес, который быстро '
+                'отвечает коротким ответом',
+            trailing: AppDropdown<String>(
+              value: s.testUrlOwn ? '' : s.testUrl,
+              items: {...AppSettings.testUrls, '': 'Свой адрес'},
+              onChanged: (v) {
+                s.testUrlOwn = v.isEmpty;
+                if (v.isNotEmpty) s.testUrl = v;
+                state.changed();
+              },
+            ),
+          ),
+          _RevealRow(
+            open: s.testUrlOwn,
+            row: _Row(
+              title: 'Свой адрес проверки',
+              subtitle: 'Начинается с http:// или https://',
+              trailing: SizedBox(
+                width: 340,
+                child: TextFormField(
+                  // Новый ключ при каждом открытии: поле берёт текущий адрес, а не прежний.
+                  key: ValueKey('Свой адрес проверки ${s.testUrlOwn}'),
+                  initialValue: s.testUrl,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  validator: (v) => _testUrlOk(v!.trim()) ? null : 'Нужен адрес вида https://example.com/…',
+                  onChanged: (v) {
+                    if (!_testUrlOk(v.trim())) return;
+                    s.testUrl = v.trim();
+                    state.changed();
+                  },
+                ),
+              ),
+            ),
+          ),
         ]),
       ]),
       _Group(
@@ -1234,7 +1269,8 @@ const _keywords = <String, String>{
   'Mux: TCP-соединения': 'mux мультиплексор потоки concurrency',
   'Mux: XUDP-соединения': 'mux мультиплексор udp потоки игры',
   'Уровень логов': 'журнал логи отладка debug info warning подробность',
-  'Адрес для проверки': 'пинг задержка url ссылка тест',
+  'Адрес для проверки': 'пинг задержка url ссылка тест google cloudflare apple firefox gstatic',
+  'Свой адрес проверки': 'пинг задержка url ссылка тест свой',
   'Исключения системного прокси': 'proxy bypass обход мимо исключить localhost локальные адреса',
   'User-Agent': 'ua юзер агент заголовок подписка',
   'Отправлять HWID': 'устройство идентификатор лимит',
@@ -1248,6 +1284,11 @@ const _keywords = <String, String>{
   'Починить сеть': 'сброс интернет пропал не работает завис зависло адаптер tun прокси dns восстановить',
   'Удалить все данные': 'сброс очистить стереть всё подписки серверы',
 };
+
+bool _testUrlOk(String v) {
+  final u = Uri.tryParse(v);
+  return u != null && (u.scheme == 'http' || u.scheme == 'https') && u.host.isNotEmpty;
+}
 
 bool _muxOk(String v) {
   final n = int.tryParse(v.trim());
