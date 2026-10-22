@@ -305,7 +305,9 @@ class AppSettings {
     // пользователя: после обновления программы версия в нём должна обновиться сама.
     s.proxyBypass = (j['proxyBypass'] as String? ?? '').trim();
     final ua = (j['userAgent'] as String? ?? '').trim();
-    s.userAgent = ua.isEmpty || RegExp(r'^SkipIt/[\w.]+$').hasMatch(ua) ? defaultUserAgent : ua;
+    // «SkipIt/<версия>» прежней версии (в том числе с номером сборки: 1.1.7a-1) — это значение по
+    // умолчанию: заменяется на текущую версию.
+    s.userAgent = ua.isEmpty || RegExp(r'^SkipIt/[\w.-]+$').hasMatch(ua) ? defaultUserAgent : ua;
     s.sendHwid = parseBool(j['sendHwid'], s.sendHwid);
     s.hwid = j['hwid'] as String? ?? s.hwid;
     s.updateSubsOnStart = parseBool(j['updateSubsOnStart'], s.updateSubsOnStart);

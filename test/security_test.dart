@@ -245,6 +245,7 @@ void main() {
     // Значение, сохранённое старой версией, — не выбор пользователя: заменяется текущим.
     expect(AppSettings.fromJson({'userAgent': 'SkipIt/1.0'}).userAgent, 'SkipIt/$appVersion');
     expect(AppSettings.fromJson({'userAgent': 'SkipIt/1.0.1'}).userAgent, 'SkipIt/$appVersion');
+    expect(AppSettings.fromJson({'userAgent': 'SkipIt/1.1.7a-1'}).userAgent, 'SkipIt/$appVersion');
     // А своё значение пользователя сохраняется как есть.
     expect(AppSettings.fromJson({'userAgent': 'Happ/2.0'}).userAgent, 'Happ/2.0');
   });
