@@ -193,7 +193,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _Group(
         Icons.bolt_rounded,
         'Подключение',
-        'Kill Switch, переподключение при сбое, автовыбор сервера, режим TUN',
+        'Kill Switch, блокировка рекламы, переподключение при сбое, автовыбор сервера, режим TUN',
         'Kill Switch ${s.killSwitch ? 'включён' : 'выключен'} · TUN: ${s.tunCore == TunCore.xray ? 'Xray' : 'sing-box'}',
         [
         _Section('', [
@@ -209,6 +209,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   'его не откроете. Действует в режимах TUN и «Смешанный»; локальная сеть остаётся доступной',
               s.killSwitch,
               (v) => state.setKillSwitch(v)),
+          _Row(
+            title: 'Блокировать рекламу и трекеры',
+            subtitle: 'Не пускает к рекламным и следящим сайтам из готового списка гео-базы — во всех программах, '
+                'которые идут через VPN. Рекламу внутри видео (YouTube) так не убрать: она приходит с того же адреса, '
+                'что и само видео, — для неё нужно расширение браузера, например uBlock Origin',
+            trailing: AppSwitch(value: s.adBlock, onChanged: (v) => state.setAdBlock(v)),
+          ),
           _Row(
             title: 'Режим TUN',
             subtitle: switch (s.tunCore) {
@@ -1204,6 +1211,7 @@ const _keywords = <String, String>{
   'Режим TUN': 'ядро xray sing-box singbox адаптер',
   'Сетевой стек sing-box': 'stack стек gvisor system mixed системный смешанный адаптер',
   'Kill Switch': 'килл свитч защита утечка обрыв блокировка интернета',
+  'Блокировать рекламу и трекеры': 'реклама баннеры трекеры слежка счётчики счетчики adblock ads блокировщик',
   'Автовыбор сервера': 'лучший быстрый пинг авто',
   'Разрешить подключения из локальной сети': 'lan wifi роутер телефон раздать другим устройствам',
   'Тип проверки': 'пинг задержка ping tcp скорость реальная real delay',

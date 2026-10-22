@@ -348,4 +348,30 @@ void main() {
       await f.delete();
     }
   });
+
+  test('блокировка рекламы: правило первым, раньше правил провайдера; служебные — ещё выше', () {
+    final json = LinkParser.parseText(_provider).servers.single;
+    final link = LinkParser.parseLink(
+        'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.5:443?type=tcp&security=tls&sni=a.example#a')!;
+    const ads = {'domain': [XrayConfig.adsList], 'outboundTag': 'skipit-block'};
+    for (final server in [json, link]) {
+      final off = XrayConfig.build(server: server, routing: RoutingProfile.global(), settings: AppSettings());
+      expect(jsonEncode(off), isNot(contains(XrayConfig.adsList)));
+
+      final settings = AppSettings()..adBlock = true;
+      final cfg = XrayConfig.build(server: server, routing: RoutingProfile.global(), settings: settings);
+      final rules = (cfg['routing'] as Map)['rules'] as List;
+      expect(rules.first, ads);
+      expect(rules.where((r) => jsonEncode(r).contains(XrayConfig.adsList)).length, 1);
+      expect((cfg['outbounds'] as List).where((o) => o['tag'] == 'skipit-block').length, 1);
+
+      XrayConfig.addTun(cfg, settings: settings, apps: AppRules());
+      XrayConfig.addCheckInbound(cfg, port: 20902);
+      final after = (cfg['routing'] as Map)['rules'] as List;
+      final at = after.indexWhere((r) => jsonEncode(r).contains(XrayConfig.adsList));
+      // Запросы DNS из адаптера и проверка связи не попадают под блокировку.
+      expect(after.indexWhere((r) => r['port'] == '53'), inInclusiveRange(0, at - 1));
+      expect(after.indexWhere((r) => jsonEncode(r).contains(XrayConfig.checkInTag)), inInclusiveRange(0, at - 1));
+    }
+  });
 }

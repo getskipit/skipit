@@ -202,6 +202,7 @@ class XrayConfig {
     if (provider != null) {
       final cfg = buildFromProvider(provider, settings);
       addOwnRules(cfg, routing, settings);
+      addAdBlock(cfg, settings);
       if (settings.ownDns) useOwnDns(cfg, routing, settings);
       return cfg;
     }
@@ -236,7 +237,7 @@ class XrayConfig {
     add(routing.directSites, routing.directIp, 'direct');
     rules.add({'network': 'tcp,udp', 'outboundTag': routing.globalProxy ? 'proxy' : 'direct'});
 
-    return {
+    final cfg = <String, dynamic>{
       'log': {'loglevel': settings.logLevel},
       'api': {
         'tag': 'api',
@@ -288,6 +289,29 @@ class XrayConfig {
       ],
       'routing': {'domainStrategy': routing.domainStrategy, 'rules': rules},
     };
+    addAdBlock(cfg, settings);
+    return cfg;
+  }
+
+  /// Готовый список рекламных и следящих сайтов из гео-базы.
+  static const adsList = 'geosite:category-ads-all';
+
+  /// «Блокировать рекламу и трекеры» (Настройки → Подключение): правило встаёт первым — раньше правил
+  /// провайдера и своего профиля. Это единственное своё правило впереди провайдера: оно ничего не
+  /// перенаправляет, а только запрещает. Рекламу с тех же адресов, что и сам сайт (ролики YouTube),
+  /// так не убрать: ядро видит только адрес. Служебные правила программы (адаптер, DNS, проверка
+  /// связи) добавляются позже и встают ещё выше.
+  static void addAdBlock(Map<String, dynamic> cfg, AppSettings settings) {
+    if (!settings.adBlock) return;
+    final outbounds = [...(cfg['outbounds'] as List)];
+    if (!outbounds.any((o) => o is Map && o['tag'] == _block)) outbounds.add({'tag': _block, 'protocol': 'blackhole'});
+    cfg['outbounds'] = outbounds;
+    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    routing['rules'] = [
+      {'domain': const [adsList], 'outboundTag': _block},
+      ...(routing['rules'] as List? ?? const []),
+    ];
+    cfg['routing'] = routing;
   }
 
   static const fragmentTag = 'skipit-fragment', noiseTag = 'skipit-noise';

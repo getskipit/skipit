@@ -147,6 +147,9 @@ class AppSettings {
 
   /// Предупреждать о запущенном zapret перед подключением (выключает галочка «Больше не спрашивать»).
   bool zapretWarn = true;
+
+  /// Блокировать рекламу и трекеры списком из гео-базы (см. XrayConfig.addAdBlock).
+  bool adBlock = false;
   bool preferJson = true;
   UpdateChannel updateChannel = UpdateChannel.stable;
 
@@ -222,6 +225,7 @@ class AppSettings {
         'notifications': notifications,
         'reduceMotion': reduceMotion,
         'zapretWarn': zapretWarn,
+        'adBlock': adBlock,
         'uiScale': uiScale,
         'navTop': navTop,
         'settingsList': settingsList,
@@ -297,6 +301,7 @@ class AppSettings {
     s.notifications = parseBool(j['notifications'], s.notifications);
     s.reduceMotion = parseBool(j['reduceMotion'], s.reduceMotion);
     s.zapretWarn = parseBool(j['zapretWarn'], s.zapretWarn);
+    s.adBlock = parseBool(j['adBlock'], s.adBlock);
     s.navTop = parseBool(j['navTop'], s.navTop);
     s.settingsList = parseBool(j['settingsList'], s.settingsList);
     final uiScale = asInt(j['uiScale']);

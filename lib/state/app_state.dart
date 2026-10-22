@@ -1709,6 +1709,13 @@ class AppState extends ChangeNotifier {
     isConnected ? await disconnect() : await connect(ignoreOtherVpn: ignoreOtherVpn);
   }
 
+  /// Блокировка рекламы: правило живёт в конфиге ядра, поэтому при подключённом VPN — переподключение.
+  Future<void> setAdBlock(bool on) async {
+    settings.adBlock = on;
+    changed();
+    if (isConnected) await reconnect();
+  }
+
   Future<void> reconnect() async {
     // Kill Switch на время переподключения не снимается — иначе в паузе трафик пошёл бы напрямую.
     await disconnect(keepError: true, hold: true);
@@ -1891,9 +1898,11 @@ class AppState extends ChangeNotifier {
       final provider = XrayConfig.providerConfig(server);
       if (provider != null) {
         final own = XrayConfig.hasOwnRules(routing) && XrayConfig.needsGeoFiles(routing);
-        if (own || XrayConfig.configNeedsGeoFiles(provider)) await _ensureGeoFiles(routing, force: true);
+        if (own || settings.adBlock || XrayConfig.configNeedsGeoFiles(provider)) {
+          await _ensureGeoFiles(routing, force: true);
+        }
       } else {
-        await _ensureGeoFiles(routing);
+        await _ensureGeoFiles(routing, force: settings.adBlock);
       }
 
       _checkCancel();
