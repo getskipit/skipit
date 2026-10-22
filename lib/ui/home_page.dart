@@ -335,7 +335,7 @@ class _TunCorePicker extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
               decoration: BoxDecoration(
                 color: hovered ? C.surface2 : C.surface,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(C.r(11)),
                 border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.5) : C.border),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -386,7 +386,7 @@ class _RoutingInfoState extends State<_RoutingInfo> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: hovered ? C.surface2 : C.surface,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(C.r(14)),
                 border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.5) : C.border),
               ),
               child: Row(children: [
@@ -432,12 +432,12 @@ class _KillSwitchBox extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
           color: C.orange.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.orange.withValues(alpha: 0.45)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Icon(Icons.shield_rounded, size: 18, color: C.orange),
+            Icon(Icons.shield_rounded, size: 18, color: C.orange),
             const SizedBox(width: 8),
             Expanded(
               child: Text('Интернет закрыт: Kill Switch',
@@ -479,7 +479,7 @@ class _NoticeBox extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: color.withValues(alpha: 0.45)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -576,7 +576,7 @@ class _ErrorBoxState extends State<_ErrorBox> {
           padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
           decoration: BoxDecoration(
             color: C.red.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(C.r(14)),
             border: Border.all(color: C.red.withValues(alpha: 0.4)),
           ),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -630,7 +630,7 @@ class _Speed extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: C.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.border),
         ),
         child: Row(children: [

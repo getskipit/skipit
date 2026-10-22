@@ -58,6 +58,8 @@ class Tray {
     required String server,
     required int state,
     required bool dark,
+    required Color accent,
+    required Color accentLight,
     required List<String> modes,
     required int mode,
     required List<String> cores,
@@ -84,6 +86,9 @@ class Tray {
         'server': server,
         'state': state,
         'dark': dark,
+        // Цвет акцента для своего меню в трее: 0xRRGGBB.
+        'accent': accent.toARGB32() & 0xFFFFFF,
+        'accentLight': accentLight.toARGB32() & 0xFFFFFF,
         // У Windows ограничение подсказки — 127 символов.
         'tooltip': tooltip.length > 120 ? '${tooltip.substring(0, 119)}…' : tooltip,
         'open': 'Открыть ${AppPaths.appName}',
@@ -97,6 +102,10 @@ class Tray {
       });
 
   static Future<void> show() => _call('show');
+
+  /// Свой значок окна, панели задач и трея: картинки RGBA нескольких размеров; пустой список — обычный.
+  static Future<void> setIcon(List<({int size, Uint8List rgba})> images) =>
+      _call('setIcon', [for (final i in images) {'size': i.size, 'rgba': i.rgba}]);
 
   /// Уведомление Windows у значка. Оболочка показывает его, только когда окно спрятано или свёрнуто.
   static Future<void> notify(String text) => _call('notify', {'title': AppPaths.appName, 'text': text});

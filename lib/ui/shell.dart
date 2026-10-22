@@ -32,7 +32,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
     context: context,
     builder: (ctx) => AlertDialog(
       title: Row(children: [
-        Icon(Icons.warning_amber_rounded, color: C.isDark ? C.orangeLight : C.orange),
+        Icon(Icons.warning_amber_rounded, color: C.warnText),
         const SizedBox(width: 10),
         const Expanded(child: Text('Сейчас работает другой VPN')),
       ]),
@@ -46,7 +46,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               decoration: BoxDecoration(
                 color: C.surface2,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(C.r(10)),
                 border: Border.all(color: C.border),
               ),
               child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -66,7 +66,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
           Container(
             padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(C.r(10)),
               border: Border.all(color: C.border),
             ),
             child: Row(children: [
@@ -111,7 +111,7 @@ Future<bool> _askAboutZapret(BuildContext context, AppState state, String zapret
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) => AlertDialog(
         title: Row(children: [
-          Icon(Icons.warning_amber_rounded, color: C.isDark ? C.orangeLight : C.orange),
+          Icon(Icons.warning_amber_rounded, color: C.warnText),
           const SizedBox(width: 10),
           Expanded(child: Text('Запущен $zapret')),
         ]),
@@ -126,7 +126,7 @@ Future<bool> _askAboutZapret(BuildContext context, AppState state, String zapret
             ),
             const SizedBox(height: 10),
             InkWell(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(C.r(8)),
               mouseCursor: SystemMouseCursors.click,
               onTap: () => setLocal(() => dontAsk = !dontAsk),
               child: Row(children: [
@@ -335,6 +335,13 @@ class _ShellState extends State<Shell> {
 
   @override
   Widget build(BuildContext context) {
+    // Меню без спрятанных разделов (Настройки → Внешний вид → «Пункты меню»). Спрятанный раздел по-прежнему
+    // открывается ссылками из окна — тогда в меню ничего не подсвечено.
+    final hidden = AppScope.of(context).settings.menuHidden;
+    final visible = [for (var i = 0; i < _items.length; i++) if (!hidden.contains('$i')) i];
+    final items = [for (final i in visible) _items[i]];
+    final index = visible.indexOf(_index);
+    void select(int j) => go(visible[j]);
     final pages = [
       const HomePage(),
       // Раздел «Серверы»: все подписки и серверы, включая скрытые с главной, на всю ширину окна.
@@ -367,14 +374,14 @@ class _ShellState extends State<Shell> {
               _MenuSlot(
                 shown: !AppScope.of(context).settings.navTop,
                 axis: Axis.horizontal,
-                child: _Sidebar(index: _index, items: _items, onSelect: go),
+                child: _Sidebar(index: index, items: items, onSelect: select),
               ),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _MenuSlot(
             shown: AppScope.of(context).settings.navTop,
             axis: Axis.vertical,
-            child: _TopBar(index: _index, items: _items, onSelect: go),
+            child: _TopBar(index: index, items: items, onSelect: select),
           ),
           // Спрятанные разделы слушают «спящий» источник и не перестраиваются от каждого изменения состояния
           // (раньше любое изменение перестраивало все шесть, вместе с полной копией списка серверов
@@ -496,7 +503,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
                     padding: EdgeInsets.fromLTRB(_badge == null ? 16 : 10, 10, 10, 10),
                     decoration: BoxDecoration(
                       color: C.surface2,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(C.r(14)),
                       // Рамка ошибки и новой версии — цветом их значка, у остальных обычная.
                       border: Border.all(
                           color: widget.kind == ToastKind.error || widget.kind == ToastKind.update
@@ -512,7 +519,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
                           height: 30,
                           decoration: BoxDecoration(
                             color: color.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(9),
+                            borderRadius: BorderRadius.circular(C.r(9)),
                           ),
                           child: Icon(icon, size: 18, color: color),
                         ),
@@ -564,7 +571,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: C.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(C.r(20)),
         border: Border.all(color: C.border),
       ),
       child: LayoutBuilder(builder: (context, c) {
@@ -585,7 +592,7 @@ class _TopBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 color: C.surface2,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(C.r(12)),
                 border: Border.all(color: state.isConnected ? C.green.withValues(alpha: 0.45) : C.border),
               ),
               child: Row(children: [
@@ -620,7 +627,9 @@ class _TopNav extends StatefulWidget {
 
 class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
   final _stack = GlobalKey();
-  late final _keys = [for (final _ in widget.items) GlobalKey()];
+  /// Ключи пунктов по названию: набор пунктов меняется, когда их прячут в настройках.
+  final _keys = <String, GlobalKey>{};
+  GlobalKey _key(String label) => _keys.putIfAbsent(label, GlobalKey.new);
   late final _move = AnimationController(vsync: this, duration: const Duration(milliseconds: 260), value: 1);
 
   /// Откуда едет подсветка и где она нарисована сейчас.
@@ -629,7 +638,8 @@ class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
 
   Rect? _target() {
     final stack = _stack.currentContext?.findRenderObject() as RenderBox?;
-    final item = _keys[widget.index].currentContext?.findRenderObject() as RenderBox?;
+    if (widget.index < 0) return null;
+    final item = _key(widget.items[widget.index].$2).currentContext?.findRenderObject() as RenderBox?;
     if (stack == null || item == null || !stack.hasSize || !item.hasSize) return null;
     return item.localToGlobal(Offset.zero, ancestor: stack) & item.size;
   }
@@ -668,7 +678,7 @@ class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(C.r(12)),
                   color: C.orange.withValues(alpha: 0.14),
                 ),
               ),
@@ -679,7 +689,7 @@ class _TopNavState extends State<_TopNav> with SingleTickerProviderStateMixin {
       Row(children: [
         for (var i = 0; i < widget.items.length; i++)
           _TopItem(
-            boxKey: _keys[i],
+            boxKey: _key(widget.items[i].$2),
             icon: widget.items[i].$1,
             label: widget.items[i].$2,
             selected: i == widget.index,
@@ -722,7 +732,7 @@ class _TopItem extends StatelessWidget {
                 height: 40,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(C.r(12)),
                   // Фон выбранного пункта рисует общая подсветка в [_TopNav].
                   color: !selected && hovered ? C.hover : Colors.transparent,
                 ),
@@ -852,7 +862,7 @@ class _Sidebar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(11, 18, 11, 14),
       decoration: BoxDecoration(
         color: C.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(C.r(22)),
         border: Border.all(color: C.border),
       ),
       // Подписи показываем только когда места достаточно — иначе во время анимации текст переполнится.
@@ -914,7 +924,7 @@ class _Sidebar extends StatelessWidget {
                   child: Container(
                     alignment: Alignment.centerLeft,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(C.r(12)),
                       color: C.orange.withValues(alpha: 0.14),
                     ),
                     // Оранжевая метка слева у выбранного пункта.
@@ -953,7 +963,7 @@ class _Sidebar extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 19, right: 10),
                 decoration: BoxDecoration(
                   color: C.surface2,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(C.r(14)),
                   border: Border.all(color: state.isConnected ? C.green.withValues(alpha: 0.45) : C.border),
                 ),
                 child: Row(children: [
@@ -1025,7 +1035,7 @@ class _MenuBadge extends StatelessWidget {
                           key: ValueKey(arrows),
                           decoration: BoxDecoration(
                             color: C.orange.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(C.r(10)),
                             border: Border.all(color: C.orange.withValues(alpha: 0.5)),
                           ),
                           child: Icon(arrows, size: 20, color: C.orange),
@@ -1088,7 +1098,7 @@ class _NavItem extends StatelessWidget {
           duration: const Duration(milliseconds: 160),
           height: height,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(C.r(12)),
             // Фон и метку выбранного пункта рисует скользящая подсветка в меню.
             color: !selected && hovered ? C.hover : Colors.transparent,
           ),
@@ -1215,7 +1225,7 @@ class _VersionRow extends StatelessWidget {
             height: _height,
             decoration: BoxDecoration(
               color: hasUpdate ? C.orange.withValues(alpha: 0.14) : (hovered ? C.hover : Colors.transparent),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(C.r(12)),
               border: Border.all(color: hasUpdate ? C.orange.withValues(alpha: 0.5) : Colors.transparent),
             ),
             child: Row(children: [

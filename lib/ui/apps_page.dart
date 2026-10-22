@@ -160,7 +160,7 @@ class _AppsPageState extends State<AppsPage> {
                 padding: const EdgeInsets.only(bottom: 14),
                 child: Panel(
                   child: Row(children: [
-                    const Icon(Icons.info_rounded, color: C.orange),
+                    Icon(Icons.info_rounded, color: C.orange),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text('Правила по приложениям работают в режимах «Смешанный» и TUN.',
@@ -200,11 +200,11 @@ class _AppsPageState extends State<AppsPage> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                 decoration: BoxDecoration(
                   color: C.orange.withValues(alpha: C.isDark ? 0.12 : 0.08),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(C.r(14)),
                   border: Border.all(color: C.orange.withValues(alpha: 0.7), width: 1.5),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.info_rounded, color: C.orange),
+                  Icon(Icons.info_rounded, color: C.orange),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -372,7 +372,7 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
                                       color: checked
                                           ? C.orange.withValues(alpha: 0.12)
                                           : (hovered ? C.hover : Colors.transparent),
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(C.r(12)),
                                       border: Border.all(
                                           color: checked ? C.orange.withValues(alpha: 0.6) : Colors.transparent),
                                     ),
@@ -400,7 +400,7 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
                                             height: 22,
                                             decoration: BoxDecoration(
                                               gradient: checked ? C.gradient : null,
-                                              borderRadius: BorderRadius.circular(7),
+                                              borderRadius: BorderRadius.circular(C.r(7)),
                                               border: checked ? null : Border.all(color: C.border, width: 1.5),
                                             ),
                                             child: checked
@@ -449,7 +449,7 @@ class AppIcon extends StatelessWidget {
     Widget fallback() => Container(
           width: size,
           height: size,
-          decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(C.r(8))),
           child: Icon(folder ? Icons.folder_rounded : Icons.web_asset_rounded, size: size * 0.62, color: C.orange),
         );
     final p = path;

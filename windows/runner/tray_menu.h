@@ -32,6 +32,11 @@ struct TrayMenuModel {
   int state = 0;
   // Тёмная или светлая тема программы.
   bool dark = true;
+  // Цвет акцента и его светлый вариант (по умолчанию фирменный оранжевый).
+  COLORREF accent = RGB(0xFF, 0x5F, 0x1A);
+  COLORREF accent_light = RGB(0xFF, 0x9A, 0x3D);
+  // Свой значок из настроек (не наш: им владеет окно); nullptr — значок из ресурсов exe.
+  HICON icon = nullptr;
   // Режимы подключения (подписи) и номер выбранного.
   std::vector<std::wstring> modes;
   int mode = -1;

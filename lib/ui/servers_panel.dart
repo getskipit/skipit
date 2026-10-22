@@ -365,7 +365,7 @@ class _IconAction extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 color: hovered ? C.hover : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(C.r(10)),
               ),
               child: Center(
                 child: busy
@@ -432,7 +432,7 @@ class _GroupCardState extends State<_GroupCard> {
     final selected = state.settings.selectedServerId == s.id;
     final udpTesting = state.udpPending.contains(s.id);
     final shown = (s.name, s.hidden, s.warning, s.delayMs, s.udpMs, udpTesting, s.protocolLabel, s.transportLabel,
-        s.isJson, selected, state.pinging, C.isDark);
+        s.isJson, selected, state.pinging, C.palette);
     final cached = _rows[s.id];
     // Тот же объект сервера: после обновления подписки сервер с тем же id — уже новый объект, и строка со
     // старым действовала бы из меню на устаревший (проверка задержки, скрытие, «Показать JSON»).
@@ -570,7 +570,7 @@ class _GroupCardState extends State<_GroupCard> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: C.surface2,
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: BorderRadius.circular(C.r(11)),
                   border: Border.all(color: C.orange),
                 ),
                 child: FlagText(sub.displayName,
@@ -589,7 +589,7 @@ class _GroupCardState extends State<_GroupCard> {
       child: Container(
       decoration: BoxDecoration(
         color: C.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(C.r(18)),
         border: Border.all(color: C.border),
       ),
       clipBehavior: Clip.antiAlias,
@@ -626,7 +626,7 @@ class _GroupCardState extends State<_GroupCard> {
                               ? 'Закреплена вверху списка. Перетащите заголовок на другую закреплённую подписку, '
                                   'чтобы поменять их местами'
                               : 'Закреплена вверху списка',
-                          child: const Icon(Icons.push_pin_rounded, size: 14, color: C.orange),
+                          child: Icon(Icons.push_pin_rounded, size: 14, color: C.orange),
                         ),
                       ],
                       if (sub?.hidden ?? false) ...[const SizedBox(width: 8), const Tag('скрыта')],
@@ -696,7 +696,7 @@ class _GroupCardState extends State<_GroupCard> {
             ),
           ),
         )),
-        if (sub != null) _SubscriptionBar(sub),
+        if (sub != null) state.settings.subDetailed ? _SubscriptionDetails(sub) : _SubscriptionBar(sub),
         if (sub?.error != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -802,6 +802,134 @@ class _SubscriptionBar extends StatelessWidget {
   }
 }
 
+/// Подробная карточка подписки (Настройки → Внешний вид → «Карточка подписки»): трафик и срок
+/// плитками с крупными цифрами, кнопки кабинета и поддержки провайдера, объявление целиком.
+class _SubscriptionDetails extends StatelessWidget {
+  const _SubscriptionDetails(this.sub);
+  final Subscription sub;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = sub.total ?? 0;
+    final hasTraffic = sub.total != null || sub.upload != null || sub.download != null;
+    final progress = total > 0 ? (sub.used / total).clamp(0.0, 1.0) : 0.0;
+    final expire = sub.expire;
+    final daysLeft = expire?.difference(DateTime.now()).inDays;
+    final soon = (daysLeft ?? 99) < 3;
+    final announce = sub.announce;
+    final hasAnnounce = announce != null && announce.isNotEmpty;
+    final links = [
+      if (sub.webPageUrl != null) ('Кабинет', Icons.open_in_new_rounded, sub.webPageUrl!),
+      if (sub.supportUrl != null) ('Поддержка', Icons.support_agent_rounded, sub.supportUrl!),
+    ];
+    if (!hasTraffic && expire == null && links.isEmpty && !hasAnnounce) return const SizedBox.shrink();
+    final small = TextStyle(fontSize: 12, color: C.muted);
+    final big = TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: C.text, height: 1.1);
+
+    Widget tile(String caption, List<Widget> children) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: C.surface2,
+              borderRadius: BorderRadius.circular(C.r(12)),
+              border: Border.all(color: C.border),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(caption,
+                  style: TextStyle(color: C.muted, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+              const SizedBox(height: 6),
+              ...children,
+            ]),
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (hasTraffic || expire != null)
+          IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (hasTraffic)
+                tile('ТРАФИК', [
+                  Text.rich(TextSpan(children: [
+                    TextSpan(text: formatBytes(sub.used), style: big),
+                    TextSpan(text: total > 0 ? '  из ${formatBytes(total)}' : '  без лимита', style: small),
+                  ])),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: total > 0 ? progress : 0,
+                      minHeight: 6,
+                      backgroundColor: C.border,
+                      color: progress > 0.9 ? C.red : C.orange,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    [
+                      if (sub.download != null) '↓ ${formatBytes(sub.download!)}',
+                      if (sub.upload != null) '↑ ${formatBytes(sub.upload!)}',
+                      if (total > 0) 'осталось ${formatBytes((total - sub.used).clamp(0, total))}',
+                    ].join('   '),
+                    style: small,
+                  ),
+                ]),
+              if (hasTraffic && expire != null) const SizedBox(width: 10),
+              if (expire != null)
+                tile('СРОК', [
+                  Text(
+                    daysLeft == null || daysLeft < 0
+                        ? 'истёк'
+                        : daysLeft == 0
+                            ? 'последний день'
+                            : '$daysLeft дн.',
+                    style: big.copyWith(color: soon ? C.red : C.text),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Icon(Icons.event_rounded, size: 14, color: soon ? C.red : C.muted),
+                    const SizedBox(width: 6),
+                    Text('до ${formatDate(expire)}', style: small.copyWith(color: soon ? C.red : C.muted)),
+                  ]),
+                ]),
+            ]),
+          ),
+        if (links.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final (label, icon, url) in links)
+              GhostButton(label: label, icon: icon, onPressed: () => WinSys.openUrl(url)),
+          ]),
+        ],
+        // Объявление провайдера целиком, в своей рамке: это слова провайдера, а не SkipIt.
+        if (hasAnnounce) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: C.orange.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(C.r(12)),
+              border: Border.all(color: C.orange.withValues(alpha: 0.35)),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(Icons.campaign_rounded, size: 16, color: C.orange),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FlagText(announce, maxLines: 8, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12.5, color: C.text, height: 1.4)),
+              ),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
 /// Строка сервера. Всё, что она показывает из состояния программы, приходит параметрами ([selected],
 /// [pinging]), а не через AppScope.of: так строка не перестраивается от каждого изменения состояния —
 /// карточка подписки отдаёт прежний виджет, пока у сервера ничего не поменялось (см. [_GroupCardState]).
@@ -864,7 +992,7 @@ class _ServerRow extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: C.surface2,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(C.r(12)),
             border: Border.all(color: C.border),
           ),
           // Только здесь ползунок всегда виден и светлее обычного: конфиг длинный, а на тёмной
@@ -956,9 +1084,9 @@ class _ServerRow extends StatelessWidget {
             if (server.warning != null)
               Tooltip(
                 message: server.warning!,
-                child: const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: Icon(Icons.warning_amber_rounded, size: 16, color: C.orangeLight),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Icon(Icons.warning_amber_rounded, size: 16, color: C.warnText),
                 ),
               ),
             if (server.udpMs != null || udpTesting) ...[

@@ -112,6 +112,10 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   RemoveTrayIcon();
+  if (icon_small_) DestroyIcon(icon_small_);
+  if (icon_big_) DestroyIcon(icon_big_);
+  icon_small_ = icon_big_ = nullptr;
+  tray_menu_.icon = nullptr;
   tray_channel_ = nullptr;
   kill_switch_channel_ = nullptr;
   KillSwitchRelease();
@@ -165,9 +169,11 @@ void FlutterWindow::AddTrayIcon() {
   tray_icon_.uID = 1;
   tray_icon_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
   tray_icon_.uCallbackMessage = kTrayMessage;
-  tray_icon_.hIcon = static_cast<HICON>(LoadImageW(
-      GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
-      GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
+  tray_icon_.hIcon = icon_small_ ? icon_small_
+                                 : static_cast<HICON>(LoadImageW(
+                                       GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
+                                       GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
+                                       LR_DEFAULTCOLOR | LR_SHARED));
   if (tray_icon_.szTip[0] == L'\0') wcscpy_s(tray_icon_.szTip, IsDevBuild() ? L"SkipIt Dev" : L"SkipIt");
   tray_added_ = Shell_NotifyIconW(NIM_ADD, &tray_icon_) != FALSE;
 }
@@ -186,10 +192,93 @@ void FlutterWindow::ShowNotification(const std::wstring& title, const std::wstri
   wcsncpy_s(data.szInfo, text.c_str(), _TRUNCATE);
   // Картинка уведомления — значок программы, а не стандартные «i» и треугольник Windows.
   data.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON;
-  data.hBalloonIcon = static_cast<HICON>(LoadImageW(
-      GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
-      GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR | LR_SHARED));
+  data.hBalloonIcon = icon_big_ ? icon_big_
+                                : static_cast<HICON>(LoadImageW(
+                                      GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
+                                      GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON),
+                                      LR_DEFAULTCOLOR | LR_SHARED));
   Shell_NotifyIconW(NIM_MODIFY, &data);
+}
+
+namespace {
+
+// Значок из картинки RGBA (без предумножения альфы) стороной size.
+HICON IconFromRgba(int size, const std::vector<uint8_t>& rgba) {
+  if (size <= 0 || rgba.size() != static_cast<size_t>(size) * size * 4) return nullptr;
+  BITMAPV5HEADER bi{};
+  bi.bV5Size = sizeof(bi);
+  bi.bV5Width = size;
+  bi.bV5Height = -size;  // строки сверху вниз
+  bi.bV5Planes = 1;
+  bi.bV5BitCount = 32;
+  bi.bV5Compression = BI_BITFIELDS;
+  bi.bV5RedMask = 0x00FF0000;
+  bi.bV5GreenMask = 0x0000FF00;
+  bi.bV5BlueMask = 0x000000FF;
+  bi.bV5AlphaMask = 0xFF000000;
+  void* bits = nullptr;
+  HDC dc = GetDC(nullptr);
+  HBITMAP color = CreateDIBSection(dc, reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS, &bits, nullptr, 0);
+  ReleaseDC(nullptr, dc);
+  if (!color || !bits) return nullptr;
+  auto* px = static_cast<uint8_t*>(bits);
+  for (size_t i = 0; i < rgba.size(); i += 4) {
+    px[i] = rgba[i + 2];
+    px[i + 1] = rgba[i + 1];
+    px[i + 2] = rgba[i];
+    px[i + 3] = rgba[i + 3];
+  }
+  HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+  ICONINFO info{TRUE, 0, 0, mask, color};
+  HICON icon = CreateIconIndirect(&info);
+  DeleteObject(mask);
+  DeleteObject(color);
+  return icon;
+}
+
+}  // namespace
+
+void FlutterWindow::SetCustomIcon(const std::vector<std::pair<int, std::vector<uint8_t>>>& images) {
+  HWND hwnd = GetHandle();
+  const UINT dpi = GetDpiForWindow(hwnd);
+  // Картинка не меньше нужного размера (ближайшая), иначе самая большая.
+  auto make = [&images](int want) -> HICON {
+    const std::pair<int, std::vector<uint8_t>>* best = nullptr;
+    for (const auto& image : images) {
+      if (!best || (best->first < want ? image.first > best->first
+                                       : image.first >= want && image.first < best->first)) {
+        best = &image;
+      }
+    }
+    return best ? IconFromRgba(best->first, best->second) : nullptr;
+  };
+  HICON small_icon = images.empty() ? nullptr : make(GetSystemMetricsForDpi(SM_CXSMICON, dpi));
+  HICON big_icon = images.empty() ? nullptr : make(GetSystemMetricsForDpi(SM_CXICON, dpi));
+  if (!images.empty() && (!small_icon || !big_icon)) {
+    if (small_icon) DestroyIcon(small_icon);
+    if (big_icon) DestroyIcon(big_icon);
+    return;
+  }
+  // Без своего значка — обычный из ресурсов (общие копии Windows, удалять их не нужно).
+  auto standard = [dpi](int metric) {
+    const int size = GetSystemMetricsForDpi(metric, dpi);
+    return static_cast<HICON>(LoadImageW(GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
+                                         size, size, LR_DEFAULTCOLOR | LR_SHARED));
+  };
+  SendMessageW(hwnd, WM_SETICON, ICON_SMALL,
+               reinterpret_cast<LPARAM>(small_icon ? small_icon : standard(SM_CXSMICON)));
+  SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(big_icon ? big_icon : standard(SM_CXICON)));
+  tray_icon_.hIcon = small_icon ? small_icon : standard(SM_CXSMICON);
+  if (tray_added_) {
+    tray_icon_.uFlags = NIF_ICON;
+    Shell_NotifyIconW(NIM_MODIFY, &tray_icon_);
+    tray_icon_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+  }
+  if (icon_small_) DestroyIcon(icon_small_);
+  if (icon_big_) DestroyIcon(icon_big_);
+  icon_small_ = small_icon;
+  icon_big_ = big_icon;
+  tray_menu_.icon = big_icon;
 }
 
 void FlutterWindow::ShowFromTray() {
@@ -305,6 +394,13 @@ void FlutterWindow::HandleTrayCall(
       tray_menu_.selected_server = number("selectedServer", tray_menu_.selected_server);
       tray_menu_.core = number("core", tray_menu_.core);
       tray_menu_.kill_switch = number("killSwitch", tray_menu_.kill_switch);
+      // Цвет акцента приходит как 0xRRGGBB.
+      auto color = [&number](const char* key, COLORREF fallback) {
+        const int v = number(key, -1);
+        return v < 0 ? fallback : RGB((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+      };
+      tray_menu_.accent = color("accent", tray_menu_.accent);
+      tray_menu_.accent_light = color("accentLight", tray_menu_.accent_light);
       auto strings = [args](const char* key, std::vector<std::wstring>& out) {
         auto it = args->find(flutter::EncodableValue(key));
         if (it == args->end()) return;
@@ -372,6 +468,23 @@ void FlutterWindow::HandleTrayCall(
       };
       ShowNotification(text("title"), text("text"));
     }
+    result->Success();
+  } else if (method == "setIcon") {
+    // Список {size, rgba}; пустой — обычный значок.
+    std::vector<std::pair<int, std::vector<uint8_t>>> images;
+    if (const auto* list = std::get_if<flutter::EncodableList>(call.arguments())) {
+      for (const auto& value : *list) {
+        const auto* entry = std::get_if<flutter::EncodableMap>(&value);
+        if (!entry) continue;
+        auto size = entry->find(flutter::EncodableValue("size"));
+        auto rgba = entry->find(flutter::EncodableValue("rgba"));
+        if (size == entry->end() || rgba == entry->end()) continue;
+        const auto* n = std::get_if<int32_t>(&size->second);
+        const auto* bytes = std::get_if<std::vector<uint8_t>>(&rgba->second);
+        if (n && bytes) images.emplace_back(*n, *bytes);
+      }
+    }
+    SetCustomIcon(images);
     result->Success();
   } else if (method == "show") {
     ShowFromTray();

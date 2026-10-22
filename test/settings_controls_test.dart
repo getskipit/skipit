@@ -9,6 +9,7 @@ import 'package:skipit/models/routing.dart';
 import 'package:skipit/models/settings.dart';
 import 'package:skipit/state/app_scope.dart';
 import 'package:skipit/state/app_state.dart';
+import 'package:skipit/ui/app_icon.dart';
 import 'package:skipit/ui/settings_page.dart';
 import 'package:skipit/ui/shell.dart';
 import 'package:skipit/ui/theme.dart';
@@ -144,6 +145,63 @@ void main() {
     await tester.pump();
     expect(state.settings.testUrl, 'https://check.example/ok');
     await tester.pump(const Duration(milliseconds: 500));
+  });
+
+  test('внешний вид: тема, акцент, скругление, значок, карточка и пункты меню сохраняются', () {
+    final s = AppSettings()
+      ..theme = AppTheme.black
+      ..accent = 'blue'
+      ..corners = 1.6
+      ..iconStyle = 'bright'
+      ..subDetailed = true
+      ..menuHidden = {'2', '4'};
+    final back = AppSettings.fromJson(s.toJson());
+    expect((back.theme, back.accent, back.corners, back.iconStyle, back.subDetailed),
+        (AppTheme.black, 'blue', 1.6, 'bright', true));
+    expect(back.menuHidden, {'2', '4'});
+    // Главную и Настройки спрятать нельзя; странное скругление не принимается.
+    final odd = AppSettings.fromJson({'menuHidden': ['0', '5', '3'], 'corners': 7});
+    expect(odd.menuHidden, {'3'});
+    expect(odd.corners, 1.0);
+
+    // Палитра с акцентом и скруглением — один объект на сочетание; оранжевый и 1 — сама тема.
+    expect(identical(Palette.dark.styled(Accent.orange, 1), Palette.dark), isTrue);
+    final blue = Palette.black.styled(Accent.blue, 1.6);
+    expect(identical(blue, Palette.black.styled(Accent.blue, 1.6)), isTrue);
+    C.use(blue);
+    expect((C.orange, C.r(10), C.warn), (Accent.blue.main, 16.0, const Color(0xFFFF5F1A)));
+    C.use(Palette.dark);
+  });
+
+  testWidgets('значок рисуется всех размеров и в меню прячутся выбранные разделы', (tester) async {
+    final images = await tester.runAsync(() => renderIcon(IconStyle.bright, Accent.green));
+    expect(images!.map((i) => i.size), iconSizes);
+    for (final i in images) {
+      expect(i.rgba.length, i.size * i.size * 4);
+    }
+    // Угол прозрачный, середина — непрозрачная.
+    final big = images.last;
+    expect(big.rgba[3], 0);
+    expect(big.rgba[(big.size * big.size ~/ 2 + big.size ~/ 2) * 4 + 3], 255);
+
+    C.use(Palette.dark);
+    tester.view.physicalSize = const Size(1100, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final state = AppState()..settings.menuHidden = {'2', '3'};
+    state.routingProfiles.add(RoutingProfile.global());
+    await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: buildTheme(), home: const Shell())));
+    await tester.pump(const Duration(milliseconds: 400));
+    // «Маршрутизация» на главной есть и плиткой — в меню её нет, поэтому одна.
+    expect(find.text('Маршрутизация'), findsOneWidget);
+    expect(find.text('Проверка'), findsNothing);
+    await tester.tap(find.text('Логи'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(state.pageIndex, 4);
+    state.settings.menuHidden = {};
+    state.changed();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Проверка'), findsOneWidget);
   });
 
   test('адрес проверки, вписанный раньше вручную, открывается как «Свой адрес»', () {

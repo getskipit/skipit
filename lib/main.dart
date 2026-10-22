@@ -14,6 +14,7 @@ import 'models/server.dart';
 import 'models/settings.dart';
 import 'state/app_scope.dart';
 import 'state/app_state.dart';
+import 'ui/app_icon.dart';
 import 'ui/flag_text.dart';
 import 'ui/shell.dart';
 import 'ui/theme.dart';
@@ -175,10 +176,11 @@ Future<void> main(List<String> rawArgs) async {
     // Тема берётся из настроек, а не из уже применённой палитры: этот обработчик срабатывает раньше,
     // чем окно перекрасится.
     final dark = switch (state.settings.theme) {
-      AppTheme.dark => true,
+      AppTheme.dark || AppTheme.black => true,
       AppTheme.light => false,
       AppTheme.system => WidgetsBinding.instance.platformDispatcher.platformBrightness != Brightness.light,
     };
+    final accent = Accent.values.asNameMap()[state.settings.accent] ?? Accent.orange;
     // Серверы для меню — в том же порядке, что на главной (не больше 60: меню прокручивается колесом).
     final servers = state.serversInListOrder.take(60).toList();
     // Провайдер каждого сервера — для заголовков в списке. Если провайдер один, заголовки не нужны.
@@ -189,7 +191,7 @@ Future<void> main(List<String> rawArgs) async {
 
     final groups = [for (final s in servers) groupOf(s)];
     final grouped = groups.toSet().length > 1;
-    final key = '$tooltip|${state.status.name}|${state.settings.closeToTray}|${state.settings.notifications}|$dark|${state.settings.mode.name}|'
+    final key = '$tooltip|${state.status.name}|${state.settings.closeToTray}|${state.settings.notifications}|$dark|${accent.name}|${state.settings.mode.name}|'
         '${state.usesTun ? '${state.settings.tunCore.name}|${state.settings.killSwitch}' : ''}|${grouped ? groups.join(',') : ''}|'
         '${state.settings.selectedServerId}|${servers.map((s) => '${s.id}:${s.name}').join(',')}|${state.settings.uiScale}';
     if (key == lastTray) return;
@@ -204,6 +206,8 @@ Future<void> main(List<String> rawArgs) async {
       server: server ?? 'Сервер не выбран',
       state: state.isConnected ? 2 : (state.isBusy ? 1 : 0),
       dark: dark,
+      accent: accent.main,
+      accentLight: accent.light,
       modes: [for (final m in trayModes) m == ConnectionMode.proxyOnly ? 'Порты' : m.label],
       mode: trayModes.indexOf(state.settings.mode),
       // Ядро TUN выбирается только в режимах с адаптером — в остальных переключателя в меню нет.
@@ -246,18 +250,47 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver {
   late final AppLifecycleListener _lifecycle;
   late Palette _palette = _resolvePalette();
 
-  Palette _resolvePalette() => switch (widget.state.settings.theme) {
-        AppTheme.dark => Palette.dark,
-        AppTheme.light => Palette.light,
-        AppTheme.system => WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.light
-            ? Palette.light
-            : Palette.dark,
-      };
+  Palette _resolvePalette() {
+    final s = widget.state.settings;
+    final base = switch (s.theme) {
+      AppTheme.dark => Palette.dark,
+      AppTheme.black => Palette.black,
+      AppTheme.light => Palette.light,
+      AppTheme.system => WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.light
+          ? Palette.light
+          : Palette.dark,
+    };
+    return base.styled(Accent.values.asNameMap()[s.accent] ?? Accent.orange, s.corners);
+  }
 
   /// Тема меняется в настройках или в Windows («Как в системе»). Цвета читаются при построении
   /// виджетов, поэтому перестраиваем все виджеты окна — но не пересоздаём их: состояние (открытый
   /// раздел, прокрутка, анимация переключателей) сохраняется, и смена темы выглядит плавно.
+  /// Какой значок сейчас стоит у окна и в трее (вид и цвет акцента); null — ещё не ставили.
+  String? _iconKey;
+
+  /// Значок окна, панели задач и трея по настройке «Значок». Классический — значок из ресурсов exe:
+  /// при запуске ничего делать не нужно.
+  void _syncIcon() {
+    final s = widget.state.settings;
+    final style = IconStyle.values.asNameMap()[s.iconStyle] ?? IconStyle.classic;
+    final accent = Accent.values.asNameMap()[s.accent] ?? Accent.orange;
+    final key = '${style.name}|${accent.name}';
+    if (key == _iconKey) return;
+    final first = _iconKey == null;
+    _iconKey = key;
+    if (style == IconStyle.classic) {
+      if (!first) unawaited(Tray.setIcon(const []));
+      return;
+    }
+    unawaited(renderIcon(style, accent).then((images) {
+      // Пока рисовали, могли выбрать другой.
+      if (_iconKey == key) return Tray.setIcon(images);
+    }));
+  }
+
   void _syncTheme() {
+    _syncIcon();
     Motion.apply(widget.state.settings.reduceMotion);
     final p = _resolvePalette();
     if (identical(p, _palette)) return;
@@ -289,6 +322,7 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver {
     if (lifecycle != null) didChangeAppLifecycleState(lifecycle);
     widget.state.addListener(_syncTheme);
     Motion.apply(widget.state.settings.reduceMotion);
+    _syncIcon();
     // При закрытии окна обязательно гасим ядро и возвращаем системный прокси.
     _lifecycle = AppLifecycleListener(onExitRequested: () async {
       await widget.state.shutdown();

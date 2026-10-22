@@ -115,7 +115,7 @@ class RoutingPage extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 4, bottom: 8),
                 child: Text(
                   provider != null ? 'СВОИ ПРОФИЛИ — РАБОТАЮТ ВМЕСТЕ С ПРАВИЛАМИ ПРОВАЙДЕРА' : 'СВОИ ПРОФИЛИ',
-                  style: const TextStyle(color: C.orange, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4),
+                  style: TextStyle(color: C.orange, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4),
                 ),
               ),
               for (final r in own)
@@ -253,7 +253,7 @@ class _DnsCardState extends State<_DnsCard> {
                       'https://dns.google/dns-query — DoH\n'
                       'tls://1.1.1.1 — DoT',
                   triggerMode: TooltipTriggerMode.tap,
-                  child: const Icon(Icons.info_rounded, size: 18, color: C.orange),
+                  child: Icon(Icons.info_rounded, size: 18, color: C.orange),
                 ),
               ),
             ),
@@ -297,7 +297,7 @@ class _DnsCardState extends State<_DnsCard> {
           ),
           if (skipped != null) ...[
             const SizedBox(height: 6),
-            Text(skipped, style: const TextStyle(color: C.orange, fontSize: 12)),
+            Text(skipped, style: TextStyle(color: C.orange, fontSize: 12)),
           ],
         ],
         const SizedBox(height: 14),

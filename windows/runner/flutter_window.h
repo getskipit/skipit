@@ -8,6 +8,8 @@
 #include <shellapi.h>
 
 #include <memory>
+#include <utility>
+#include <vector>
 #include <string>
 
 #include "tray_menu.h"
@@ -38,6 +40,9 @@ class FlutterWindow : public Win32Window {
   // Уведомление Windows у значка в трее.
   void ShowNotification(const std::wstring& title, const std::wstring& text);
   void ShowFromTray();
+  // Значок, выбранный в настройках SkipIt: картинки RGBA нескольких размеров (сторона → пиксели).
+  // Пустой список — обычный значок из ресурсов exe.
+  void SetCustomIcon(const std::vector<std::pair<int, std::vector<uint8_t>>>& images);
   void ShowTrayMenu();
   void HandleTrayCall(
       const flutter::MethodCall<flutter::EncodableValue>& call,
@@ -56,6 +61,9 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> tray_channel_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> kill_switch_channel_;
   NOTIFYICONDATAW tray_icon_{};
+  // Свой значок (окно, панель задач, трей, уведомления); nullptr — из ресурсов exe. Удаляются при смене.
+  HICON icon_small_ = nullptr;
+  HICON icon_big_ = nullptr;
   bool tray_added_ = false;
   // Крестик прячет окно в трей вместо выхода (настройка приходит из Dart).
   bool close_to_tray_ = true;

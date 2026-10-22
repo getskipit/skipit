@@ -1,6 +1,19 @@
 import 'package:flutter/material.dart';
 
-/// Набор цветов одной темы. Оранжевые фирменные цвета общие и лежат прямо в [C].
+/// Цвет акцента (Настройки → Внешний вид): кнопки, переключатели, подсветка меню, знак SkipIt.
+enum Accent {
+  orange('Оранжевый', Color(0xFFFF5F1A), Color(0xFFFF9A3D)),
+  blue('Синий', Color(0xFF2F7BFF), Color(0xFF5AA0FF)),
+  purple('Фиолетовый', Color(0xFF8B5CF6), Color(0xFFA98BFA)),
+  pink('Розовый', Color(0xFFEC4899), Color(0xFFF472B6)),
+  green('Зелёный', Color(0xFF16B356), Color(0xFF4ADE80));
+
+  const Accent(this.label, this.main, this.light);
+  final String label;
+  final Color main, light;
+}
+
+/// Набор цветов одной темы вместе с цветом акцента ([accented]).
 class Palette {
   const Palette({
     required this.brightness,
@@ -20,7 +33,17 @@ class Palette {
     required this.tileActiveBottom,
     required this.markMuted,
     required this.shadow,
+    this.accent = Accent.orange,
+    this.corners = 1,
   });
+
+  /// Цвет акцента и скругление углов (множитель радиусов, см. [C.r]). Палитры с разным акцентом или
+  /// скруглением — разные объекты: по смене палитры перерисовывается всё, что от неё зависит.
+  final Accent accent;
+  final double corners;
+
+  /// Скругление углов на выбор: острее, как было, круглее.
+  static final cornerSteps = <double, String>{0.5: 'Острее', 1.0: 'Обычные', 1.6: 'Круглее'};
 
   final Brightness brightness;
   final Color bg;
@@ -66,6 +89,27 @@ class Palette {
     shadow: Color(0x80000000),
   );
 
+  /// Чёрная (AMOLED): фон чисто чёрный, карточки чуть светлее.
+  static const black = Palette(
+    brightness: Brightness.dark,
+    bg: Color(0xFF000000),
+    surface: Color(0xFF0B0B0C),
+    surface2: Color(0xFF141416),
+    border: Color(0xFF222226),
+    text: Color(0xFFF7F7F8),
+    muted: Color(0xFF8E8E96),
+    cyan: Color(0xFF3FD3E6),
+    green: Color(0xFF4ADE80),
+    red: Color(0xFFFF4D4D),
+    hover: Color(0x0FFFFFFF),
+    tileTop: Color(0xFF141416),
+    tileBottom: Color(0xFF0B0B0C),
+    tileActiveTop: Color(0xFF2A1810),
+    tileActiveBottom: Color(0xFF160E0A),
+    markMuted: Color(0xFF55555D),
+    shadow: Color(0x80000000),
+  );
+
   static const light = Palette(
     brightness: Brightness.light,
     bg: Color(0xFFF3F3F5),
@@ -85,17 +129,67 @@ class Palette {
     markMuted: Color(0xFFB8B8C0),
     shadow: Color(0x1F000000),
   );
+
+  static final _styled = <(Palette, Accent, double), Palette>{};
+
+  /// Та же тема с другим цветом акцента и скруглением. Один и тот же объект на одно сочетание: смена
+  /// туда и обратно не перерисовывает окно зря. Плитка кнопки подключения подкрашивается акцентом.
+  Palette styled(Accent a, double corners) {
+    if (a == accent && corners == this.corners) return this;
+    return _styled.putIfAbsent((this, a, corners), () {
+      final dark = brightness == Brightness.dark;
+      Color tint(double alpha, Color base) => Color.alphaBlend(a.main.withValues(alpha: alpha), base);
+      return Palette(
+        brightness: brightness,
+        bg: bg,
+        surface: surface,
+        surface2: surface2,
+        border: border,
+        text: text,
+        muted: muted,
+        cyan: cyan,
+        green: green,
+        red: red,
+        hover: hover,
+        tileTop: tileTop,
+        tileBottom: tileBottom,
+        tileActiveTop: a == Accent.orange
+            ? tileActiveTop
+            : dark
+                ? tint(0.10, const Color(0xFF131316))
+                : tint(0.06, Colors.white),
+        tileActiveBottom: a == Accent.orange
+            ? tileActiveBottom
+            : dark
+                ? tint(0.05, const Color(0xFF0B0B0C))
+                : tint(0.14, Colors.white),
+        markMuted: markMuted,
+        shadow: shadow,
+        accent: a,
+        corners: corners,
+      );
+    });
+  }
 }
 
-/// Цвета интерфейса. Фирменные оранжевые — константы, остальное зависит от темы ([use]).
+/// Цвета интерфейса: зависят от темы и цвета акцента ([use]). [orange] и [orangeLight] — цвет акцента
+/// (по умолчанию фирменный оранжевый; имена остались с тех пор, когда он был единственным).
 class C {
   static Palette _p = Palette.dark;
   static Palette get palette => _p;
   static void use(Palette p) => _p = p;
+
+  /// Радиус скругления [x] с учётом настройки «Скругление углов».
+  static double r(double x) => x * _p.corners;
   static bool get isDark => _p.brightness == Brightness.dark;
 
-  static const orange = Color(0xFFFF5F1A);
-  static const orangeLight = Color(0xFFFF9A3D);
+  static Color get orange => _p.accent.main;
+  static Color get orangeLight => _p.accent.light;
+
+  /// Цвет предупреждений (строки журнала, медленный ответ, значок «внимание»): всегда оранжевый,
+  /// какой бы ни был акцент. [warnText] — для текста и значков: на тёмном фоне светлее.
+  static const warn = Color(0xFFFF5F1A);
+  static Color get warnText => isDark ? const Color(0xFFFF9A3D) : warn;
 
   static Color get bg => _p.bg;
   static Color get surface => _p.surface;
@@ -108,17 +202,17 @@ class C {
   static Color get red => _p.red;
   static Color get hover => _p.hover;
 
-  static const gradient = LinearGradient(
-    colors: [orangeLight, orange],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static LinearGradient get gradient => LinearGradient(
+        colors: [orangeLight, orange],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
 
   static Color delay(int? ms) {
     if (ms == null) return muted;
     if (ms < 0) return red;
     if (ms < 300) return green;
-    if (ms < 800) return isDark ? orangeLight : orange;
+    if (ms < 800) return warnText;
     return red;
   }
 }
@@ -152,13 +246,13 @@ ThemeData buildTheme() {
     cardTheme: CardThemeData(color: C.surface, elevation: 0, margin: EdgeInsets.zero),
     dialogTheme: DialogThemeData(
       backgroundColor: C.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: C.border)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(20)), side: BorderSide(color: C.border)),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: C.surface2,
       contentTextStyle: TextStyle(color: C.text),
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: C.border)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(12)), side: BorderSide(color: C.border)),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -170,7 +264,7 @@ ThemeData buildTheme() {
       // Одна рамка на все состояния. Именно `border`: только его Flutter «разворачивает» по состояниям —
       // заданная через enabledBorder такая рамка рисовалась с почти квадратными углами.
       border: WidgetStateInputBorder.resolveWith((states) => OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(C.r(12)),
             borderSide: BorderSide(
               color: states.contains(WidgetState.error)
                   ? C.red
@@ -193,14 +287,14 @@ ThemeData buildTheme() {
       style: OutlinedButton.styleFrom(
         foregroundColor: C.text,
         side: BorderSide(color: C.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(12))),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         enabledMouseCursor: SystemMouseCursors.click,
       ),
     ),
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(enabledMouseCursor: SystemMouseCursors.click)),
     tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(8), border: Border.all(color: C.border)),
+      decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(C.r(8)), border: Border.all(color: C.border)),
       textStyle: TextStyle(color: C.text, fontSize: 12),
     ),
     scrollbarTheme: ScrollbarThemeData(thumbColor: WidgetStateProperty.all(C.border)),

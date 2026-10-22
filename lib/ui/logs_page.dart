@@ -218,7 +218,7 @@ class _LogsPageState extends State<LogsPage> {
   Widget _card(Widget child) => Container(
         decoration: BoxDecoration(
           color: C.surface,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(C.r(18)),
           border: Border.all(color: C.border),
         ),
         clipBehavior: Clip.antiAlias,
@@ -349,7 +349,7 @@ class _DayGroupState extends State<_DayGroup> {
                   // Наведение — поверх того же фона, непрозрачным цветом: при переходе от непрозрачного
                   // к почти прозрачному белому середина перехода вспыхивала светло-серым.
                   color: hovered ? Color.alphaBlend(C.hover, C.surface2) : C.surface2,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(C.r(10)),
                   border: Border.all(color: marked ? C.orange.withValues(alpha: 0.55) : C.border),
                 ),
                 child: Row(children: [
@@ -362,7 +362,7 @@ class _DayGroupState extends State<_DayGroup> {
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
                     decoration: BoxDecoration(
                       color: (marked ? C.orange : C.muted).withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(C.r(8)),
                     ),
                     child: Text('$count',
                         style: TextStyle(color: marked ? C.orange : C.muted, fontSize: 11, fontWeight: FontWeight.w700)),
@@ -472,7 +472,7 @@ class _SessionTile extends StatelessWidget {
               ]),
             ),
             if (s.errors > 0) _Count(s.errors, C.red, 'Ошибок: ${s.errors}'),
-            if (s.warnings > 0) _Count(s.warnings, C.isDark ? C.orangeLight : C.orange, 'Предупреждений: ${s.warnings}'),
+            if (s.warnings > 0) _Count(s.warnings, C.warnText, 'Предупреждений: ${s.warnings}'),
             const SizedBox(width: 12),
           ]),
         ),
@@ -507,7 +507,7 @@ class _Count extends StatelessWidget {
         child: Container(
           margin: const EdgeInsets.only(left: 6),
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(C.r(8))),
           child: Text(value > 99 ? '99+' : '$value',
               style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
         ),
@@ -650,7 +650,7 @@ class _SessionView extends StatelessWidget {
                   // «раз», а не «соединений».
                   child: Text(
                       'ядро не узнало программу: ${s.unknownProcess} ${plural(s.unknownProcess, 'раз', 'раза', 'раз')}',
-                      style: TextStyle(color: C.isDark ? C.orangeLight : C.orange, fontSize: 11.5)),
+                      style: TextStyle(color: C.warnText, fontSize: 11.5)),
                 ),
             ]),
           ),
@@ -665,7 +665,7 @@ class _SessionView extends StatelessWidget {
               _Chip('Все', tabLines.length, C.text, level == null, () => onLevel(null)),
               _Chip('Ошибки', tabLines.where((l) => l.level == 2).length, C.red, level == 2, () => onLevel(2)),
               _Chip('Предупреждения', tabLines.where((l) => l.level == 1).length,
-                  C.isDark ? C.orangeLight : C.orange, level == 1, () => onLevel(1)),
+                  C.warnText, level == 1, () => onLevel(1)),
             ]),
           ),
         ),
@@ -828,7 +828,7 @@ class _HoldWhileReadingState<T extends Object> extends State<_HoldWhileReading<T
                     padding: const EdgeInsets.fromLTRB(12, 6, 10, 6),
                     decoration: BoxDecoration(
                       color: C.surface2,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(C.r(16)),
                       border: Border.all(color: hovered ? C.orange : C.border),
                       boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 10, offset: Offset(0, 3))],
                     ),
@@ -878,7 +878,7 @@ class _LineTextState extends State<_LineText> {
   static Color _levelColor(String tag) {
     final t = tag.toLowerCase();
     if (t.contains('err') || t.contains('fatal') || t.contains('panic')) return C.red;
-    if (t.contains('warn')) return C.isDark ? C.orangeLight : C.orange;
+    if (t.contains('warn')) return C.warnText;
     if (t.contains('info')) return C.green;
     return C.muted;
   }
@@ -907,7 +907,7 @@ class _LineTextState extends State<_LineText> {
     final hint = LogExplain.of(line.source, line.text);
     final color = switch (line.level) {
       2 => C.red,
-      1 => C.isDark ? C.orangeLight : C.orange,
+      1 => C.warnText,
       _ => C.text,
     };
     // Пометка уровня в начале строки ядра — своим цветом и жирным, номер соединения за ней — серым:
@@ -969,7 +969,7 @@ class _LineTextState extends State<_LineText> {
                 padding: const EdgeInsets.fromLTRB(6, 0, 2, 0),
                 decoration: BoxDecoration(
                   color: hovered || _open ? orange.withValues(alpha: 0.16) : C.surface2,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(C.r(8)),
                   border: Border.all(color: hovered || _open ? orange.withValues(alpha: 0.6) : C.border),
                 ),
                 child: DefaultSelectionStyle.merge(
@@ -1028,7 +1028,7 @@ class _Chip extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: selected ? color.withValues(alpha: 0.14) : (hovered ? C.hover : Colors.transparent),
-                borderRadius: BorderRadius.circular(9),
+                borderRadius: BorderRadius.circular(C.r(9)),
                 border: Border.all(color: selected ? color.withValues(alpha: 0.5) : C.border),
               ),
               child: Text.rich(
@@ -1091,7 +1091,7 @@ class _ConnGroupText extends StatelessWidget {
         if (!many) TextSpan(text: _via(c), style: TextStyle(color: C.muted)),
         // Правило по приложениям к соединению не применилось: ядро не узнало программу.
         if (group.items.any((e) => e.unknownProcess))
-          TextSpan(text: ' · программа не определена', style: TextStyle(color: C.isDark ? C.orangeLight : C.orange)),
+          TextSpan(text: ' · программа не определена', style: TextStyle(color: C.warnText)),
       ]),
       style: _style,
     );
@@ -1118,7 +1118,7 @@ class _ConnGroupText extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(6, 0, 2, 0),
                   decoration: BoxDecoration(
                     color: hovered || open ? orange.withValues(alpha: 0.16) : C.surface2,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(C.r(8)),
                     border: Border.all(color: hovered || open ? orange.withValues(alpha: 0.6) : C.border),
                   ),
                   child: DefaultSelectionStyle.merge(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../state/app_scope.dart';
+import 'app_icon.dart';
 import 'app_menu.dart';
 import 'theme.dart';
 
@@ -124,14 +126,21 @@ class _MarkPainter extends CustomPainter {
       old.flight != flight || old.muted != muted || old.white != white || !identical(old.palette, palette);
 }
 
-/// Значок приложения — та же картинка, что у иконки exe (assets/icon.png из tools/make_icon.ps1).
+/// Значок приложения: классический — та же картинка, что у иконки exe (assets/icon.png из
+/// tools/make_icon.ps1), другие виды (Настройки → Внешний вид → «Значок») рисуются.
 class AppBadge extends StatelessWidget {
   const AppBadge({super.key, this.size = 38});
   final double size;
 
   @override
-  Widget build(BuildContext context) =>
-      Image.asset('assets/icon.png', width: size, height: size, filterQuality: FilterQuality.medium);
+  Widget build(BuildContext context) {
+    final state = context.dependOnInheritedWidgetOfExactType<AppScope>()?.state;
+    final style = IconStyle.values.asNameMap()[state?.settings.iconStyle] ?? IconStyle.classic;
+    if (style == IconStyle.classic) {
+      return Image.asset('assets/icon.png', width: size, height: size, filterQuality: FilterQuality.medium);
+    }
+    return CustomPaint(size: Size.square(size), painter: SkipItIconPainter(style, C.palette.accent));
+  }
 }
 
 /// Выпадающий список в общем стиле: скруглённая рамка, подсветка при наведении, без «залипающего» фокуса.
@@ -169,7 +178,7 @@ class AppDropdown<T> extends StatelessWidget {
             padding: const EdgeInsets.only(left: 14, right: 8),
             decoration: BoxDecoration(
               color: hovered ? C.orange.withValues(alpha: 0.08) : (height != null ? C.surface : Colors.transparent),
-              borderRadius: BorderRadius.circular(height != null ? 18 : 12),
+              borderRadius: BorderRadius.circular(C.r(height != null ? 18 : 12)),
               border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.7) : C.border),
             ),
             child: Row(mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min, children: [
@@ -288,7 +297,7 @@ class AppSwitch extends StatelessWidget {
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: value ? C.orange : C.surface2,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(C.r(15)),
               border: Border.all(
                 color: value ? C.orange : (hovered ? C.orange.withValues(alpha: 0.6) : C.border),
                 width: 1.5,
@@ -447,7 +456,7 @@ class Panel extends StatelessWidget {
             padding: padding,
             decoration: BoxDecoration(
               color: hovered ? C.surface2 : C.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(C.r(18)),
               border: Border.all(
                 color: glow
                     ? C.orange.withValues(alpha: 0.6)
@@ -518,7 +527,7 @@ class GradientButton extends StatelessWidget {
             gradient: hovered
                 ? const LinearGradient(colors: [Color(0xFFFFAE5C), Color(0xFFFF7033)])
                 : C.gradient,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(C.r(12)),
             boxShadow: enabled
                 ? [BoxShadow(color: C.orange.withValues(alpha: hovered ? 0.55 : 0.3), blurRadius: hovered ? 22 : 14)]
                 : null,
@@ -526,7 +535,7 @@ class GradientButton extends StatelessWidget {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(C.r(12)),
               // Палец, пока кнопка доступна (по умолчанию на Windows — стрелка).
               mouseCursor: WidgetStateMouseCursor.clickable,
               onTap: onPressed,
@@ -713,7 +722,7 @@ class DelayBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(C.r(8)),
       ),
       child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
     );
@@ -731,7 +740,7 @@ class Tag extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
         decoration: BoxDecoration(
           border: Border.all(color: color.withValues(alpha: 0.4)),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(C.r(6)),
         ),
         child: Text(text, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
       );
@@ -797,7 +806,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: C.surface2,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.border),
         ),
         child: Stack(key: _stackKey, children: [
@@ -807,7 +816,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
               duration: Duration(milliseconds: _animate ? 240 : 0),
               curve: Curves.easeOutCubic,
               child: DecoratedBox(
-                decoration: BoxDecoration(gradient: C.gradient, borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(gradient: C.gradient, borderRadius: BorderRadius.circular(C.r(10))),
               ),
             ),
           Row(
@@ -827,7 +836,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
                           // До первого измерения выбранный пункт закрашен сам — без пустого кадра.
                           gradient: selected && thumb == null ? C.gradient : null,
                           color: !selected && hovered ? C.hover : null,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(C.r(10)),
                         ),
                         // Плавно меняется только цвет текста; фон не смешивается — едет сама плашка.
                         child: AnimatedDefaultTextStyle(

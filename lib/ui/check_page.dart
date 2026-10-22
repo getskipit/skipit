@@ -72,7 +72,7 @@ String _ms(int? value) => value == null ? '—' : '$value мс';
 (IconData, Color) _look(SiteNoteKind kind) => switch (kind) {
       SiteNoteKind.ok => (Icons.check_circle_rounded, C.green),
       SiteNoteKind.info => (Icons.info_rounded, C.orange),
-      SiteNoteKind.warn => (Icons.error_rounded, C.orange),
+      SiteNoteKind.warn => (Icons.error_rounded, C.warn),
       SiteNoteKind.bad => (Icons.error_rounded, C.red),
     };
 
@@ -84,7 +84,7 @@ Widget _note(SiteNote note) {
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
     decoration: BoxDecoration(
       color: color.withValues(alpha: note.kind == SiteNoteKind.info ? 0.06 : 0.10),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(C.r(10)),
     ),
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 16, color: color)),
@@ -101,7 +101,7 @@ Widget _metric(String name, String value, String note, {bool mono = false, Color
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: C.surface2,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(C.r(10)),
         border: Border.all(color: C.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
@@ -260,7 +260,7 @@ class _SiteCardState extends State<_SiteCard> {
           padding: const EdgeInsets.fromLTRB(12, 9, 8, 10),
           decoration: BoxDecoration(
             color: hovered || open ? C.surface2 : C.surface2.withValues(alpha: 0),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(C.r(10)),
             border: Border.all(color: C.border),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -410,7 +410,7 @@ class _LineCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
       decoration: BoxDecoration(
         color: C.surface2,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(C.r(10)),
         border: Border.all(color: active ? C.orange.withValues(alpha: 0.6) : C.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
@@ -597,7 +597,7 @@ class _SpeedCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
       decoration: BoxDecoration(
         color: C.surface2,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(C.r(10)),
         border: Border.all(color: active ? C.orange.withValues(alpha: 0.6) : C.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
@@ -763,10 +763,10 @@ class _DnsCheckCard extends StatelessWidget {
                 Text(
                     'Это заметно дальше, чем у ${p.nearerLabel} (${p.nearerMs} мс): сайтам и программам, '
                     'которые идут напрямую, с такими адресами дольше ждать ответа',
-                    style: const TextStyle(color: C.orange, fontSize: 12)),
+                    style: TextStyle(color: C.warn, fontSize: 12)),
               if (p.done && p.slow)
                 Text('Дольше, чем ядро ждёт этот сервер (${p.limitMs} мс): оно успевает уйти к следующему DNS',
-                    style: const TextStyle(color: C.orange, fontSize: 12)),
+                    style: TextStyle(color: C.warn, fontSize: 12)),
             ]),
           ),
         ]),

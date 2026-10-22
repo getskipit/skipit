@@ -13,6 +13,7 @@ import '../models/settings.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
 import '../version.dart';
+import 'app_icon.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -258,18 +259,59 @@ class _SettingsPageState extends State<SettingsPage> {
         Icons.palette_rounded,
         'Внешний вид',
         'Тема, масштаб, где стоит меню, что показывать на главной, анимации',
-        '${switch (s.theme) { AppTheme.dark => 'Тёмная', AppTheme.light => 'Светлая', AppTheme.system => 'Как в Windows' }} · '
+        '${switch (s.theme) { AppTheme.dark => 'Тёмная', AppTheme.black => 'Чёрная', AppTheme.light => 'Светлая', AppTheme.system => 'Как в Windows' }} · '
             '${s.uiScale} % · меню ${s.navTop ? 'сверху' : 'слева'}',
         [
         _Section('', [
           _Row(
             title: 'Тема',
-            subtitle: '«Как в системе» следует за настройкой Windows',
+            subtitle: s.theme == AppTheme.black
+                ? 'Чёрная: фон совсем чёрный — для экранов AMOLED и OLED'
+                : '«Как в системе» следует за настройкой Windows',
             trailing: Segmented<AppTheme>(
               value: s.theme,
-              items: const {AppTheme.dark: 'Тёмная', AppTheme.light: 'Светлая', AppTheme.system: 'Как в системе'},
+              items: const {
+                AppTheme.dark: 'Тёмная',
+                AppTheme.black: 'Чёрная',
+                AppTheme.light: 'Светлая',
+                AppTheme.system: 'Как в системе',
+              },
               onChanged: (v) {
                 s.theme = v;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'Цвет акцента',
+            subtitle: 'Кнопки, переключатели, подсветка меню и знак SkipIt. Предупреждения остаются оранжевыми',
+            trailing: _AccentPicker(
+              value: Accent.values.asNameMap()[s.accent] ?? Accent.orange,
+              onChanged: (v) {
+                s.accent = v.name;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'Значок',
+            subtitle: 'Значок окна, панели задач и трея. Ярлыки на рабочем столе и в «Пуске» остаются прежними',
+            trailing: _IconPicker(
+              value: IconStyle.values.asNameMap()[s.iconStyle] ?? IconStyle.classic,
+              onChanged: (v) {
+                s.iconStyle = v.name;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'Скругление углов',
+            subtitle: 'Углы карточек, кнопок и полей',
+            trailing: Segmented<double>(
+              value: s.corners,
+              items: Palette.cornerSteps,
+              onChanged: (v) {
+                s.corners = v;
                 state.changed();
               },
             ),
@@ -321,6 +363,33 @@ class _SettingsPageState extends State<SettingsPage> {
               selected: {for (final p in AppSettings.homeParts.keys) if (s.homeShows(p)) p},
               onToggle: (p) {
                 s.homeHidden.contains(p) ? s.homeHidden.remove(p) : s.homeHidden.add(p);
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'Карточка подписки',
+            subtitle: s.subDetailed
+                ? 'Подробная: крупные цифры трафика и срока, кнопки кабинета и поддержки, объявление целиком'
+                : 'Компактная: трафик и срок одной строкой',
+            trailing: Segmented<bool>(
+              value: s.subDetailed,
+              items: const {false: 'Компактная', true: 'Подробная'},
+              onChanged: (v) {
+                s.subDetailed = v;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'Пункты меню',
+            subtitle: 'Какие разделы видны в меню. Главная и Настройки — всегда',
+            trailing: const SizedBox.shrink(),
+            below: _PartChips(
+              items: AppSettings.menuPages,
+              selected: {for (final p in AppSettings.menuPages.keys) if (!s.menuHidden.contains(p)) p},
+              onToggle: (p) {
+                s.menuHidden.contains(p) ? s.menuHidden.remove(p) : s.menuHidden.add(p);
                 state.changed();
               },
             ),
@@ -952,7 +1021,7 @@ class _GroupNavItem extends StatelessWidget {
                 height: 42,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(C.r(12)),
                   color: selected
                       ? C.orange.withValues(alpha: 0.14)
                       : (hovered ? C.hover : Colors.transparent),
@@ -1038,7 +1107,7 @@ class _GroupTile extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(18, 18, 14, 16),
             decoration: BoxDecoration(
               color: hovered ? Color.alphaBlend(C.hover, C.surface) : C.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(C.r(18)),
               border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.6) : C.border),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1048,7 +1117,7 @@ class _GroupTile extends StatelessWidget {
                   height: 42,
                   decoration: BoxDecoration(
                     color: C.orange.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(C.r(12)),
                   ),
                   child: Icon(group.icon, size: 22, color: C.orange),
                 ),
@@ -1232,11 +1301,16 @@ class _SettingsQuery extends InheritedWidget {
 /// Ключевые слова строк настроек (по названию строки): слова, которыми настройку ищут, хотя в её
 /// названии и подписи их нет.
 const _keywords = <String, String>{
-  'Тема': 'оформление цвет тёмная темная светлая ночная dark light вид',
+  'Тема': 'оформление цвет тёмная темная светлая чёрная черная amoled oled ночная dark light black вид',
   'Масштаб': 'размер крупнее мельче меньше уменьшить увеличить шрифт текст zoom интерфейс',
+  'Цвет акцента': 'цвет акцент оранжевый синий фиолетовый розовый зелёный зеленый оформление кастомизация',
+  'Значок': 'значок иконка icon трей панель задач логотип вид кастомизация',
+  'Скругление углов': 'углы радиус скругление острые круглые оформление кастомизация',
   'Расположение меню': 'вёрстка верстка меню сверху слева сбоку панель навигация разделы',
   'Вид настроек': 'настройки плитки список списком одной страницей вёрстка верстка группы',
   'На главной': 'главная экран скрыть спрятать показать скорость трафик режим маршрутизация таймер время страна',
+  'Карточка подписки': 'подписка трафик срок карточка подробная компактная минимализм кастомизация',
+  'Пункты меню': 'меню разделы скрыть спрятать убрать серверы маршрутизация проверка логи кастомизация',
   'Меньше анимаций': 'анимация плавность тормозит лагает производительность слабый компьютер',
   'Запускать вместе с Windows': 'автозапуск автозагрузка старт включение компьютера',
   'Сворачивать в трей при закрытии': 'трей значок крестик закрыть фон свернуть',
@@ -1332,7 +1406,7 @@ class _Section extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(title.toUpperCase(),
-              style: const TextStyle(color: C.orange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
+              style: TextStyle(color: C.orange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
         ),
         Panel(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
@@ -1448,6 +1522,83 @@ class _PortSecretRowState extends State<_PortSecretRow> {
 
 /// Строка, которая плавно появляется и сворачивается вместе со своей чертой-разделителем (её ставит
 /// раздел), а не выскакивает рывком.
+/// Выбор вида значка: сами значки, выбранный — в рамке цвета акцента.
+class _IconPicker extends StatelessWidget {
+  const _IconPicker({required this.value, required this.onChanged});
+  final IconStyle value;
+  final ValueChanged<IconStyle> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+        for (final style in IconStyle.values)
+          Tooltip(
+            message: style.label,
+            waitDuration: const Duration(milliseconds: 400),
+            child: Hover(
+              builder: (context, hovered) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onChanged(style),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(C.r(12)),
+                    border: Border.all(
+                      color: style == value ? C.orange : (hovered ? C.border : Colors.transparent),
+                      width: 2,
+                    ),
+                  ),
+                  child: style == IconStyle.classic
+                      ? Image.asset('assets/icon.png', width: 30, height: 30, filterQuality: FilterQuality.medium)
+                      : CustomPaint(size: const Size.square(30), painter: SkipItIconPainter(style, C.palette.accent)),
+                ),
+              ),
+            ),
+          ),
+      ]);
+}
+
+/// Выбор цвета акцента: кружки цветов, выбранный — с галочкой.
+class _AccentPicker extends StatelessWidget {
+  const _AccentPicker({required this.value, required this.onChanged});
+  final Accent value;
+  final ValueChanged<Accent> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+        for (final a in Accent.values)
+          Tooltip(
+            message: a.label,
+            waitDuration: const Duration(milliseconds: 400),
+            child: Hover(
+              builder: (context, hovered) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onChanged(a),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                          colors: [a.light, a.main], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      border: Border.all(
+                        color: a == value ? C.text : (hovered ? C.muted : Colors.transparent),
+                        width: 2,
+                      ),
+                    ),
+                    child: a == value ? const Icon(Icons.check_rounded, size: 16, color: Colors.white) : null,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ]);
+}
+
 class _RevealRow extends StatelessWidget {
   const _RevealRow({required this.open, required this.row, this.divider = false});
   final bool open;
@@ -1517,7 +1668,7 @@ class _PartChips extends StatelessWidget {
                     color: on
                         ? C.orange.withValues(alpha: hovered ? 0.22 : 0.14)
                         : (hovered ? Color.alphaBlend(C.hover, C.surface2) : C.surface2),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(C.r(10)),
                     border: Border.all(
                         color: on || hovered ? C.orange.withValues(alpha: hovered ? 0.8 : 0.6) : C.border),
                   ),

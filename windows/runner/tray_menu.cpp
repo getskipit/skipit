@@ -111,8 +111,6 @@ Palette PaletteFor(bool dark) {
                         RGB(0x16, 0x16, 0x1A), RGB(0x6E, 0x6E, 0x78)};
 }
 
-constexpr COLORREF kOrange = RGB(0xFF, 0x5F, 0x1A);
-constexpr COLORREF kOrangeLight = RGB(0xFF, 0x9A, 0x3D);
 constexpr COLORREF kGreen = RGB(0x4A, 0xDE, 0x80);
 constexpr COLORREF kRed = RGB(0xFF, 0x4D, 0x4D);
 
@@ -267,6 +265,8 @@ void Paint(HWND hwnd, HDC target) {
   const int w = client.right, h = client.bottom;
   const float s = static_cast<float>(m->scale);
   const Palette p = PaletteFor(m->model.dark);
+  // Цвет акцента программы (Настройки → Внешний вид).
+  const COLORREF orange = m->model.accent, orange_light = m->model.accent_light;
 
   // Рисуем в память и переносим одним куском — без мерцания.
   HDC mem = CreateCompatibleDC(target);
@@ -302,7 +302,7 @@ void Paint(HWND hwnd, HDC target) {
 
     Gdiplus::SolidBrush text_brush(Rgb(p.text));
     Gdiplus::SolidBrush muted_brush(Rgb(p.muted));
-    Gdiplus::SolidBrush orange_brush(Rgb(kOrange));
+    Gdiplus::SolidBrush orange_brush(Rgb(orange));
     Gdiplus::SolidBrush white_brush(Gdiplus::Color(255, 255, 255, 255));
 
     // Шапка: название программы, под ним — точка состояния, статус и сервер.
@@ -310,7 +310,7 @@ void Paint(HWND hwnd, HDC target) {
     const float text_w = w - text_x - (kPadding + 8) * s;
     g.DrawString(m->model.title.c_str(), -1, &title_font,
                  Gdiplus::RectF(text_x, (kPadding + 9) * s, text_w, 20 * s), &format, &text_brush);
-    const COLORREF dot = m->model.state == 2 ? kGreen : (m->model.state == 1 ? kOrange : p.muted);
+    const COLORREF dot = m->model.state == 2 ? kGreen : (m->model.state == 1 ? orange : p.muted);
     Gdiplus::SolidBrush dot_brush(Rgb(dot));
     g.FillEllipse(&dot_brush, text_x + 1 * s, (kPadding + 36) * s, 7 * s, 7 * s);
     std::wstring status = m->model.status;
@@ -334,7 +334,7 @@ void Paint(HWND hwnd, HDC target) {
       const Gdiplus::RectF r = ToRectF(group.rect);
       FillRounded(g, r, 8 * s, Rgb(p.track));
       FillRounded(g, Gdiplus::RectF(r.X + 9 * s, r.Y + (r.Height - 12 * s) / 2, 3 * s, 12 * s), 1.5f * s,
-                  Rgb(kOrange));
+                  Rgb(orange));
       g.DrawString(group.text.c_str(), -1, &group_font,
                    Gdiplus::RectF(r.X + 20 * s, r.Y, r.Width - 28 * s, r.Height), &format, &text_brush);
     }
@@ -355,7 +355,7 @@ void Paint(HWND hwnd, HDC target) {
           Gdiplus::GraphicsPath path;
           AddRounded(path, r, 8 * s);
           Gdiplus::LinearGradientBrush gradient(Gdiplus::PointF(r.X, r.Y), Gdiplus::PointF(r.GetRight(), r.GetBottom()),
-                                                Rgb(kOrangeLight), Rgb(kOrange));
+                                                Rgb(orange_light), Rgb(orange));
           g.FillPath(&gradient, &path);
         } else if (hovered) {
           FillRounded(g, r, 8 * s, Rgb(p.muted, 40));
@@ -365,11 +365,11 @@ void Paint(HWND hwnd, HDC target) {
         continue;
       }
 
-      const COLORREF accent = item.danger ? kRed : kOrange;
+      const COLORREF accent = item.danger ? kRed : orange;
       if (hovered) {
         FillRounded(g, r, 9 * s, Rgb(accent, 34));
       } else if (item.kind == Kind::kServer && item.selected) {
-        FillRounded(g, r, 9 * s, Rgb(kOrange, 20));
+        FillRounded(g, r, 9 * s, Rgb(orange, 20));
       }
 
       if (item.kind == Kind::kServer) {
@@ -407,7 +407,7 @@ void Paint(HWND hwnd, HDC target) {
                      Gdiplus::RectF(r.X + 12 * s, r.Y, r.Width - 12 * s - 52 * s, r.Height), &format, &text_brush);
         const float tw = 34 * s, th = 18 * s;
         const Gdiplus::RectF track(r.GetRight() - tw - 10 * s, r.Y + (r.Height - th) / 2, tw, th);
-        FillRounded(g, track, th / 2, item.selected ? Rgb(kOrange) : Rgb(p.muted, 90));
+        FillRounded(g, track, th / 2, item.selected ? Rgb(orange) : Rgb(p.muted, 90));
         const float knob = th - 6 * s;
         Gdiplus::SolidBrush knob_brush(item.selected ? Gdiplus::Color(255, 255, 255, 255) : Rgb(p.muted));
         g.FillEllipse(&knob_brush, item.selected ? track.GetRight() - knob - 3 * s : track.X + 3 * s, track.Y + 3 * s,
@@ -672,8 +672,10 @@ void ShowTrayMenu(HWND owner, UINT message, POINT pt, const TrayMenuModel& model
   const int width = static_cast<int>(kWidth * menu->scale + 0.5);
   const int height = Layout(*menu);
   const int icon_size = static_cast<int>(28 * menu->scale + 0.5);
-  menu->icon = static_cast<HICON>(LoadImageW(GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON),
-                                             IMAGE_ICON, icon_size, icon_size, LR_DEFAULTCOLOR));
+  // Своя копия значка: меню удаляет её при закрытии.
+  menu->icon = model.icon ? static_cast<HICON>(CopyImage(model.icon, IMAGE_ICON, icon_size, icon_size, 0))
+                          : static_cast<HICON>(LoadImageW(GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON),
+                                                          IMAGE_ICON, icon_size, icon_size, LR_DEFAULTCOLOR));
 
   // Меню — над курсором (трей обычно внизу), правый край у курсора; за пределы рабочей области не выходит.
   MONITORINFO info{sizeof(info)};

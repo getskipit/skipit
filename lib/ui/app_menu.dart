@@ -168,7 +168,7 @@ class _MenuCardState<T> extends State<_MenuCard<T>> {
           constraints: BoxConstraints(minWidth: minWidth < 190 ? 190 : minWidth, maxWidth: 380),
           decoration: BoxDecoration(
             color: C.surface2,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(C.r(14)),
             border: Border.all(color: C.border),
             boxShadow: [BoxShadow(color: C.palette.shadow, blurRadius: 28, offset: const Offset(0, 10))],
           ),
@@ -221,7 +221,7 @@ class _MenuRow<T> extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 9),
             decoration: BoxDecoration(
               color: hovered ? accent.withValues(alpha: 0.13) : Colors.transparent,
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(C.r(9)),
             ),
             child: Row(children: [
               if (item.icon != null) ...[
@@ -240,7 +240,7 @@ class _MenuRow<T> extends StatelessWidget {
               ],
               if (item.checked) ...[
                 const SizedBox(width: 14),
-                const Icon(Icons.check_rounded, size: 16, color: C.orange),
+                Icon(Icons.check_rounded, size: 16, color: C.orange),
               ],
             ]),
           ),

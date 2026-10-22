@@ -38,7 +38,7 @@ enum TunCore {
 
 enum PingType { tcp, realDelay }
 
-enum AppTheme { dark, light, system }
+enum AppTheme { dark, light, system, black }
 
 /// Канал обновлений SkipIt: только релизы или ещё и пре-релизы (бета).
 enum UpdateChannel { stable, beta }
@@ -146,6 +146,14 @@ class AppSettings {
   };
   bool homeShows(String part) => !homeHidden.contains(part);
 
+  /// Спрятанные пункты меню — номера разделов. Главная и Настройки прятать нельзя: без них не попасть
+  /// в остальное.
+  Set<String> menuHidden = {};
+
+  /// Карточка подписки подробная (крупные цифры, кнопки, объявление целиком), а не компактная.
+  bool subDetailed = false;
+  static const menuPages = {'1': 'Серверы', '2': 'Маршрутизация', '3': 'Проверка', '4': 'Логи'};
+
   /// Меню разделов вдоль верхнего края окна, а не слева.
   bool navTop = false;
 
@@ -167,6 +175,15 @@ class AppSettings {
   /// Версия, о которой фоновая проверка обновлений уже сообщила: второй раз о ней не напоминает.
   String? updateNotified;
   AppTheme theme = AppTheme.dark;
+
+  /// Цвет акцента — имя из Accent (lib/ui/theme.dart): orange, blue, purple, pink, green.
+  String accent = 'orange';
+
+  /// Скругление углов — множитель радиусов (Palette.cornerSteps).
+  double corners = 1;
+
+  /// Вид значка — имя из IconStyle (lib/ui/app_icon.dart): classic, accent, light, bright, mono.
+  String iconStyle = 'classic';
 
   String? selectedServerId;
   String? selectedRoutingId;
@@ -242,10 +259,15 @@ class AppSettings {
         'navTop': navTop,
         'settingsList': settingsList,
         'homeHidden': homeHidden.toList(),
+        'menuHidden': menuHidden.toList(),
+        'subDetailed': subDetailed,
         'preferJson': preferJson,
         'updateChannel': updateChannel.name,
         'updateNotified': updateNotified,
         'theme': theme.name,
+        'accent': accent,
+        'corners': corners,
+        'iconStyle': iconStyle,
         'selectedServerId': selectedServerId,
         'selectedRoutingId': selectedRoutingId,
         'serverSort': serverSort,
@@ -324,10 +346,17 @@ class AppSettings {
     if (uiScales.contains(uiScale)) s.uiScale = uiScale!;
     final homeHidden = j['homeHidden'];
     if (homeHidden is List) s.homeHidden = {for (final p in homeHidden) if (homeParts.containsKey(p)) p as String};
+    s.subDetailed = parseBool(j['subDetailed'], s.subDetailed);
+    final menuHidden = j['menuHidden'];
+    if (menuHidden is List) s.menuHidden = {for (final p in menuHidden) if (menuPages.containsKey(p)) p as String};
     s.preferJson = parseBool(j['preferJson'], s.preferJson);
     s.updateChannel = UpdateChannel.values.asNameMap()[j['updateChannel']] ?? s.updateChannel;
     s.updateNotified = j['updateNotified'] as String?;
     s.theme = AppTheme.values.asNameMap()[j['theme']] ?? s.theme;
+    s.accent = j['accent'] as String? ?? s.accent;
+    s.iconStyle = j['iconStyle'] as String? ?? s.iconStyle;
+    final corners = j['corners'];
+    if (corners is num && const [0.5, 1.0, 1.6].contains(corners.toDouble())) s.corners = corners.toDouble();
     s.selectedServerId = j['selectedServerId'] as String?;
     s.selectedRoutingId = j['selectedRoutingId'] as String?;
     s.serverSort = const ['delay', 'name'].contains(j['serverSort']) ? j['serverSort'] as String : s.serverSort;
