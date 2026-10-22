@@ -36,7 +36,12 @@ void main() {
     final inbound = (cfg['inbounds'] as List).last as Map;
     expect((inbound['tag'], inbound['listen'], inbound['port']), (XrayConfig.checkInTag, '127.0.0.1', 10830));
     final rules = checkRules(cfg);
-    expect(rules.first['domain'], ['full:${XrayConfig.checkHost}', 'full:${XrayConfig.speedHost}']);
+    expect(rules.first['domain'], [
+      'full:${XrayConfig.checkHost}',
+      'full:speedtest.selectel.ru',
+      'full:proof.ovh.net',
+      'full:fra-de-ping.vultr.com',
+    ]);
     expect(rules.first['outboundTag'], 'proxy');
     // Через этот вход нельзя ходить никуда, кроме адреса проверки.
     expect((rules.last['outboundTag'], rules.last.containsKey('domain')), ('skipit-block', false));

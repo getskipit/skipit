@@ -6,6 +6,7 @@ import '../models/routing.dart';
 import '../models/server.dart';
 import '../models/settings.dart';
 import 'paths.dart';
+import 'speed_test.dart';
 import 'util.dart';
 
 class XrayConfig {
@@ -986,12 +987,12 @@ class XrayConfig {
   /// Адрес, по которому программа проверяет связь через VPN и узнаёт страну выхода.
   static const checkHost = 'www.cloudflare.com';
 
-  /// Сервер замера скорости (см. SpeedTest): через тот же вход, чтобы замер наверняка шёл через VPN.
-  static const speedHost = 'speedtest.selectel.ru';
+  /// Серверы замера скорости (см. SpeedTest): через тот же вход, чтобы замер наверняка шёл через VPN.
+  static List<String> get speedHosts => [for (final s in SpeedTest.servers) s.host];
 
   /// Локальный вход для проверки связи: запрос программы к [checkHost] всегда идёт через VPN-сервер,
   /// какими бы ни были правила маршрутизации (обычный запрос мог бы уйти напрямую и ничего не сказал бы
-  /// о сервере). Так же идёт замер скорости — к [speedHost]. Всё, кроме этих двух адресов, вход блокирует.
+  /// о сервере). Так же идёт замер скорости — к [speedHosts]. Всё остальное вход блокирует.
   static void addCheckInbound(Map<String, dynamic> cfg, {required int port}) {
     const block = 'skipit-block';
     cfg['inbounds'] = [
@@ -1016,7 +1017,7 @@ class XrayConfig {
     routing['rules'] = [
       {
         'inboundTag': inbound,
-        'domain': ['full:$checkHost', 'full:$speedHost'],
+        'domain': ['full:$checkHost', for (final h in speedHosts) 'full:$h'],
         ...vpn,
       },
       {'inboundTag': inbound, 'outboundTag': block},

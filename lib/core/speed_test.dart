@@ -5,7 +5,10 @@ import 'dart:typed_data';
 
 import 'site_check.dart';
 
-typedef SpeedResult = ({double? mbit, String? error});
+/// Итог замера: скорость или ошибка; [unreachable] — сервер замера не ответил (тогда берётся
+/// следующий из [SpeedTest.servers]); [host] — с какого сервера качался файл.
+typedef SpeedResult = ({double? mbit, String? error, bool unreachable, String host});
+typedef SpeedServer = ({String host, String path});
 typedef SpeedProgress = void Function(double mbit, double done);
 
 /// Замер скорости скачивания: один и тот же файл через VPN и напрямую.
@@ -25,6 +28,9 @@ class SpeedReport {
   final vpnSamples = <double>[], directSamples = <double>[];
   double? vpnMbit, directMbit;
   String? vpnError, directError;
+
+  /// С какого сервера качался файл через VPN и напрямую (null — замер до сервера не дошёл).
+  String? vpnHost, directHost;
 
   static String show(double? mbit) =>
       mbit == null ? '—' : '${mbit >= 10 ? mbit.round() : mbit.toStringAsFixed(1)} Мбит/с';
@@ -53,9 +59,12 @@ class SpeedReport {
 
   String get copyText => [
         'Скорость скачивания — через VPN: ${vpnMbit == null ? (vpnError ?? '—') : show(vpnMbit)}; '
-            'напрямую: ${directMbit == null ? (directError ?? '—') : show(directMbit)}',
+            'напрямую: ${directMbit == null ? (directError ?? '—') : show(directMbit)}'
+            '${_hosts.isEmpty ? '' : ' (сервер замера: ${_hosts.join(', ')})'}',
         for (final n in notes) '  • ${n.text}',
       ].join('\n');
+
+  List<String> get _hosts => {for (final h in [vpnHost, directHost]) if (h != null) h}.toList();
 }
 
 /// Замер скорости: несколько секунд проверочный файл качается сразу в несколько соединений, скачанное
@@ -64,8 +73,26 @@ class SpeedReport {
 /// Одно соединение упирается в собственный потолок задолго до быстрой линии, поэтому их несколько,
 /// а скорость — их сумма.
 class SpeedTest {
-  /// Открытый сервер замера скорости и файл на нём.
-  static const host = 'speedtest.selectel.ru', path = '/100MB';
+  /// Открытые серверы замера скорости и файл на каждом: первый — основной (в России), остальные —
+  /// запасные, если он не отвечает. Все отдают файл по https в четыре соединения сразу (Hetzner,
+  /// например, на третье отвечает 429 — не подходит).
+  static const List<SpeedServer> servers = [
+    (host: 'speedtest.selectel.ru', path: '/100MB'),
+    (host: 'proof.ovh.net', path: '/files/100Mb.dat'),
+    (host: 'fra-de-ping.vultr.com', path: '/vultr.com.100MB.bin'),
+  ];
+
+  /// Замер по серверам из [list] по очереди, пока какой-то не ответит. Следующий берётся, только если
+  /// сервер не ответил вовсе; оборванный или прерванный замер не повторяется.
+  static Future<SpeedResult> firstReachable(
+      List<SpeedServer> list, Future<SpeedResult> Function(SpeedServer server) run, bool Function()? keepGoing) async {
+    late SpeedResult result;
+    for (final server in list) {
+      result = await run(server);
+      if (!result.unreachable || !(keepGoing?.call() ?? true)) break;
+    }
+    return result;
+  }
 
   /// Сколько соединений качают файл одновременно.
   static const streams = 4;
@@ -89,8 +116,11 @@ class SpeedTest {
   /// Открывает [streams] соединений способом [open] и качает файл по всем сразу; скорость — сумма.
   /// [onProgress] раз в [tick] получает скорость за последний отрезок и долю прошедшего времени.
   /// [keepGoing] отвечает, то ли ещё подключение: после отключения VPN замер останавливается.
-  static Future<SpeedResult> _measure(
-      Future<_Link> Function() open, SpeedProgress? onProgress, bool Function()? keepGoing) async {
+  static Future<SpeedResult> _measure(SpeedServer server, Future<_Link> Function() open, SpeedProgress? onProgress,
+      bool Function()? keepGoing) async {
+    final host = server.host;
+    SpeedResult fail(String error, {bool unreachable = false}) =>
+        (mbit: null, error: error, unreachable: unreachable, host: host);
     final links = <_Link>[];
     String? openError;
     await Future.wait([
@@ -105,7 +135,7 @@ class SpeedTest {
           }
         }(),
     ]);
-    if (links.isEmpty) return (mbit: null, error: openError ?? 'соединение с сервером замера не установилось');
+    if (links.isEmpty) return fail(openError ?? 'соединение с сервером замера не установилось', unreachable: true);
     try {
       final done = Completer<void>();
       final watch = Stopwatch()..start();
@@ -152,7 +182,7 @@ class SpeedTest {
             close();
           }
         }, onError: (Object e) => close());
-        tls.write(ascii.encode('GET $path HTTP/1.1\r\nHost: $host\r\nUser-Agent: SkipIt\r\nAccept: */*\r\n'
+        tls.write(ascii.encode('GET ${server.path} HTTP/1.1\r\nHost: $host\r\nUser-Agent: SkipIt\r\nAccept: */*\r\n'
             'Connection: close\r\n\r\n'));
       }
 
@@ -182,12 +212,12 @@ class SpeedTest {
       });
       await done.future.timeout(duration + _timeout, onTimeout: () {});
       ticker.cancel();
-      if (stopped) return (mbit: null, error: 'замер прерван: VPN отключился или переподключился');
+      if (stopped) return fail('замер прерван: VPN отключился или переподключился');
       final elapsed = lastDataAt ?? watch.elapsed;
-      if (status == null) return (mbit: null, error: 'сервер замера не ответил');
-      if (!status!.contains(' 200')) return (mbit: null, error: 'сервер замера ответил «$status»');
-      if (total < 200 * 1024) return (mbit: null, error: 'сервер замера не отдал файл');
-      return (mbit: mbit(total: total, atWarmup: atWarmup, elapsed: elapsed), error: null);
+      if (status == null) return fail('сервер замера не ответил', unreachable: true);
+      if (!status!.contains(' 200')) return fail('сервер замера ответил «$status»');
+      if (total < 200 * 1024) return fail('сервер замера не отдал файл');
+      return (mbit: mbit(total: total, atWarmup: atWarmup, elapsed: elapsed), error: null, unreachable: false, host: host);
     } finally {
       for (final link in links) {
         unawaited(link.tls.close().catchError((Object _) => link.tls));
@@ -197,8 +227,10 @@ class SpeedTest {
   }
 
   /// Через VPN: соединения с сервером замера через вход проверки связи ядра на порту [port].
-  static Future<SpeedResult> viaVpn({required int port, SpeedProgress? onProgress, bool Function()? keepGoing}) =>
-      _measure(() async {
+  static Future<SpeedResult> viaVpn(SpeedServer server,
+          {required int port, SpeedProgress? onProgress, bool Function()? keepGoing}) =>
+      _measure(server, () async {
+        final host = server.host;
         final socket = await RawSocket.connect(InternetAddress.loopbackIPv4, port, timeout: _timeout);
         try {
           final answer = Completer<String>();
@@ -229,12 +261,12 @@ class SpeedTest {
 
   /// Напрямую: соединения с адресом [address] сервера замера через сетевую карту с адресом [source]
   /// (null — обычным маршрутом: так в режимах без адаптера).
-  static Future<SpeedResult> direct(InternetAddress address, InternetAddress? source,
+  static Future<SpeedResult> direct(SpeedServer server, InternetAddress address, InternetAddress? source,
           {SpeedProgress? onProgress, bool Function()? keepGoing}) =>
-      _measure(() async {
+      _measure(server, () async {
         final raw = await RawSocket.connect(address, 443, sourceAddress: source, timeout: _timeout);
         try {
-          return (raw: raw, tls: await RawSecureSocket.secure(raw, host: host).timeout(_timeout));
+          return (raw: raw, tls: await RawSecureSocket.secure(raw, host: server.host).timeout(_timeout));
         } catch (_) {
           unawaited(raw.close().catchError((Object _) => raw));
           rethrow;

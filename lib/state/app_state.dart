@@ -387,10 +387,15 @@ class AppState extends ChangeNotifier {
           checkPulse.fire();
         };
     try {
-      final vpn = await SpeedTest.viaVpn(port: port, onProgress: live(report.vpnSamples), keepGoing: alive);
+      // Сервер не ответил — следующий из списка; столбики прошлой попытки убираются.
+      final vpn = await SpeedTest.firstReachable(SpeedTest.servers, (server) {
+        report.vpnSamples.clear();
+        return SpeedTest.viaVpn(server, port: port, onProgress: live(report.vpnSamples), keepGoing: alive);
+      }, alive);
       report
         ..vpnMbit = vpn.mbit
         ..vpnError = vpn.error
+        ..vpnHost = vpn.unreachable ? null : vpn.host
         ..stage = 'напрямую…'
         ..running = 1
         ..progress = 0;
@@ -405,18 +410,28 @@ class AppState extends ChangeNotifier {
         if (tunnel != null && source == null) {
           report.directError = 'не нашлось сетевой карты, кроме адаптера VPN';
         } else {
-          try {
-            final address = (await InternetAddress.lookup(SpeedTest.host, type: InternetAddressType.IPv4)
-                    .timeout(const Duration(seconds: 4)))
-                .first;
-            final direct =
-                await SpeedTest.direct(address, source, onProgress: live(report.directSamples), keepGoing: alive);
-            report
-              ..directMbit = direct.mbit
-              ..directError = direct.error;
-          } catch (e) {
-            report.directError = describeNetError(e);
-          }
+          // Сначала тот же сервер, что и через VPN: тогда разница скоростей — это сам VPN.
+          final order = [
+            ...SpeedTest.servers.where((s) => s.host == report.vpnHost),
+            ...SpeedTest.servers.where((s) => s.host != report.vpnHost),
+          ];
+          final direct = await SpeedTest.firstReachable(order, (server) async {
+            report.directSamples.clear();
+            final InternetAddress address;
+            try {
+              address = (await InternetAddress.lookup(server.host, type: InternetAddressType.IPv4)
+                      .timeout(const Duration(seconds: 4)))
+                  .first;
+            } catch (e) {
+              return (mbit: null, error: describeNetError(e), unreachable: true, host: server.host);
+            }
+            return SpeedTest.direct(server, address, source,
+                onProgress: live(report.directSamples), keepGoing: alive);
+          }, alive);
+          report
+            ..directMbit = direct.mbit
+            ..directError = direct.error
+            ..directHost = direct.unreachable ? null : direct.host;
         }
       }
       log.add('app', report.copyText.split('\n').first);

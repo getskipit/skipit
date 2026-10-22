@@ -141,6 +141,48 @@ void main() {
         '  • Проверка прервана: VPN отключился или переподключился');
   });
 
+  test('скорость: сервер не ответил — берётся следующий; оборванный замер не повторяется', () async {
+    SpeedResult r(String host, {bool unreachable = false, double? mbit}) =>
+        (mbit: mbit, error: mbit == null ? 'ошибка' : null, unreachable: unreachable, host: host);
+    final tried = <String>[];
+    Future<SpeedResult> Function(SpeedServer) run(Map<String, SpeedResult> answers) => (s) async {
+          tried.add(s.host);
+          return answers[s.host]!;
+        };
+    final hosts = [for (final s in SpeedTest.servers) s.host];
+    expect(hosts.first, 'speedtest.selectel.ru');
+
+    var res = await SpeedTest.firstReachable(SpeedTest.servers,
+        run({hosts[0]: r(hosts[0], unreachable: true), hosts[1]: r(hosts[1], mbit: 90)}), null);
+    expect((res.mbit, res.host), (90.0, hosts[1]));
+    expect(tried, hosts.take(2));
+
+    tried.clear();
+    res = await SpeedTest.firstReachable(SpeedTest.servers, run({hosts[0]: r(hosts[0])}), null);
+    expect(res.error, 'ошибка');
+    expect(tried, [hosts[0]]);
+
+    // Все молчат — итог последнего; VPN отключился — дальше не идём.
+    tried.clear();
+    res = await SpeedTest.firstReachable(
+        SpeedTest.servers, run({for (final h in hosts) h: r(h, unreachable: true)}), null);
+    expect(res.unreachable, isTrue);
+    expect(tried, hosts);
+    tried.clear();
+    await SpeedTest.firstReachable(
+        SpeedTest.servers, run({for (final h in hosts) h: r(h, unreachable: true)}), () => false);
+    expect(tried, [hosts[0]]);
+
+    expect((SpeedReport()
+          ..vpnMbit = 50
+          ..directMbit = 60
+          ..vpnHost = hosts[1]
+          ..directHost = hosts[1])
+        .copyText
+        .split('\n')
+        .first, endsWith('(сервер замера: ${hosts[1]})'));
+  });
+
   test('скорость: счёт без разгона и вывод — режет ли VPN', () {
     // 30 МБ за 6 с, из них 2 МБ за первую секунду разгона: считаются 28 МБ за 5 с.
     final speed = SpeedTest.mbit(
