@@ -239,6 +239,7 @@ HICON IconFromRgba(int size, const std::vector<uint8_t>& rgba) {
 }  // namespace
 
 void FlutterWindow::SetCustomIcon(const std::vector<std::pair<int, std::vector<uint8_t>>>& images) {
+  icon_images_ = images;
   HWND hwnd = GetHandle();
   const UINT dpi = GetDpiForWindow(hwnd);
   // Картинка не меньше нужного размера (ближайшая), иначе самая большая.
@@ -524,6 +525,13 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       info->ptMinTrackSize.y = static_cast<LONG>(kMinHeight * scale);
       return 0;
     }
+    case WM_DPICHANGED:
+      // Окно перешло на монитор с другим масштабом — свой значок заново, нужного размера.
+      if (!icon_images_.empty()) {
+        const auto images = icon_images_;
+        SetCustomIcon(images);
+      }
+      break;
     case WM_ENTERSIZEMOVE:
       in_size_move_ = true;
       break;

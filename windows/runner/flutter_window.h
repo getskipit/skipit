@@ -64,6 +64,8 @@ class FlutterWindow : public Win32Window {
   // Свой значок (окно, трей, уведомления; кнопку на панели задач Windows 11 берёт из exe); nullptr — из ресурсов exe. Удаляются при смене.
   HICON icon_small_ = nullptr;
   HICON icon_big_ = nullptr;
+  // Картинки своего значка: по ним он рисуется заново при смене масштаба монитора.
+  std::vector<std::pair<int, std::vector<uint8_t>>> icon_images_;
   bool tray_added_ = false;
   // Крестик прячет окно в трей вместо выхода (настройка приходит из Dart).
   bool close_to_tray_ = true;

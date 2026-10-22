@@ -298,9 +298,11 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Sing
   /// при запуске ничего делать не нужно.
   void _syncIcon() {
     final s = widget.state.settings;
+    // Вызывается на каждое изменение состояния — сначала дешёвая проверка, не те ли самые настройки.
+    if (_iconKey == '${s.iconStyle}|${s.accent}') return;
     final style = IconStyle.values.asNameMap()[s.iconStyle] ?? IconStyle.classic;
     final accent = Accent.values.asNameMap()[s.accent] ?? Accent.orange;
-    final key = '${style.name}|${accent.name}';
+    final key = '${s.iconStyle}|${s.accent}';
     if (key == _iconKey) return;
     final first = _iconKey == null;
     _iconKey = key;
