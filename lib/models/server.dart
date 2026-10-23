@@ -85,8 +85,8 @@ class ServerProfile {
         'port': port,
         'link': link,
         'outbound': outbound,
+        // Задержка не сохраняется: после перезапуска старые миллисекунды вводили бы в заблуждение.
         'subscriptionId': subscriptionId,
-        'delayMs': delayMs,
         'warning': warning,
         'hidden': hidden,
       };
@@ -100,7 +100,6 @@ class ServerProfile {
         link: j['link'] as String? ?? '',
         outbound: Map<String, dynamic>.from(j['outbound'] as Map? ?? const {}),
         subscriptionId: j['subscriptionId'] as String?,
-        delayMs: asInt(j['delayMs']),
         warning: j['warning'] as String?,
         hidden: parseBool(j['hidden']),
       );

@@ -15,10 +15,15 @@ import 'xray_config.dart';
 class PingCancel {
   bool cancelled = false;
   final _onCancel = <Future<void> Function()>[];
+  final _done = Completer<void>();
+
+  /// Завершается, когда проверку остановили: ожидание чего угодно можно оборвать в этот же момент.
+  Future<void> get whenCancelled => _done.future;
 
   Future<void> cancel() async {
     if (cancelled) return;
     cancelled = true;
+    _done.complete();
     for (final f in _onCancel) {
       await f();
     }
@@ -39,20 +44,34 @@ class Pinger {
   /// [cancel] обрывает и уже начатое соединение: сервер, который не отвечает, иначе держал бы
   /// остановленную проверку до конца своего времени ожидания.
   static Future<int> tcp(ServerProfile s, {List<InternetAddress> sources = const [], PingCancel? cancel}) async {
+    // Срок 4 с и отмена действуют на всю попытку, вместе с поиском адреса сервера по имени: он идёт
+    // ещё до соединения и при плохой сети может висеть сколько угодно — вместе с ним висела бы вся
+    // проверка, и «Остановить» не помогала.
     Future<int> attempt(InternetAddress? source) async {
       final sw = Stopwatch()..start();
-      try {
-        final task = await Socket.startConnect(s.address, s.port, sourceAddress: source);
-        cancel?._onCancel.add(() async => task.cancel());
-        if (cancel?.cancelled ?? false) task.cancel();
-        final socket = await task.socket.timeout(const Duration(seconds: 4), onTimeout: () {
-          task.cancel();
-          throw TimeoutException('connect');
-        });
+      ConnectionTask<Socket>? task;
+      var over = false;
+      Future<int> work() async {
+        final t = await Socket.startConnect(s.address, s.port, sourceAddress: source);
+        task = t;
+        if (over) t.cancel();
+        final socket = await t.socket;
+        if (over) {
+          socket.destroy();
+          return -1;
+        }
         socket.destroy();
         return sw.elapsedMilliseconds;
+      }
+
+      try {
+        final stop = cancel?.whenCancelled.then<int>((_) => -1);
+        return await (stop == null ? work() : Future.any([work(), stop])).timeout(const Duration(seconds: 4));
       } catch (_) {
         return -1;
+      } finally {
+        over = true;
+        task?.cancel();
       }
     }
 
@@ -157,7 +176,7 @@ class Pinger {
     cancel?._onCancel.add(proc.stop);
     try {
       await proc.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'], input: config);
-      final ok = await waitForPort(base, alive: () => proc.running);
+      final ok = await waitForPort(base, alive: () => proc.running && !(cancel?.cancelled ?? false));
       if (cancel?.cancelled ?? false) return;
       if (!ok || !proc.running) return failAll('Xray не запустился для проверки задержки');
       // Результат каждого сервера показывается сразу, как пришёл, — не ждём самый медленный.
@@ -233,7 +252,7 @@ class Pinger {
     cancel?._onCancel.add(proc.stop);
     try {
       await proc.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'], input: config);
-      final ok = await waitForPort(base, alive: () => proc.running);
+      final ok = await waitForPort(base, alive: () => proc.running && !(cancel?.cancelled ?? false));
       if (cancel?.cancelled ?? false) return;
       if (!ok || !proc.running) return failAll('Xray не запустился для проверки UDP');
       // Результат каждого сервера — сразу, как он готов. Если ядро проверки завершилось посреди проверки,

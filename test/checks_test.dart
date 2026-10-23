@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/line_check.dart';
+import 'package:skipit/core/link_parser.dart';
+import 'package:skipit/core/ping.dart';
 import 'package:skipit/core/site_check.dart';
 import 'package:skipit/core/speed_test.dart';
 import 'package:skipit/state/app_state.dart';
@@ -202,6 +204,27 @@ void main() {
     expect(AppState.bytesContain(data, ascii.encode('CATEGORY-ADS-ALL')), isTrue);
     expect(AppState.bytesContain(data, ascii.encode('CATEGORY-ADS-ALZ')), isFalse);
     expect(AppState.bytesContain(ascii.encode('CATEGORY-ADS'), ascii.encode('CATEGORY-ADS-ALL')), isFalse);
+  });
+
+  test('проверка задержки по TCP: срок и отмена действуют на всю попытку, вместе с поиском адреса', () async {
+    final servers = [
+      for (var i = 1; i <= 3; i++)
+        LinkParser.parseLink(
+            'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.$i:443?type=tcp&security=tls&sni=a.example#s$i')!,
+      LinkParser.parseLink(
+          'vless://b831381d-6324-4d53-ad4f-8cda48b30811@nohost.invalid:443?type=tcp&security=tls&sni=a.example#x')!,
+    ];
+    final cancel = PingCancel();
+    final results = <int>[];
+    final sw = Stopwatch()..start();
+    final run = Pinger.tcpAll(servers, (s, ms) => results.add(ms), cancel);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await cancel.cancel();
+    await run;
+    expect(sw.elapsed, lessThan(const Duration(seconds: 2)));
+    // Задержка после перезапуска не показывается: в state.json её нет.
+    final s = servers.first..delayMs = 120;
+    expect(s.toJson().containsKey('delayMs'), isFalse);
   });
 
   test('скорость: подпись у кнопки говорит, что происходит', () {
