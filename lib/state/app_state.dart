@@ -1619,9 +1619,14 @@ class AppState extends ChangeNotifier {
       // (Kill Switch такие соединения самой программы выпускает — см. kill_switch.cpp.)
       if (settings.pingType == PingType.tcp) {
         final tunnel = WinSys.tunnelOnDefaultRoute();
+        // «Остановить» обрывает и ожидание списка сетевых карт.
         final sources = tunnel == null
             ? const <InternetAddress>[]
-            : await Pinger.physicalSources([tunnel, ...WinSys.tunNames]);
+            : await Future.any([
+                Pinger.physicalSources([tunnel, ...WinSys.tunNames]),
+                cancel.whenCancelled.then((_) => const <InternetAddress>[]),
+              ]);
+        if (cancel.cancelled) return;
         await Pinger.tcpAll(list, onResult, cancel, sources);
       } else {
         await Pinger.realDelayAll(list, settings.testUrl, log, onResult, cancel, settings);

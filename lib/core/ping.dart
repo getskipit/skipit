@@ -93,7 +93,22 @@ class Pinger {
   }
 
   /// Адреса всех сетевых карт, кроме адаптеров с именами [skip] (наш адаптер VPN).
-  static Future<List<InternetAddress>> physicalSources(List<String> skip) async {
+  /// Список карт запоминается на минуту, а одновременные запросы ждут один общий: Windows иногда отвечает
+  /// на перечень сетевых карт по 4–10 секунд, и на столько же вставала каждая проверка задержки.
+  static Future<List<InternetAddress>> physicalSources(List<String> skip) {
+    final key = skip.join('\n');
+    final known = _sources;
+    if (known != null && known.key == key && DateTime.now().difference(known.at) < const Duration(minutes: 1)) {
+      return known.list;
+    }
+    final list = _listSources(skip);
+    _sources = (key: key, at: DateTime.now(), list: list);
+    return list;
+  }
+
+  static ({String key, DateTime at, Future<List<InternetAddress>> list})? _sources;
+
+  static Future<List<InternetAddress>> _listSources(List<String> skip) async {
     try {
       final all = await NetworkInterface.list(type: InternetAddressType.any);
       return [
