@@ -44,52 +44,71 @@ class Pinger {
   /// [cancel] обрывает и уже начатое соединение: сервер, который не отвечает, иначе держал бы
   /// остановленную проверку до конца своего времени ожидания.
   static Future<int> tcp(ServerProfile s, {List<InternetAddress> sources = const [], PingCancel? cancel}) async {
-    // Срок 4 с и отмена действуют на всю попытку, вместе с поиском адреса сервера по имени: он идёт
-    // ещё до соединения и при плохой сети может висеть сколько угодно — вместе с ним висела бы вся
-    // проверка, и «Остановить» не помогала.
-    Future<int> attempt(InternetAddress? source) async {
-      final sw = Stopwatch()..start();
-      ConnectionTask<Socket>? task;
-      var over = false;
-      Future<int> work() async {
-        final t = await Socket.startConnect(s.address, s.port, sourceAddress: source);
-        task = t;
-        if (over) t.cancel();
-        final socket = await t.socket;
-        if (over) {
-          socket.destroy();
-          return -1;
-        }
-        socket.destroy();
-        return sw.elapsedMilliseconds;
-      }
+    final sw = Stopwatch()..start();
+    final tasks = <ConnectionTask<Socket>>[];
+    var over = false;
 
-      try {
-        final stop = cancel?.whenCancelled.then<int>((_) => -1);
-        return await (stop == null ? work() : Future.any([work(), stop])).timeout(const Duration(seconds: 4));
-      } catch (_) {
-        return -1;
-      } finally {
-        over = true;
-        task?.cancel();
+    // Адрес сервера ищется один раз и только IPv4 (IPv6 — если IPv4 у сервера нет), а соединяемся с
+    // карт того же типа. Раньше каждая карта искала адрес сама, в том числе IPv6: при подключённом VPN
+    // такие запросы подвешивали поиск адресов Windows на десяток секунд, и с третьей проверки подряд
+    // все серверы выходили «Нет».
+    Future<int> work() async {
+      var targets = <InternetAddress>[];
+      final literal = InternetAddress.tryParse(s.address);
+      if (literal != null) {
+        targets = [literal];
+      } else {
+        try {
+          targets = await InternetAddress.lookup(s.address, type: InternetAddressType.IPv4);
+        } catch (_) {}
+        if (targets.isEmpty) targets = await InternetAddress.lookup(s.address);
       }
+      final pairs = <(InternetAddress, InternetAddress?)>[
+        for (final target in targets.take(2))
+          if (sources.isEmpty)
+            (target, null)
+          else
+            for (final source in sources)
+              if (source.type == target.type) (target, source),
+      ];
+      if (pairs.isEmpty) return -1;
+      final done = Completer<int>();
+      var left = pairs.length;
+      for (final (target, source) in pairs) {
+        unawaited(() async {
+          var ms = -1;
+          try {
+            final task = await Socket.startConnect(target, s.port, sourceAddress: source);
+            tasks.add(task);
+            if (over) task.cancel();
+            final socket = await task.socket;
+            socket.destroy();
+            if (!over) ms = sw.elapsedMilliseconds;
+          } catch (_) {}
+          left--;
+          if (done.isCompleted) return;
+          if (ms >= 0) {
+            done.complete(ms);
+          } else if (left == 0) {
+            done.complete(-1);
+          }
+        }());
+      }
+      return done.future;
     }
 
-    if (sources.isEmpty) return attempt(null);
-    final done = Completer<int>();
-    var left = sources.length;
-    for (final source in sources) {
-      unawaited(attempt(source).then((ms) {
-        left--;
-        if (done.isCompleted) return;
-        if (ms >= 0) {
-          done.complete(ms);
-        } else if (left == 0) {
-          done.complete(-1);
-        }
-      }));
+    // Срок 4 с и отмена действуют на всю попытку, вместе с поиском адреса.
+    try {
+      final stop = cancel?.whenCancelled.then<int>((_) => -1);
+      return await (stop == null ? work() : Future.any([work(), stop])).timeout(const Duration(seconds: 4));
+    } catch (_) {
+      return -1;
+    } finally {
+      over = true;
+      for (final task in tasks) {
+        task.cancel();
+      }
     }
-    return done.future;
   }
 
   /// Адреса всех сетевых карт, кроме адаптеров с именами [skip] (наш адаптер VPN).
