@@ -44,7 +44,6 @@ class Pinger {
   /// [cancel] обрывает и уже начатое соединение: сервер, который не отвечает, иначе держал бы
   /// остановленную проверку до конца своего времени ожидания.
   static Future<int> tcp(ServerProfile s, {List<InternetAddress> sources = const [], PingCancel? cancel}) async {
-    final sw = Stopwatch()..start();
     final tasks = <ConnectionTask<Socket>>[];
     var over = false;
 
@@ -72,6 +71,9 @@ class Pinger {
               if (source.type == target.type) (target, source),
       ];
       if (pairs.isEmpty) return -1;
+      // Задержка — только само соединение: время поиска адреса по имени (DNS) в неё не входит, иначе
+      // при медленном DNS близкий сервер выглядел бы далёким.
+      final sw = Stopwatch()..start();
       final done = Completer<int>();
       var left = pairs.length;
       for (final (target, source) in pairs) {
