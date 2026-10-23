@@ -1585,7 +1585,26 @@ class AppState extends ChangeNotifier {
     // Результаты приходят по одному серверу, а окно обновляется не чаще раза в 200 мс: при сотнях серверов
     // оно иначе перестраивалось бы сотни раз подряд (вместе со списками серверов) и тормозило всю проверку.
     Timer? redraw;
+    // Конец проверки — один раз: или когда она закончилась сама, или сразу по «Остановить». Остановленная
+    // проверка отпускает кнопку и строки немедленно, не дожидаясь, пока досидят её соединения: какое-то
+    // ожидание внутри (у Windows бывают долгие поиски адреса по имени) могло держать её секундами.
+    void finish() {
+      if (!identical(_pingCancel, cancel)) return;
+      if (cancel.cancelled) {
+        for (final s in list) {
+          s.delayMs ??= before[s];
+        }
+      }
+      redraw?.cancel();
+      _pingCancel = null;
+      pinging = false;
+      changed();
+    }
+
+    unawaited(cancel.whenCancelled.then((_) => finish()));
     void onResult(ServerProfile s, int ms) {
+      // Результаты остановленной проверки, пришедшие позже, не показываются.
+      if (cancel.cancelled) return;
       s.delayMs = ms;
       redraw ??= Timer(const Duration(milliseconds: 200), () {
         redraw = null;
@@ -1610,15 +1629,7 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       if (!cancel.cancelled) toast('Ошибка проверки: $e');
     } finally {
-      if (cancel.cancelled) {
-        for (final s in list) {
-          s.delayMs ??= before[s];
-        }
-      }
-      redraw?.cancel();
-      _pingCancel = null;
-      pinging = false;
-      changed();
+      finish();
     }
   }
 
