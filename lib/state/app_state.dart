@@ -1627,7 +1627,14 @@ class AppState extends ChangeNotifier {
                 cancel.whenCancelled.then((_) => const <InternetAddress>[]),
               ]);
         if (cancel.cancelled) return;
-        await Pinger.tcpAll(list, onResult, cancel, sources);
+        var answered = false;
+        await Pinger.tcpAll(list, (s, ms) {
+          if (ms >= 0) answered = true;
+          onResult(s, ms);
+        }, cancel, sources);
+        // Ни один сервер не ответил через запомненные карты — сеть могла смениться: следующая проверка
+        // возьмёт свежий список.
+        if (sources.isNotEmpty && !answered && !cancel.cancelled) Pinger.forgetSources();
       } else {
         await Pinger.realDelayAll(list, settings.testUrl, log, onResult, cancel, settings);
       }

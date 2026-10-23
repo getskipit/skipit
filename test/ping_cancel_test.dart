@@ -15,6 +15,11 @@ void main() {
     expect(identical(a, b), isTrue);
     expect(identical(Pinger.physicalSources(['Другой']), a), isFalse);
     await a;
+    // Сеть сменилась — тот же запрос берёт список заново.
+    final c = Pinger.physicalSources(['Нет такого адаптера']);
+    expect(identical(c, Pinger.physicalSources(['Нет такого адаптера'])), isTrue);
+    Pinger.forgetSources();
+    expect(identical(c, Pinger.physicalSources(['Нет такого адаптера'])), isFalse);
   });
 
   test('остановленная проверка задержки сразу снимается, следующую можно начать', () async {

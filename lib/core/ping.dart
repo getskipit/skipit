@@ -127,6 +127,10 @@ class Pinger {
 
   static ({String key, DateTime at, Future<List<InternetAddress>> list})? _sources;
 
+  /// Забыть запомненный список карт: сеть могла смениться (Wi-Fi ↔ кабель, новый адрес), и привязка
+  /// к старому адресу даёт «Нет» у всех серверов.
+  static void forgetSources() => _sources = null;
+
   static Future<List<InternetAddress>> _listSources(List<String> skip) async {
     try {
       final all = await NetworkInterface.list(type: InternetAddressType.any);
