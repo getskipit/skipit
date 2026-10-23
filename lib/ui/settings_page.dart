@@ -78,6 +78,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Выбранная группа в виде «Списком».
   int _listGroup = 0;
 
+  /// Вид настроек на прошлом построении: по его смене открывается та же группа (см. build).
+  bool? _wasList;
+
   /// Счётчик повторных нажатий на раздел в меню ([AppState.pageReselected]), который страница уже видела.
   int? _seenReselect;
   final _searchKey = GlobalKey();
@@ -922,6 +925,15 @@ class _SettingsPageState extends State<SettingsPage> {
     final Widget header;
     final List<Widget> body;
     // Вид «Списком»: слева группы, справа настройки выбранной (поиск и в нём ищет по всем группам).
+    // Смена вида («Плитки» ↔ «Списком») оставляет открытой ту же группу: в ней только что и меняли вид.
+    if (_wasList != null && _wasList != s.settingsList) {
+      if (s.settingsList) {
+        if (_group != null) _listGroup = _group!;
+      } else {
+        _group = _listGroup;
+      }
+    }
+    _wasList = s.settingsList;
     final listMode = s.settingsList && query.isEmpty;
     final listGroup = _listGroup.clamp(0, groups.length - 1);
     if (query.isNotEmpty) {

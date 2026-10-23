@@ -217,6 +217,37 @@ void main() {
     expect(find.text('Проверка'), findsOneWidget);
   });
 
+  testWidgets('смена вида настроек оставляет открытой ту же группу', (tester) async {
+    C.use(Palette.dark);
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    state.routingProfiles.add(RoutingProfile.global());
+    await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: buildTheme(), home: const Shell())));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byIcon(Icons.tune_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Внешний вид'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.text('Цвет акцента'), findsOneWidget);
+    await tester.tap(find.text('Списком'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(state.settings.settingsList, isTrue);
+    expect(find.text('Цвет акцента').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('Плитки'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(state.settings.settingsList, isFalse);
+    expect(find.text('Цвет акцента').hitTestable(), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 600));
+  });
+
   test('адрес проверки, вписанный раньше вручную, открывается как «Свой адрес»', () {
     expect(AppSettings.fromJson({'testUrl': 'https://check.example/ok'}).testUrlOwn, isTrue);
     expect(AppSettings.fromJson({'testUrl': 'https://cp.cloudflare.com/generate_204'}).testUrlOwn, isFalse);
