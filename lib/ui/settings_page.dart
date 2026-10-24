@@ -99,22 +99,18 @@ class _SettingsPageState extends State<SettingsPage> {
     scroll.jumpTo(0);
   }
 
-  /// Плитки при возврате из группы плавно поднимаются снизу на своё место — как в «Логах», где их поднимает
-  /// сворачивающийся переключатель групп. Уходящие плитки (открыли группу) не сдвигаются. Сдвиг идёт, пока плитки
-  /// проявляются (вторая половина перехода): раньше они ещё прозрачные, и движения не было бы видно.
-  static Widget _rise(bool tiles, Animation<double> anim, Widget child) => !tiles
-      ? child
-      : AnimatedBuilder(
-          animation: anim,
-          builder: (context, child) {
-            final up = Curves.easeOutCubic.transform(((anim.value - 0.5) / 0.5).clamp(0.0, 1.0));
-            return Transform.translate(
-              offset: Offset(0, anim.status == AnimationStatus.reverse ? 0 : 54 * (1 - up)),
-              child: child,
-            );
-          },
-          child: child,
-        );
+  /// Как в «Логах», где страницу двигает переключатель групп: при возврате плитки плавно поднимаются снизу
+  /// на своё место, при открытии группы её страница плавно опускается сверху. Уходящая страница не сдвигается.
+  /// Сдвиг идёт с первого кадра по кривой самого перехода — так же, как там движется переключатель: к моменту,
+  /// когда страница проявляется, остаётся мягкий доезд. Сдвиг только во второй половине перехода проходил
+  /// почти весь, пока страница ещё прозрачная, и в конце она заметно «подпрыгивала».
+  static Widget _rise(bool tiles, Animation<double> anim, Widget child) => AnimatedBuilder(
+        animation: anim,
+        builder: (context, child) => anim.status == AnimationStatus.reverse
+            ? child!
+            : Transform.translate(offset: Offset(0, (tiles ? 54 : -54) * (1 - anim.value)), child: child),
+        child: child,
+      );
 
   @override
   void dispose() {

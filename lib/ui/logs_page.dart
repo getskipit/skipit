@@ -187,20 +187,19 @@ class _LogsPageState extends State<LogsPage> {
             Tooltip(
               message: 'Насколько подробно ядра пишут журнал. Новый уровень — со следующего подключения',
               waitDuration: const Duration(milliseconds: 400),
-              // Той же высоты, что и кнопки рядом.
-              child: SizedBox(
-                height: 48,
-                child: AppDropdown<String>(
-                  value: state.settings.logLevel,
-                  items: const {
-                    'debug': 'Уровень: debug',
-                    'info': 'Уровень: info',
-                    'warning': 'Уровень: warning',
-                    'error': 'Уровень: error',
-                    'none': 'Уровень: none',
-                  },
-                  onChanged: (v) {
-                    state.settings.logLevel = v;
+              // Такая же кнопка, как «Отчёт» и «Папка» рядом (выпадающий список был выше них), — меню
+              // уровней появляется под ней.
+              child: Builder(
+                builder: (context) => GhostButton(
+                  label: 'Уровень: ${state.settings.logLevel}',
+                  icon: Icons.tune_rounded,
+                  onPressed: () async {
+                    final level = await showAppMenu<String>(context, items: [
+                      for (final l in const ['debug', 'info', 'warning', 'error', 'none'])
+                        AppMenuItem(l, l, checked: l == state.settings.logLevel),
+                    ]);
+                    if (level == null) return;
+                    state.settings.logLevel = level;
                     state.changed();
                   },
                 ),
