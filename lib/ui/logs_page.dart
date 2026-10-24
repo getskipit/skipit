@@ -12,6 +12,7 @@ import '../state/app_scope.dart';
 import '../state/app_state.dart';
 import 'app_menu.dart';
 import 'flag_text.dart';
+import 'groups.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -24,7 +25,16 @@ class LogsPage extends StatefulWidget {
 }
 
 /// Фильтр строк: события приложения отдельно от вывода ядер.
-enum _LogTab { all, app, xray, singbox, connections }
+enum _LogTab {
+  all,
+  app,
+  xray,
+  singbox,
+  connections;
+
+  /// Вкладки строк журнала — без списка соединений.
+  static const lines = [all, app, xray, singbox];
+}
 
 extension on _LogTab {
   String get label => switch (this) {
@@ -92,7 +102,7 @@ class _LogsPageState extends State<LogsPage> {
   void initState() {
     super.initState();
     _tick = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted && _tab == _LogTab.connections && _recent) setState(() {});
+      if (mounted && _recent && AppScope.read(context).pageIndex == AppState.logsPage) setState(() {});
     });
   }
 
@@ -105,8 +115,17 @@ class _LogsPageState extends State<LogsPage> {
   /// Пустой источник обновлений для спрятанного раздела: никогда не срабатывает.
   static final _idle = ChangeNotifier();
 
-  /// Отрезок, выбранный пользователем. null — показываем самый свежий и следуем за новыми.
-  String? _selectedId;
+  /// Журнал, открытый в «Истории»; null — список журналов по дням.
+  String? _historyId;
+
+  /// Открытая группа (0 — текущее подключение, 1 — соединения, 2 — история); null — плитки групп.
+  int? _group;
+
+  /// Выбранная группа в виде «Списком».
+  int _listGroup = 0;
+
+  /// Счётчик повторных нажатий на раздел в меню ([AppState.pageReselected]), который страница уже видела.
+  int? _seenReselect;
 
   @override
   Widget build(BuildContext context) {
@@ -118,102 +137,188 @@ class _LogsPageState extends State<LogsPage> {
       listenable: state.pageIndex == AppState.logsPage ? log : _idle,
       builder: (context, _) {
         final sessions = log.sessions;
-        final selected = sessions.where((s) => s.id == _selectedId).firstOrNull ?? sessions.lastOrNull;
-        if (selected != null && selected.lines == null) log.load(selected);
+        // «Текущее подключение» — идущий журнал, а без подключения — последний.
+        final current = sessions.lastOrNull;
+        final picked = sessions.where((s) => s.id == _historyId).firstOrNull;
+        if (current != null && current.lines == null) log.load(current);
+        if (picked != null && picked.lines == null) log.load(picked);
 
-        return Column(children: [
-          PageHeader(
-            'Логи',
-            subtitle: 'Журнал разбит по подключениям и хранится ${LogBuffer.keepDays} дней. '
-                'Под строками ядра — пояснения простыми словами',
-            actions: [
-              GhostButton(
-                label: 'Папка',
-                icon: Icons.folder_open_rounded,
-                onPressed: () => Process.run(AppPaths.explorer, [AppPaths.logDir.path]),
+        // Ушли в другой раздел меню или нажали «Логи» ещё раз — возвращаемся к плиткам, как в «Настройках».
+        final reselected = _seenReselect != null && _seenReselect != state.pageReselected;
+        _seenReselect = state.pageReselected;
+        if (state.pageIndex != AppState.logsPage || reselected) {
+          _group = null;
+          _historyId = null;
+        }
+
+        final listMode = state.settings.logsList;
+        final shown = listMode ? _listGroup : _group;
+        final groups = _groups(current, sessions);
+        final header = GroupHeader(
+          page: 'Логи',
+          backTooltip: 'Все логи',
+          group: !listMode && _group != null ? groups[_group!] : null,
+          hint: 'Журнал хранится ${LogBuffer.keepDays} дней. Под строками ядра — пояснения простыми словами',
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            GhostButton(
+              label: 'Папка',
+              icon: Icons.folder_open_rounded,
+              onPressed: () => Process.run(AppPaths.explorer, [AppPaths.logDir.path]),
+            ),
+            const SizedBox(width: 8),
+            // Builder: меню выбора появляется под самой кнопкой.
+            Builder(
+              builder: (context) => GhostButton(
+                label: 'Очистить историю',
+                icon: Icons.delete_sweep_rounded,
+                onPressed: sessions.any((s) => !s.live) ? () => _clearHistory(context, sessions) : null,
               ),
-              // Builder: меню выбора появляется под самой кнопкой.
-              Builder(
-                builder: (context) => GhostButton(
-                  label: 'Очистить историю',
-                  icon: Icons.delete_sweep_rounded,
-                  onPressed: sessions.any((s) => !s.live)
-                      ? () async {
-                          // Дни, за которые есть прошлые журналы, свежие сверху.
-                          final days = <DateTime>[];
-                          for (final s in sessions.reversed.where((s) => !s.live)) {
-                            final day = DateTime(s.start.year, s.start.month, s.start.day);
-                            if (!days.contains(day)) days.add(day);
-                          }
-                          // 0 — за всё время, дальше — номер дня в списке плюс один.
-                          final picked = await showAppMenu<int>(context, items: [
-                            const AppMenuItem(0, 'За всё время', icon: Icons.delete_sweep_rounded, danger: true),
-                            const AppMenuItem.divider(),
-                            for (final (i, day) in days.indexed) AppMenuItem(i + 1, _dayLabel(day)),
-                          ]);
-                          if (picked == null || !context.mounted) return;
-                          final day = picked == 0 ? null : days[picked - 1];
-                          final ok = day == null
-                              ? await confirm(context, 'Очистить историю?',
-                                  'Журналы прошлых подключений будут удалены. Текущий журнал останется.')
-                              : await confirm(context, 'Удалить журналы за ${_dayLabel(day).toLowerCase()}?',
-                                  // Текущий журнал начат сегодня — про него есть смысл говорить только тут.
-                                  _dayLabel(day) == 'Сегодня'
-                                      ? 'Все журналы за сегодня, кроме текущего, будут удалены.'
-                                      : 'Все журналы за этот день будут удалены.');
-                          if (!ok) return;
-                          setState(() => _selectedId = null);
-                          log.clearHistory(day: day);
-                        }
-                      : null,
+            ),
+          ]),
+          onBack: () => setState(() {
+            _group = null;
+            _historyId = null;
+          }),
+        );
+
+        final Widget body = switch (shown) {
+          null => ListView(primary: false, padding: const EdgeInsets.only(top: 2), children: [
+              GroupGrid(groups: groups, onOpen: (i) => setState(() => _group = i)),
+            ]),
+          0 || 1 when current == null => _padded(_card(_empty('Здесь пока пусто'))),
+          0 => _padded(_card(_view(state, current!, tabs: _LogTab.lines))),
+          1 => _padded(_card(_view(state, current!, tabs: const [_LogTab.connections]))),
+          _ => picked != null
+              ? _padded(_card(_view(state, picked, tabs: _LogTab.values, onBack: () => setState(() => _historyId = null))))
+              : _padded(_card(sessions.isEmpty
+                  ? _empty('Здесь пока пусто')
+                  : _SessionList(
+                      sessions: sessions,
+                      selected: null,
+                      onSelect: (s) => setState(() => _historyId = s.id),
+                    ))),
+        };
+
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          header,
+          Expanded(
+            child: GroupListLayout(
+              groups: listMode ? groups : null,
+              selected: _listGroup,
+              onSelect: (i) => setState(() {
+                _listGroup = i;
+                _historyId = null;
+              }),
+              // Плитки, страница группы и журнал из истории сменяют друг друга плавно, как в «Настройках»:
+              // старое гаснет, новое проявляется и чуть подъезжает.
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 320),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                layoutBuilder: (current, previous) =>
+                    Stack(fit: StackFit.expand, children: [...previous, if (current != null) current]),
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: CurvedAnimation(parent: anim, curve: const Interval(0.5, 1)),
+                  child: SlideTransition(
+                    position: Tween(
+                      begin: Offset(child.key == const ValueKey('grid') ? -0.03 : 0.03, 0),
+                      end: Offset.zero,
+                    ).animate(anim),
+                    child: child,
+                  ),
+                ),
+                child: KeyedSubtree(
+                  key: ValueKey(shown == null ? 'grid' : 'group$shown${shown == 2 ? '-${picked?.id}' : ''}'),
+                  child: body,
                 ),
               ),
-            ],
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
-              child: sessions.isEmpty
-                  ? _card(Center(child: Text('Здесь пока пусто', style: TextStyle(color: C.muted))))
-                  : LayoutBuilder(
-                      builder: (context, c) => Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                        SizedBox(
-                          width: c.maxWidth < 860 ? 250 : 310,
-                          child: _card(_SessionList(
-                            sessions: sessions,
-                            selected: selected,
-                            onSelect: (s) => setState(() => _selectedId = identical(s, sessions.last) ? null : s.id),
-                          )),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: _card(_SessionView(
-                            session: selected!,
-                            tab: _tab,
-                            onTab: (t) => setState(() => _tab = t),
-                            route: _route,
-                            onRoute: (r) => setState(() => _route = r),
-                            recent: _recent,
-                            onRecent: (v) => setState(() => _recent = v),
-                            level: _level,
-                            onLevel: (v) => setState(() => _level = v),
-                            open: _open,
-                            onToggle: (key) => setState(() => _open.remove(key) || _open.add(key)),
-                            onCopied: () => state.toast('Журнал скопирован'),
-                            onDelete: () {
-                              setState(() => _selectedId = null);
-                              log.remove(selected);
-                            },
-                          )),
-                        ),
-                      ]),
-                    ),
             ),
           ),
         ]);
       },
     );
   }
+
+  /// Плитки «Логов»: что сейчас в каждой группе — одной строкой.
+  List<PageGroup> _groups(LogSession? current, List<LogSession> sessions) {
+    final String now;
+    if (current == null) {
+      now = 'Журнала пока нет';
+    } else if (current.live) {
+      now = 'Идёт ${_span(DateTime.now().difference(current.start))}'
+          '${current.errors > 0 ? ' · ошибок: ${current.errors}' : ''}';
+    } else {
+      now = 'Последний: ${_dayLabel(current.start).toLowerCase()}, ${_clock(current.start)}';
+    }
+    final total = current?.connectionsTotal ?? 0;
+    final proxy = current?.connectionCounts[ConnRoute.proxy] ?? 0;
+    final past = sessions.where((s) => !s.live).length;
+    return [
+      PageGroup(Icons.receipt_long_rounded, 'Текущее подключение',
+          'Что происходит сейчас: события программы и вывод ядер с пояснениями', now,
+          alert: current != null && current.live && current.errors > 0 ? C.red : null),
+      PageGroup(Icons.swap_horiz_rounded, 'Соединения',
+          'Какая программа или сайт куда идёт: через VPN, напрямую или блокируется',
+          total == 0 ? 'Пока нет' : '$total ${plural(total, 'соединение', 'соединения', 'соединений')} · через VPN $proxy'),
+      PageGroup(Icons.history_rounded, 'История', 'Журналы прошлых подключений по дням. Хранятся ${LogBuffer.keepDays} дней',
+          past == 0 ? 'Пока пусто' : '$past ${plural(past, 'журнал', 'журнала', 'журналов')}'),
+    ];
+  }
+
+  /// Журнал с вкладками [tabs]. [onBack] — стрелка назад к списку журналов (в «Истории»).
+  Widget _view(AppState state, LogSession s, {required List<_LogTab> tabs, VoidCallback? onBack}) => _SessionView(
+        session: s,
+        tabs: tabs,
+        // Вкладка, которой в этой группе нет (например, «Соединения» в текущем подключении), — первая из своих.
+        tab: tabs.contains(_tab) ? _tab : tabs.first,
+        onTab: (t) => setState(() => _tab = t),
+        route: _route,
+        onRoute: (r) => setState(() => _route = r),
+        recent: _recent,
+        onRecent: (v) => setState(() => _recent = v),
+        level: _level,
+        onLevel: (v) => setState(() => _level = v),
+        open: _open,
+        onToggle: (key) => setState(() => _open.remove(key) || _open.add(key)),
+        onCopied: () => state.toast('Журнал скопирован'),
+        onBack: onBack,
+        onDelete: () {
+          setState(() => _historyId = null);
+          state.log.remove(s);
+        },
+      );
+
+  Future<void> _clearHistory(BuildContext context, List<LogSession> sessions) async {
+    // Дни, за которые есть прошлые журналы, свежие сверху.
+    final days = <DateTime>[];
+    for (final s in sessions.reversed.where((s) => !s.live)) {
+      final day = DateTime(s.start.year, s.start.month, s.start.day);
+      if (!days.contains(day)) days.add(day);
+    }
+    // 0 — за всё время, дальше — номер дня в списке плюс один.
+    final picked = await showAppMenu<int>(context, items: [
+      const AppMenuItem(0, 'За всё время', icon: Icons.delete_sweep_rounded, danger: true),
+      const AppMenuItem.divider(),
+      for (final (i, day) in days.indexed) AppMenuItem(i + 1, _dayLabel(day)),
+    ]);
+    if (picked == null || !context.mounted) return;
+    final day = picked == 0 ? null : days[picked - 1];
+    final ok = day == null
+        ? await confirm(context, 'Очистить историю?',
+            'Журналы прошлых подключений будут удалены. Текущий журнал останется.')
+        : await confirm(context, 'Удалить журналы за ${_dayLabel(day).toLowerCase()}?',
+            // Текущий журнал начат сегодня — про него есть смысл говорить только тут.
+            _dayLabel(day) == 'Сегодня'
+                ? 'Все журналы за сегодня, кроме текущего, будут удалены.'
+                : 'Все журналы за этот день будут удалены.');
+    if (!ok || !mounted) return;
+    setState(() => _historyId = null);
+    AppScope.read(this.context).log.clearHistory(day: day);
+  }
+
+  Widget _padded(Widget child) => Padding(padding: const EdgeInsets.fromLTRB(28, 0, 28, 28), child: child);
+
+  Widget _empty(String text) => Center(child: Text(text, style: TextStyle(color: C.muted)));
 
   Widget _card(Widget child) => Container(
         decoration: BoxDecoration(
@@ -518,6 +623,7 @@ class _Count extends StatelessWidget {
 class _SessionView extends StatelessWidget {
   const _SessionView({
     required this.session,
+    required this.tabs,
     required this.tab,
     required this.onTab,
     required this.route,
@@ -530,8 +636,12 @@ class _SessionView extends StatelessWidget {
     required this.onToggle,
     required this.onCopied,
     required this.onDelete,
+    this.onBack,
   });
   final LogSession session;
+
+  /// Вкладки этого вида; одна — переключателя нет.
+  final List<_LogTab> tabs;
   final _LogTab tab;
   final ValueChanged<_LogTab> onTab;
   final ConnRoute? route;
@@ -544,6 +654,9 @@ class _SessionView extends StatelessWidget {
   final ValueChanged<String> onToggle;
   final VoidCallback onCopied;
   final VoidCallback onDelete;
+
+  /// Назад к списку журналов (в «Истории»); null — стрелки нет.
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -570,6 +683,14 @@ class _SessionView extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.fromLTRB(18, 14, 10, 12),
         child: Row(children: [
+          if (onBack != null) ...[
+            IconButton(
+              tooltip: 'Ко всем журналам',
+              icon: Icon(Icons.arrow_back_rounded, size: 20, color: C.muted),
+              onPressed: onBack,
+            ),
+            const SizedBox(width: 4),
+          ],
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               FlagText(s.title,
@@ -604,25 +725,26 @@ class _SessionView extends StatelessWidget {
             ),
         ]),
       ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          // В узком окне пять вкладок не помещаются — переключатель слегка уменьшается.
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
+      if (tabs.length > 1)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+          child: Align(
             alignment: Alignment.centerLeft,
-            child: Segmented<_LogTab>(
-              value: tab,
-              items: {
-                for (final t in _LogTab.values)
-                  t: '${t.label}  ${t == _LogTab.connections ? s.connectionsTotal : (all ?? const <LogLine>[]).where((l) => t.matches(l.source)).length}',
-              },
-              onChanged: onTab,
+            // В узком окне пять вкладок не помещаются — переключатель слегка уменьшается.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Segmented<_LogTab>(
+                value: tab,
+                items: {
+                  for (final t in tabs)
+                    t: '${t.label}  ${t == _LogTab.connections ? s.connectionsTotal : (all ?? const <LogLine>[]).where((l) => t.matches(l.source)).length}',
+                },
+                onChanged: onTab,
+              ),
             ),
           ),
         ),
-      ),
       // Фильтр соединений по пути и по времени. В списке всего отрезка — только последние соединения.
       if (showConns && stored.isNotEmpty)
         Padding(

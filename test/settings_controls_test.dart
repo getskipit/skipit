@@ -233,13 +233,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(find.text('Цвет акцента'), findsOneWidget);
-    await tester.tap(find.text('Списком'));
+    await tester.tap(find.text('Списком').first);
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(state.settings.settingsList, isTrue);
     expect(find.text('Цвет акцента').hitTestable(), findsOneWidget);
-    await tester.tap(find.text('Плитки'));
+    await tester.tap(find.text('Плитки').first);
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }

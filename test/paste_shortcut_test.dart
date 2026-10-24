@@ -78,6 +78,8 @@ void main() {
     state.log.add('app', 'Подключено');
     await tester.tap(find.byIcon(Icons.receipt_long_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Текущее подключение'));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.textContaining('Подключено').last);
     await tester.pump(const Duration(milliseconds: 100));
     // В журнале (и в любом разделе, кроме главной) Ctrl+V ничего не добавляет.

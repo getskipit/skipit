@@ -185,13 +185,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byIcon(Icons.receipt_long_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Соединения'));
+    await tester.pump(const Duration(milliseconds: 400));
     // Пять обращений к одному сайту — в списке одна строка со счётчиком.
     for (final out in ['proxy', 'proxy-2', 'proxy', 'proxy-2', 'proxy']) {
       state.log.addConnection(ConnEntry(
           network: 'tcp', host: 'same.example', port: 443, inbound: 'http', outbound: out, route: ConnRoute.proxy));
     }
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.tap(find.text('Соединения  ${total + 5}'));
     await tester.pump(const Duration(milliseconds: 400));
 
     // По умолчанию — «Последняя минута»: числа на кнопках считаются по списку, пометки про 2000 нет.

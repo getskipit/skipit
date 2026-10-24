@@ -38,6 +38,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byIcon(Icons.receipt_long_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Текущее подключение'));
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.textContaining('Повторилась'), findsNothing);
     await tester.tap(find.text('×3'));
@@ -72,6 +74,8 @@ void main() {
     ));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byIcon(Icons.receipt_long_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Текущее подключение'));
     await tester.pump(const Duration(milliseconds: 400));
 
     // Внизу списка он следует за новыми строками.
@@ -142,6 +146,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byIcon(Icons.receipt_long_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Текущее подключение'));
+    await tester.pump(const Duration(milliseconds: 400));
 
     Rect row(int i) => tester.getRect(find.byKey(ValueKey<LogLine>(state.log.lines[i])));
     final from = row(7).bottomRight - const Offset(40, 3);
@@ -203,6 +209,8 @@ void main() {
     ));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byIcon(Icons.receipt_long_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Текущее подключение'));
     await tester.pump(const Duration(milliseconds: 400));
 
     Future<String?> copy() async {

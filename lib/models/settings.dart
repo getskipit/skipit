@@ -163,6 +163,9 @@ class AppSettings {
   /// Настройки одной страницей по группам, а не плитками.
   bool settingsList = false;
 
+  /// «Логи» списком групп слева, а не плитками.
+  bool logsList = false;
+
   /// Масштаб интерфейса в процентах: 80, 90 или 100.
   int uiScale = 100;
   static const uiScales = [80, 90, 100];
@@ -261,6 +264,7 @@ class AppSettings {
         'uiScale': uiScale,
         'navTop': navTop,
         'settingsList': settingsList,
+        'logsList': logsList,
         'homeHidden': homeHidden.toList(),
         'menuHidden': menuHidden.toList(),
         'subDetailed': subDetailed,
@@ -346,6 +350,7 @@ class AppSettings {
     s.adBlock = parseBool(j['adBlock'], s.adBlock);
     s.navTop = parseBool(j['navTop'], s.navTop);
     s.settingsList = parseBool(j['settingsList'], s.settingsList);
+    s.logsList = parseBool(j['logsList'], s.logsList);
     final uiScale = asInt(j['uiScale']);
     if (uiScales.contains(uiScale)) s.uiScale = uiScale!;
     final homeHidden = j['homeHidden'];

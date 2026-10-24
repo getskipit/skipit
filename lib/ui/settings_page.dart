@@ -15,6 +15,7 @@ import '../state/app_scope.dart';
 import '../state/app_state.dart';
 import '../version.dart';
 import 'app_icon.dart';
+import 'groups.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -373,6 +374,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   _group = _listGroup;
                 }
                 s.settingsList = v;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: 'Вид логов',
+            subtitle: s.logsList
+                ? 'Списком: слева группы, справа журнал выбранной'
+                : 'Плитки: сначала группы, у каждой своя страница',
+            trailing: Segmented<bool>(
+              value: s.logsList,
+              items: const {false: 'Плитки', true: 'Списком'},
+              onChanged: (v) {
+                s.logsList = v;
                 state.changed();
               },
             ),
@@ -925,6 +940,13 @@ class _SettingsPageState extends State<SettingsPage> {
       _scrollToTop();
     }
 
+    Widget headerFor(_Group? g) => GroupHeader(
+        page: 'Настройки',
+        backTooltip: 'Все настройки',
+        group: g,
+        hint: hint,
+        trailing: search,
+        onBack: () => openGroup(null));
     final Widget header;
     final List<Widget> body;
     // Вид «Списком»: слева группы, справа настройки выбранной (поиск и в нём ищет по всем группам).
@@ -937,7 +959,7 @@ class _SettingsPageState extends State<SettingsPage> {
           for (final sec in g.sections) _Section(sec.title.isEmpty ? g.title : '${g.title} · ${sec.title}', sec.children),
       ];
       final found = sections.any((s) => _found(s.title, s.children, query).isNotEmpty);
-      header = _SettingsHeader(group: null, hint: hint, search: search, onBack: () => openGroup(null));
+      header = headerFor(null);
       body = [
         ...sections,
         if (!found)
@@ -948,15 +970,15 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
       ];
     } else if (listMode) {
-      header = _SettingsHeader(group: null, hint: hint, search: search, onBack: () => openGroup(null));
+      header = headerFor(null);
       body = [if (groups[listGroup].banner != null) groups[listGroup].banner!, ...groups[listGroup].sections];
     } else if (_group != null) {
       final g = groups[_group!];
-      header = _SettingsHeader(group: g, hint: hint, search: search, onBack: () => openGroup(null));
+      header = headerFor(g);
       body = [if (g.banner != null) g.banner!, ...g.sections];
     } else {
-      header = _SettingsHeader(group: null, hint: hint, search: search, onBack: () => openGroup(null));
-      body = [_GroupGrid(groups: groups, onOpen: openGroup)];
+      header = headerFor(null);
+      body = [GroupGrid(groups: groups, onOpen: openGroup)];
     }
     return _SettingsQuery(
       query: query,
@@ -964,7 +986,7 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         header,
         Expanded(
-          child: _ListLayout(
+          child: GroupListLayout(
             groups: listMode ? groups : null,
             selected: listGroup,
             onSelect: (i) {
@@ -1014,331 +1036,13 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-/// Вид «Списком»: слева — группы настроек (как в «Параметрах» Windows), справа — [child] с настройками
-/// выбранной. Список групп не прокручивается вместе с настройками; в узком окне от него остаются значки.
-/// [groups] = null — обычный вид, [child] на всю ширину.
-class _ListLayout extends StatelessWidget {
-  const _ListLayout({required this.groups, required this.selected, required this.onSelect, required this.child});
-  final List<_Group>? groups;
-  final int selected;
-  final ValueChanged<int> onSelect;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final list = groups;
-    if (list == null) return child;
-    return LayoutBuilder(builder: (context, c) {
-      final wide = c.maxWidth >= 820;
-      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 2, 0, 0),
-          child: SizedBox(
-            width: wide ? 220 : 44,
-            child: Column(children: [
-              for (var i = 0; i < list.length; i++)
-                _GroupNavItem(
-                  group: list[i],
-                  selected: i == selected,
-                  showLabel: wide,
-                  onTap: () => onSelect(i),
-                ),
-            ]),
-          ),
-        ),
-        Expanded(child: child),
-      ]);
-    });
-  }
-}
-
-class _GroupNavItem extends StatelessWidget {
-  const _GroupNavItem({required this.group, required this.selected, required this.showLabel, required this.onTap});
-  final _Group group;
-  final bool selected;
-  final bool showLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Tooltip(
-          message: showLabel ? '' : group.title,
-          waitDuration: const Duration(milliseconds: 300),
-          child: Hover(
-            builder: (context, hovered) => GestureDetector(
-              onTap: onTap,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                height: 42,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(C.r(12)),
-                  color: selected
-                      ? C.orange.withValues(alpha: 0.14)
-                      : (hovered ? C.hover : Colors.transparent),
-                ),
-                child: Row(children: [
-                  Icon(group.icon, size: 20, color: selected || hovered ? C.orange : C.muted),
-                  if (showLabel) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(group.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: selected || hovered ? C.text : C.muted)),
-                    ),
-                    if (group.alert != null)
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(color: group.alert, shape: BoxShape.circle),
-                      ),
-                  ],
-                ]),
-              ),
-            ),
-          ),
-        ),
-      );
-}
-
 /// Группа настроек: плитка на первой странице «Настроек» и своя страница с разделами.
-class _Group {
-  const _Group(this.icon, this.title, this.description, this.summary, this.sections, {this.alert, this.banner});
-  final IconData icon;
-  final String title;
-
-  /// Что лежит в группе — описание на плитке.
-  final String description;
-
-  /// Коротко, что сейчас выбрано в группе, — подпись плитки.
-  final String summary;
+class _Group extends PageGroup {
+  const _Group(super.icon, super.title, super.description, super.summary, this.sections, {super.alert, this.banner});
   final List<_Section> sections;
-
-  /// Цвет отметки на плитке, если в группе есть что-то важное (доступно обновление, ядро не найдено).
-  final Color? alert;
 
   /// Плашка над настройками группы (в поиске не показывается).
   final Widget? banner;
-}
-
-/// Плитки групп: три в ряд, в узком окне — две.
-class _GroupGrid extends StatelessWidget {
-  const _GroupGrid({required this.groups, required this.onOpen});
-  final List<_Group> groups;
-  final ValueChanged<int> onOpen;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(28, 4, 28, 18),
-        child: LayoutBuilder(builder: (context, c) {
-          const gap = 14.0;
-          final columns = c.maxWidth >= 720 ? 3 : 2;
-          final width = ((c.maxWidth - gap * (columns - 1)) / columns).floorToDouble();
-          return Wrap(spacing: gap, runSpacing: gap, children: [
-            for (var i = 0; i < groups.length; i++)
-              SizedBox(width: width, child: _GroupTile(group: groups[i], onTap: () => onOpen(i))),
-          ]);
-        }),
-      );
-}
-
-class _GroupTile extends StatelessWidget {
-  const _GroupTile({required this.group, required this.onTap});
-  final _Group group;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Hover(
-        builder: (context, hovered) => GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            height: 172,
-            padding: const EdgeInsets.fromLTRB(18, 18, 14, 16),
-            decoration: BoxDecoration(
-              color: hovered ? Color.alphaBlend(C.hover, C.surface) : C.surface,
-              borderRadius: BorderRadius.circular(C.r(18)),
-              border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.6) : C.border),
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: C.orange.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(C.r(12)),
-                  ),
-                  child: Icon(group.icon, size: 22, color: C.orange),
-                ),
-                const Spacer(),
-                if (group.alert != null)
-                  Container(
-                    width: 9,
-                    height: 9,
-                    margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(color: group.alert, shape: BoxShape.circle),
-                  ),
-                Icon(Icons.chevron_right_rounded, color: hovered ? C.orange : C.muted),
-              ]),
-              const Spacer(),
-              Text(group.title, maxLines: 1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text(group.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: C.muted, fontSize: 12.5, height: 1.3)),
-              const SizedBox(height: 8),
-              // Что сейчас выбрано — одной строкой, акцентным цветом.
-              Text(group.summary,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: C.isDark ? C.orangeLight : C.orange, fontSize: 12, fontWeight: FontWeight.w600)),
-            ]),
-          ),
-        ),
-      );
-}
-
-/// Заголовок «Настроек» — один на плитки, страницы групп и поиск: высота и место поля поиска не меняются,
-/// поэтому при переходах ничего не прыгает. В группе слева плавно выезжает стрелка назад, а надпись
-/// «Настройки» с подписью сменяется на «Настройки» мелко над названием группы.
-class _SettingsHeader extends StatelessWidget {
-  const _SettingsHeader({required this.group, required this.hint, required this.search, required this.onBack});
-  final _Group? group;
-  final String hint;
-  final Widget search;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    final g = group;
-    final back = Padding(
-      padding: const EdgeInsets.only(right: 14),
-      child: Tooltip(
-        message: 'Все настройки',
-        child: Hover(
-          builder: (context, hovered) => GestureDetector(
-            onTap: onBack,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: hovered ? C.orange.withValues(alpha: 0.14) : C.surface2,
-                shape: BoxShape.circle,
-                border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.6) : C.border),
-              ),
-              child: Icon(Icons.arrow_back_rounded, size: 20, color: hovered ? C.orange : C.muted),
-            ),
-          ),
-        ),
-      ),
-    );
-    const big = TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, height: 1.2);
-    // «Настройки» плавно уменьшается из заголовка в надпись над группой (и обратно), а строка под ним —
-    // подпись страницы или название группы — выезжает снизу и проявляется; высота строк меняется плавно.
-    final title = Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // В группе надпись «Настройки» — тоже путь назад к плиткам, как стрелка.
-        Hover(
-          enabled: g != null,
-          builder: (context, hovered) => GestureDetector(
-            onTap: g == null ? null : onBack,
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              // На основе общего стиля: иначе у надписи пропал бы шрифт программы.
-              style: DefaultTextStyle.of(context).style.merge(g == null
-                  ? big.copyWith(color: C.text)
-                  : TextStyle(
-                      color: hovered ? C.orange : C.muted,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                      height: 1.2)),
-              child: const Text('Настройки', maxLines: 1),
-            ),
-          ),
-        ),
-        const SizedBox(height: 2),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          height: g == null ? 17 : 34,
-          clipBehavior: Clip.hardEdge,
-          decoration: const BoxDecoration(),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 260),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            layoutBuilder: (current, previous) =>
-                Stack(alignment: Alignment.topLeft, children: [...previous, if (current != null) current]),
-            // Старая строка гаснет за первую половину, новая выезжает и проявляется во второй — не накладываются.
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: CurvedAnimation(parent: anim, curve: const Interval(0.45, 1)),
-              child: SlideTransition(
-                position: Tween(begin: const Offset(0, 0.35), end: Offset.zero).animate(anim),
-                child: child,
-              ),
-            ),
-            child: g == null
-                ? Text(hint,
-                    key: const ValueKey('hint'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: C.muted, fontSize: 13, height: 1.3))
-                : Text(g.title, key: ValueKey(g.title), maxLines: 1, overflow: TextOverflow.ellipsis, style: big),
-          ),
-        ),
-      ],
-    );
-    final heading = SizedBox(
-      height: 58,
-      child: Row(children: [
-        // Место под стрелку растёт, а сама круглая кнопка не обрезается: она проявляется и подрастает
-        // из своего центра (обрезка по прямоугольнику показывала её «квадратом»).
-        TweenAnimationBuilder<double>(
-          tween: Tween(end: g == null ? 0 : 1),
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          child: back,
-          builder: (context, t, child) => t == 0
-              ? const SizedBox.shrink()
-              : SizedBox(
-                  width: 54 * t,
-                  height: 40,
-                  child: OverflowBox(
-                    alignment: Alignment.centerLeft,
-                    minWidth: 54,
-                    maxWidth: 54,
-                    child: Opacity(
-                      opacity: t,
-                      child: Transform.scale(scale: 0.7 + 0.3 * t, alignment: const Alignment(-0.26, 0), child: child),
-                    ),
-                  ),
-                ),
-        ),
-        Expanded(child: title),
-      ]),
-    );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 22, 28, 14),
-      child: LayoutBuilder(
-        builder: (context, c) => c.maxWidth >= 680
-            ? Row(children: [Expanded(child: heading), search])
-            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [heading, const SizedBox(height: 14), search]),
-      ),
-    );
-  }
 }
 
 /// Текст поиска по настройкам (строчными буквами; пустой — поиска нет) — для разделов страницы.
@@ -1363,6 +1067,7 @@ const _keywords = <String, String>{
   'Скругление углов': 'углы радиус скругление острые круглые оформление кастомизация',
   'Расположение меню': 'вёрстка верстка меню сверху слева сбоку панель навигация разделы',
   'Вид настроек': 'настройки плитки список списком одной страницей вёрстка верстка группы',
+  'Вид логов': 'логи журнал журналы плитки список списком вёрстка верстка группы',
   'На главной': 'главная экран скрыть спрятать показать скорость трафик режим маршрутизация таймер время страна',
   'Карточка подписки': 'подписка трафик срок карточка подробная компактная минимализм кастомизация',
   'Пункты меню': 'меню разделы скрыть спрятать убрать серверы маршрутизация проверка логи кастомизация',
