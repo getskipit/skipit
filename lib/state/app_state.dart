@@ -543,8 +543,8 @@ class AppState extends ChangeNotifier {
   DateTime? _lastHeal;
   var _healing = false;
 
-  /// За эту пропажу связи уже записали, что интернета нет и напрямую.
-  var _noInternetNoted = false;
+  /// За эту пропажу связи уже записали, почему подключение не перезапускается.
+  var _healSkipNoted = false;
 
   /// Страна, из которой сайты видят этот компьютер через VPN (код `fi`); null — ещё не узнали.
   String? exitCountry;
@@ -562,7 +562,7 @@ class AppState extends ChangeNotifier {
     exitCountry = null;
     _linkTimer = Timer(const Duration(seconds: 1), _checkLink);
     _linkDownSince = null;
-    _noInternetNoted = false;
+    _healSkipNoted = false;
   }
 
   void _stopLinkCheck() {
@@ -592,7 +592,7 @@ class AppState extends ChangeNotifier {
     if (ok) {
       _linkFails = 0;
       _linkDownSince = null;
-      _noInternetNoted = false;
+      _healSkipNoted = false;
       if (country != null) exitCountry = country;
       if (wasDown) {
         log.add('app', 'Связь через VPN восстановилась');
@@ -632,13 +632,29 @@ class AppState extends ChangeNotifier {
     if (!shouldHeal(downSince: since, now: DateTime.now(), lastHeal: _lastHeal)) return;
     _healing = true;
     try {
+      // Обе проверки сразу: при зависшем ядре вторая ждёт своего срока, и по очереди перезапуск
+      // откладывался бы ещё на десяток секунд.
+      final port = _checkPort;
+      final viaVpnFuture = port == null ? Future.value(false) : Net.reachable(XrayConfig.checkUrl2, port);
       final direct = await _directInternet();
+      final viaVpn = await viaVpnFuture;
       // Пока проверяли, связь могла вернуться, а подключение — смениться.
       if (!isConnected || _linkDownSince != since) return;
       if (!direct) {
-        if (!_noInternetNoted) {
-          _noInternetNoted = true;
+        if (!_healSkipNoted) {
+          _healSkipNoted = true;
           log.add('app', 'Связи нет и напрямую: пропал сам интернет, перезапуск VPN не поможет — жду, когда он вернётся');
+        }
+        return;
+      }
+      // Не отвечает только сайт проверки (например, выход сервера не пускает к Cloudflare), а через VPN
+      // всё идёт — рабочее подключение не трогаем.
+      if (viaVpn) {
+        // Следующая такая проверка — не раньше чем через 5 минут, а не на каждой неудачной проверке связи.
+        _lastHeal = DateTime.now();
+        if (!_healSkipNoted) {
+          _healSkipNoted = true;
+          log.add('app', 'Сайт проверки связи не отвечает, но другой сайт через VPN открывается — подключение не перезапускаю');
         }
         return;
       }
@@ -647,7 +663,12 @@ class AppState extends ChangeNotifier {
           'а напрямую интернет есть — перезапускаю подключение');
       // Kill Switch на время перезапуска не снимается — мимо VPN ничего не уходит.
       await disconnect(keepError: true, hold: true, hung: true);
-      await _refreshSelectedSubscription();
+      final token = ++_crashRetry;
+      // С Kill Switch подписку в паузе не обновляем: он не выпускает запросы DNS мимо VPN, и обновление
+      // просто ждало бы своего срока, продлевая время без интернета.
+      if (!KillSwitch.active) await _refreshSelectedSubscription();
+      // Пока обновлялась подписка, человек мог сам подключиться или открыть интернет без VPN.
+      if (token != _crashRetry || isBusy || isConnected) return;
       await connect();
       _notify(isConnected ? 'Связи через сервер не было — VPN переподключён' : 'Не удалось переподключиться. $_withoutVpn');
     } finally {
@@ -660,7 +681,8 @@ class AppState extends ChangeNotifier {
   Future<void> _refreshSelectedSubscription() async {
     final server = selectedServer;
     final sub = subscriptions.where((s) => s.id == server?.subscriptionId).firstOrNull;
-    if (server == null || sub == null) return;
+    // Только подписки по https: мимо VPN ссылка с ключом по http ушла бы интернет-провайдеру открытым текстом.
+    if (server == null || sub == null || directSubscriptionHost(sub.url) == null) return;
     final before = server.link;
     try {
       await updateSubscription(sub, silent: true).timeout(const Duration(seconds: 15));
@@ -2578,13 +2600,21 @@ class AppState extends ChangeNotifier {
       if (delay != null) {
         _notify('VPN оборвался, переподключаюсь');
         final token = ++_crashRetry;
+        final waiting = 'Ядро VPN неожиданно закрылось — переподключусь через ${delay.inSeconds} с';
         if (delay > const Duration(seconds: 5)) {
-          lastError = 'Ядро VPN неожиданно закрылось — переподключусь через ${delay.inSeconds} с';
+          lastError = waiting;
           notifyListeners();
         }
         await Future.delayed(delay);
-        // Пока ждали, человек мог сам подключиться или открыть интернет без VPN — тогда не вмешиваемся.
-        if (token != _crashRetry || isBusy || isConnected) return;
+        // Пока ждали, человек мог сам подключиться или открыть интернет без VPN — тогда не вмешиваемся,
+        // а обещание переподключиться убираем.
+        if (token != _crashRetry || isBusy || isConnected) {
+          if (lastError == waiting) {
+            lastError = null;
+            notifyListeners();
+          }
+          return;
+        }
         await connect();
         if (isConnected) {
           _notify('VPN снова подключён');

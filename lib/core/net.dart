@@ -112,6 +112,23 @@ class Net {
     }
   }
 
+  /// Отвечает ли [url] через локальный HTTP-вход ядра [proxyPort] (любой ответ сервера, хоть с ошибкой).
+  static Future<bool> reachable(String url, int proxyPort) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 6)
+      ..findProxy = (_) => 'PROXY 127.0.0.1:$proxyPort';
+    try {
+      final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 6));
+      final res = await req.close().timeout(const Duration(seconds: 6));
+      await res.drain<void>().timeout(const Duration(seconds: 3));
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   /// [onProgress] — сколько байт уже получено и сколько всего (-1, если сервер не сообщил размер).
   static Future<void> download(String url, String path,
       {int? proxyPort, void Function(int received, int total)? onProgress}) async {

@@ -38,6 +38,7 @@ void main() {
     final rules = checkRules(cfg);
     expect(rules.first['domain'], [
       'full:${XrayConfig.checkHost}',
+      'full:${XrayConfig.checkHost2}',
       'full:speedtest.selectel.ru',
       'full:proof.ovh.net',
       'full:fra-de-ping.vultr.com',

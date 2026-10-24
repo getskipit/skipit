@@ -987,6 +987,11 @@ class XrayConfig {
   /// Адрес, по которому программа проверяет связь через VPN и узнаёт страну выхода.
   static const checkHost = 'www.cloudflare.com';
 
+  /// Второй сайт проверки (не Cloudflare): прежде чем перезапускать подключение из-за «Нет связи», программа
+  /// убеждается, что не отвечает не только [checkHost]. Тот же адрес проверяет связь Android.
+  static const checkHost2 = 'www.gstatic.com';
+  static const checkUrl2 = 'https://$checkHost2/generate_204';
+
   /// Серверы замера скорости (см. SpeedTest): через тот же вход, чтобы замер наверняка шёл через VPN.
   static List<String> get speedHosts => [for (final s in SpeedTest.servers) s.host];
 
@@ -1017,7 +1022,7 @@ class XrayConfig {
     routing['rules'] = [
       {
         'inboundTag': inbound,
-        'domain': ['full:$checkHost', for (final h in speedHosts) 'full:$h'],
+        'domain': ['full:$checkHost', 'full:$checkHost2', for (final h in speedHosts) 'full:$h'],
         ...vpn,
       },
       {'inboundTag': inbound, 'outboundTag': block},
