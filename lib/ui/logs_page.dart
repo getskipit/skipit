@@ -242,8 +242,13 @@ class _LogsPageState extends State<LogsPage> {
   /// Плитки «Логов»: что сейчас в каждой группе — одной строкой.
   List<PageGroup> _groups(LogSession? current, List<LogSession> sessions) {
     final String now;
+    // Журнал «Без подключения» (программа открыта, VPN не подключён) — не подключение: ошибки в нём
+    // (например, обновления подписок) на плитке не считаются сбоем.
+    final connected = current != null && current.live && current.connection;
     if (current == null) {
       now = 'Журнала пока нет';
+    } else if (current.live && !current.connection) {
+      now = 'Не подключено';
     } else if (current.live) {
       now = 'Идёт ${_span(DateTime.now().difference(current.start))}'
           '${current.errors > 0 ? ' · ошибок: ${current.errors}' : ''}';
@@ -256,7 +261,7 @@ class _LogsPageState extends State<LogsPage> {
     return [
       PageGroup(Icons.receipt_long_rounded, 'Текущее подключение',
           'Что происходит сейчас: события программы и вывод ядер с пояснениями', now,
-          alert: current != null && current.live && current.errors > 0 ? C.red : null),
+          alert: connected && current.errors > 0 ? C.red : null),
       PageGroup(Icons.swap_horiz_rounded, 'Соединения',
           'Какая программа или сайт куда идёт: через VPN, напрямую или блокируется',
           total == 0 ? 'Пока нет' : '$total ${plural(total, 'соединение', 'соединения', 'соединений')} · через VPN $proxy'),
