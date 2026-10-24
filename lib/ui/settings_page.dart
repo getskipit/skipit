@@ -99,6 +99,23 @@ class _SettingsPageState extends State<SettingsPage> {
     scroll.jumpTo(0);
   }
 
+  /// Плитки при возврате из группы плавно поднимаются снизу на своё место — как в «Логах», где их поднимает
+  /// сворачивающийся переключатель групп. Уходящие плитки (открыли группу) не сдвигаются. Сдвиг идёт, пока плитки
+  /// проявляются (вторая половина перехода): раньше они ещё прозрачные, и движения не было бы видно.
+  static Widget _rise(bool tiles, Animation<double> anim, Widget child) => !tiles
+      ? child
+      : AnimatedBuilder(
+          animation: anim,
+          builder: (context, child) {
+            final up = Curves.easeOutCubic.transform(((anim.value - 0.5) / 0.5).clamp(0.0, 1.0));
+            return Transform.translate(
+              offset: Offset(0, anim.status == AnimationStatus.reverse ? 0 : 54 * (1 - up)),
+              child: child,
+            );
+          },
+          child: child,
+        );
+
   @override
   void dispose() {
     _outShift.dispose();
@@ -1003,7 +1020,7 @@ class _SettingsPageState extends State<SettingsPage> {
           layoutBuilder: (current, previous) =>
               Stack(alignment: Alignment.topCenter, children: [...previous, if (current != null) current]),
           // Без наложения: старая страница гаснет за первую половину, новая проявляется во второй.
-          transitionBuilder: (child, anim) => FadeTransition(
+          transitionBuilder: (child, anim) => _rise(child.key == const ValueKey('grid'), anim, FadeTransition(
             opacity: CurvedAnimation(parent: anim, curve: const Interval(0.5, 1)),
             child: SlideTransition(
               position: Tween(
@@ -1018,7 +1035,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: child,
               ),
             ),
-          ),
+          )),
           child: KeyedSubtree(
             key: _shownKey = ValueKey(query.isNotEmpty
                 ? 'search'

@@ -919,31 +919,33 @@ class _UdpCard extends StatelessWidget {
   }
 }
 
+/// Собирает «Отчёт для разбора» в папку, которую выберет человек, — после предупреждения, что в нём лежит.
+/// Зовётся из «Проверки» и из «Логов».
+Future<void> makeReportWithDialog(BuildContext context, AppState state) async {
+  final ok = await confirm(
+      context,
+      'Собрать отчёт?',
+      'В журнале есть адреса сайтов, которые открывались при этом подключении '
+          '(на уровнях логов info и debug — все). Ключи, ссылки подписок и адреса VPN-серверов '
+          'в отчёт не попадают. Пока VPN подключён, записываются адреса DNS-серверов, к которым '
+          'ходит программа: по ним можно примерно понять, из какой вы страны. '
+          'Отправляйте файл только тому, кому доверяете.',
+      ok: 'Собрать');
+  if (!ok) return;
+  final dir = await WinSys.pickFolder();
+  if (dir == null) return;
+  try {
+    final path = await state.makeReport(dir);
+    state.toast('Отчёт сохранён', kind: ToastKind.success, detail: path.split(r'\').last);
+  } catch (e) {
+    state.toast('Не удалось сохранить отчёт: ${describeNetError(e)}');
+  }
+}
+
 /// Отчёт для разбора: версия, настройки и журнал последнего подключения одним файлом.
 class _ReportCard extends StatelessWidget {
   const _ReportCard({required this.state});
   final AppState state;
-
-  Future<void> _make(BuildContext context) async {
-    final ok = await confirm(
-        context,
-        'Собрать отчёт?',
-        'В журнале есть адреса сайтов, которые открывались при этом подключении '
-            '(на уровнях логов info и debug — все). Ключи, ссылки подписок и адреса VPN-серверов '
-            'в отчёт не попадают. Пока VPN подключён, записываются адреса DNS-серверов, к которым '
-            'ходит программа: по ним можно примерно понять, из какой вы страны. '
-            'Отправляйте файл только тому, кому доверяете.',
-        ok: 'Собрать');
-    if (!ok) return;
-    final dir = await WinSys.pickFolder();
-    if (dir == null) return;
-    try {
-      final path = await state.makeReport(dir);
-      state.toast('Отчёт сохранён', kind: ToastKind.success, detail: path.split(r'\').last);
-    } catch (e) {
-      state.toast('Не удалось сохранить отчёт: ${describeNetError(e)}');
-    }
-  }
 
   @override
   Widget build(BuildContext context) => Panel(
@@ -956,7 +958,8 @@ class _ReportCard extends StatelessWidget {
                     'и адресов VPN-серверов. Его можно отправить тому, кто помогает разобраться'),
           ),
           const SizedBox(width: 12),
-          GhostButton(label: 'Собрать', icon: Icons.summarize_rounded, onPressed: () => _make(context)),
+          GhostButton(
+              label: 'Собрать', icon: Icons.summarize_rounded, onPressed: () => makeReportWithDialog(context, state)),
         ]),
       );
 }

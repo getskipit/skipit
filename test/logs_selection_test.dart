@@ -301,4 +301,55 @@ void main() {
       expect(position.maxScrollExtent, extent, reason: 'длина списка изменилась на шаге $i');
     }
   });
+  testWidgets('поиск сужает журнал, «Только с ошибками» оставляет в «Истории» журналы с ошибками', (tester) async {
+    C.use(Palette.dark);
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState();
+    state.routingProfiles.addAll([RoutingProfile.global(), ...RoutingProfile.templates()]);
+    final now = DateTime.now();
+    state.log.sessions
+      ..add(LogSession(id: 'test-ok', start: now.subtract(const Duration(minutes: 2)), connection: true, title: 'Чистый'))
+      ..add(LogSession(id: 'test-bad', start: now.subtract(const Duration(minutes: 1)), connection: true, title: 'Сбойный')
+        ..errors = 2);
+    state.log.startSession('Сервер');
+    state.log.add('app', 'alpha one');
+    state.log.add('app', 'beta two');
+
+    await tester.pumpWidget(AppScope(
+      state: state,
+      child: MaterialApp(theme: buildTheme(), home: const Shell()),
+    ));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byIcon(Icons.receipt_long_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Текущее подключение'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.textContaining('alpha one'), findsOneWidget);
+
+    final search = find.byWidgetPredicate((w) => w is TextField && w.decoration?.hintText == 'Поиск');
+    await tester.enterText(search, 'BETA');
+    await tester.pump();
+    expect(find.textContaining('alpha one'), findsNothing);
+    expect(find.textContaining('beta two'), findsOneWidget);
+    await tester.enterText(search, 'нет-такого');
+    await tester.pump();
+    expect(find.text('Ничего не найдено по «нет-такого»'), findsOneWidget);
+
+    // «История»: с отбором остаётся только журнал с ошибками.
+    await tester.tap(find.text('История').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Чистый', findRichText: true), findsOneWidget);
+    await tester.tap(find.textContaining('Только с ошибками', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Чистый', findRichText: true), findsNothing);
+    expect(find.text('Сбойный', findRichText: true), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
+  });
 }
