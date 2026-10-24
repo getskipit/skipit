@@ -2251,10 +2251,9 @@ class AppState extends ChangeNotifier {
         }
 
         await waitTun(ignoreOtherVpn ? 5 : 4);
-        // IPv6 включён в SkipIt, но выключен в самой Windows: адаптеру нельзя дать IPv6-адрес, и sing-box
-        // сразу завершается. Поднимаем адаптер без IPv6 — уходить мимо VPN по IPv6 тогда нечему.
+        // IPv6 выключен в самой Windows: адаптеру нельзя дать IPv6-адрес, и sing-box сразу завершается.
+        // Поднимаем адаптер без IPv6 — уходить мимо VPN по IPv6 тогда нечему.
         if (!_singbox.running &&
-            session.ipv6 &&
             log.lines.skip(logStart).any((l) => l.source == 'sing-box' && l.text.contains('set ipv6 address'))) {
           log.add('app', 'Предупреждение: в Windows выключен IPv6 — адаптер VPN поднят без него');
           await buildTun(adapterIpv6: false);

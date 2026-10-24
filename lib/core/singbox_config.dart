@@ -136,11 +136,12 @@ class SingboxConfig {
           'type': 'tun',
           'tag': 'tun-in',
           'interface_name': AppPaths.appName,
-          // IPv6 выключен — у адаптера нет IPv6-адреса, как и у адаптера Xray. Мимо VPN IPv6 при этом не
-          // уходит: без IPv6-адреса sing-box со strict_route сам закрывает весь IPv6 фильтром Windows
-          // («block ipv6»). С адресом не запускался у тех, у кого IPv6 выключен в самой Windows
-          // («set ipv6 address: Element not found»); adapterIpv6: false — повтор для включённого IPv6.
-          'address': ['${XrayConfig.tunV4}/30', if (ipv6 && adapterIpv6) '${XrayConfig.tunV6}/126'],
+          // IPv6-адрес у адаптера есть всегда: иначе IPv6-трафик шёл бы мимо туннеля (утечка IP),
+          // если у интернет-провайдера пользователя есть IPv6. При выключенном IPv6 он блокируется правилом ниже.
+          // adapterIpv6: false — повтор, когда IPv6 выключен в самой Windows и адрес не ставится («set ipv6
+          // address: Element not found»). Тогда весь IPv6 закрывает фильтр самого sing-box («block ipv6»,
+          // strict_route без IPv6-адреса) — вместе с ::1, поэтому только как повтор, а не всегда.
+          'address': ['${XrayConfig.tunV4}/30', if (adapterIpv6) '${XrayConfig.tunV6}/126'],
           'mtu': settings.mtu,
           'auto_route': true,
           'strict_route': true,
