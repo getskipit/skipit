@@ -379,10 +379,15 @@ class _SessionListState extends State<_SessionList> {
           ],
         ),
     ];
-    // Свой контроллер плавной прокрутки: основной контроллер страницы занят списком строк справа.
+    // Свой контроллер плавной прокрутки: основной контроллер страницы занят журналом.
+    // Список строится целиком, а не по мере прокрутки: дни бывают по одному журналу и по сорок, и длину
+    // недостроенного списка пришлось бы прикидывать — ползунок прыгал и менял размер на ходу.
     return SmoothScroll(
-      builder: (context, controller) =>
-          ListView(controller: controller, padding: const EdgeInsets.only(bottom: 10), children: rows),
+      builder: (context, controller) => SingleChildScrollView(
+        controller: controller,
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows),
+      ),
     );
   }
 }

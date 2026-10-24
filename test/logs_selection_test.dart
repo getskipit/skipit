@@ -251,4 +251,54 @@ void main() {
     expect(await copy(), isNull);
     state.log.endSession();
   });
+
+  testWidgets('ползунок «Истории» не прыгает: длина списка не меняется при прокрутке', (tester) async {
+    C.use(Palette.dark);
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState();
+    state.routingProfiles.addAll([RoutingProfile.global(), ...RoutingProfile.templates()]);
+    // Дни очень разного размера, как в настоящей истории за пять дней.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day, 0, 30);
+    var n = 0;
+    for (final (daysAgo, count) in [(4, 30), (3, 1), (2, 41), (1, 1), (0, 2)]) {
+      for (var i = 0; i < count; i++) {
+        final start = today.subtract(Duration(days: daysAgo)).add(Duration(minutes: i));
+        state.log.sessions.add(LogSession(id: 'test-${n++}', start: start, connection: true, title: 'Сервер $n'));
+      }
+    }
+
+    await tester.pumpWidget(AppScope(
+      state: state,
+      child: MaterialApp(theme: buildTheme(), home: const Shell()),
+    ));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byIcon(Icons.receipt_long_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('История'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    // Прошлые дни свёрнуты — разворачиваем все, начиная с нижних: пока верхние свёрнуты, заголовки видны.
+    for (final daysAgo in [4, 3, 2, 1]) {
+      final day = today.subtract(Duration(days: daysAgo));
+      await tester.tap(daysAgo == 1 ? find.text('ВЧЕРА') : find.textContaining(RegExp('^${day.day} ')).last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    final position = tester.state<ScrollableState>(
+        find.ancestor(of: find.text('Сервер 75'), matching: find.byType(Scrollable)).first).position;
+    final extent = position.maxScrollExtent;
+    // 75 журналов по 56 точек и пять заголовков дней.
+    expect(extent, greaterThan(75 * 56.0 - 800));
+    for (var i = 1; i <= 10; i++) {
+      position.jumpTo(extent * i / 10);
+      await tester.pump();
+      expect(position.maxScrollExtent, extent, reason: 'длина списка изменилась на шаге $i');
+    }
+  });
 }
