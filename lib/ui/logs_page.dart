@@ -124,6 +124,9 @@ class _LogsPageState extends State<LogsPage> {
   /// Выбранная группа в виде «Списком».
   int _listGroup = 0;
 
+  /// Последняя открытая группа в виде «Плитки»: переключатель групп показывает её, пока сворачивается.
+  int _lastGroup = 0;
+
   /// Счётчик повторных нажатий на раздел в меню ([AppState.pageReselected]), который страница уже видела.
   int? _seenReselect;
 
@@ -152,6 +155,7 @@ class _LogsPageState extends State<LogsPage> {
         }
 
         final listMode = state.settings.logsList;
+        if (_group != null) _lastGroup = _group!;
         final shown = listMode ? _listGroup : _group;
         final groups = _groups(current, sessions);
         final header = GroupHeader(
@@ -201,6 +205,24 @@ class _LogsPageState extends State<LogsPage> {
 
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           header,
+          // На странице группы — переключатель между группами: в соседнюю не надо возвращаться к плиткам.
+          Reveal(
+            open: !listMode && _group != null,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(28, 0, 28, 14),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Segmented<int>(
+                  value: _lastGroup,
+                  items: {for (var i = 0; i < groups.length; i++) i: groups[i].title},
+                  onChanged: (i) => setState(() {
+                    _group = i;
+                    _historyId = null;
+                  }),
+                ),
+              ),
+            ),
+          ),
           Expanded(
             child: GroupListLayout(
               groups: listMode ? groups : null,
