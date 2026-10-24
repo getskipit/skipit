@@ -2207,17 +2207,23 @@ class AppState extends ChangeNotifier {
         final random = Random.secure();
         tunStatsPort = port;
         tunStatsSecret = [for (var i = 0; i < 16; i++) random.nextInt(256).toRadixString(16).padLeft(2, '0')].join();
-        final tun = SingboxConfig.build(
-            settings: session,
-            routing: routing,
-            apps: appRules,
-            serverDomains: domains,
-            statsPort: tunStatsPort,
-            statsSecret: tunStatsSecret,
-            xrayDnsPort: dnsPort);
-        final tunText = const JsonEncoder.withIndent('  ').convert(tun);
-        await _debugCopy(AppPaths.tunConfigFile, tunText);
-        _reportSingbox = tun;
+        late String tunText;
+        Future<void> buildTun({bool adapterIpv6 = true}) async {
+          final tun = SingboxConfig.build(
+              settings: session,
+              routing: routing,
+              apps: appRules,
+              serverDomains: domains,
+              statsPort: tunStatsPort,
+              statsSecret: tunStatsSecret,
+              xrayDnsPort: dnsPort,
+              adapterIpv6: adapterIpv6);
+          tunText = const JsonEncoder.withIndent('  ').convert(tun);
+          await _debugCopy(AppPaths.tunConfigFile, tunText);
+          _reportSingbox = tun;
+        }
+
+        await buildTun();
         var logStart = log.lines.length;
         _checkCancel();
         Future<void> startSingbox() async {
@@ -2245,6 +2251,18 @@ class AppState extends ChangeNotifier {
         }
 
         await waitTun(ignoreOtherVpn ? 5 : 4);
+        // IPv6 включён в SkipIt, но выключен в самой Windows: адаптеру нельзя дать IPv6-адрес, и sing-box
+        // сразу завершается. Поднимаем адаптер без IPv6 — уходить мимо VPN по IPv6 тогда нечему.
+        if (!_singbox.running &&
+            session.ipv6 &&
+            log.lines.skip(logStart).any((l) => l.source == 'sing-box' && l.text.contains('set ipv6 address'))) {
+          log.add('app', 'Предупреждение: в Windows выключен IPv6 — адаптер VPN поднят без него');
+          await buildTun(adapterIpv6: false);
+          _checkCancel();
+          logStart = log.lines.length;
+          await startSingbox();
+          await waitTun(ignoreOtherVpn ? 5 : 4);
+        }
         // Как и у Xray: Windows иногда зависает на создании адаптера, а повторная попытка проходит сразу.
         // sing-box сам сообщает о зависании только через 10 секунд — перезапускаем его раньше, один раз.
         if (!ignoreOtherVpn && _singbox.running && !WinSys.ownTunActive()) {

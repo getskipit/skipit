@@ -52,8 +52,11 @@ void main() {
     final settings = AppSettings()..ipv6 = false;
     final cfg = SingboxConfig.build(
         settings: settings, routing: RoutingProfile.global(), apps: AppRules(), serverDomains: const []);
+    // Без IPv6-адреса у адаптера (как у Xray): иначе sing-box не запускался, если IPv6 выключен в Windows.
+    // Мимо VPN IPv6 не уходит — со strict_route sing-box без IPv6-адреса закрывает его фильтром Windows.
     final tun = (cfg['inbounds'] as List).single as Map;
-    expect((tun['address'] as List).any((a) => '$a'.contains(':')), isTrue);
+    expect(tun['address'], ['172.19.0.1/30']);
+    expect(tun['strict_route'], isTrue);
     final rules = (cfg['route'] as Map)['rules'] as List;
     expect(rules.any((r) => r['ip_version'] == 6 && r['action'] == 'reject'), isTrue);
     // Пакет на собственные адреса адаптера отклоняется, а не уходит «напрямую» и обратно в адаптер по кругу;
@@ -72,6 +75,15 @@ void main() {
     final on = SingboxConfig.build(
         settings: settings, routing: RoutingProfile.global(), apps: AppRules(), serverDomains: const []);
     expect(((on['route'] as Map)['rules'] as List).any((r) => r['ip_version'] == 6), isFalse);
+    expect(((on['inbounds'] as List).single as Map)['address'], ['172.19.0.1/30', 'fdfe:dcba:9876::1/126']);
+    // Повтор, когда IPv6 выключен в самой Windows: адаптер без IPv6 даже при включённом IPv6 в SkipIt.
+    final retry = SingboxConfig.build(
+        settings: settings,
+        routing: RoutingProfile.global(),
+        apps: AppRules(),
+        serverDomains: const [],
+        adapterIpv6: false);
+    expect(((retry['inbounds'] as List).single as Map)['address'], ['172.19.0.1/30']);
 
     // Проверка самим ядром sing-box, если оно лежит в проекте.
     final singbox = File('core/skipit-sing-box.exe');
