@@ -646,7 +646,7 @@ class AppState extends ChangeNotifier {
       log.add('app', 'Предупреждение: связи через сервер нет ${DateTime.now().difference(since).inSeconds} с, '
           'а напрямую интернет есть — перезапускаю подключение');
       // Kill Switch на время перезапуска не снимается — мимо VPN ничего не уходит.
-      await disconnect(keepError: true, hold: true);
+      await disconnect(keepError: true, hold: true, hung: true);
       await _refreshSelectedSubscription();
       await connect();
       _notify(isConnected ? 'Связи через сервер не было — VPN переподключён' : 'Не удалось переподключиться. $_withoutVpn');
@@ -2496,7 +2496,9 @@ class AppState extends ChangeNotifier {
   }
 
   /// [hold] — не снимать Kill Switch: отключение не по воле пользователя (сбой ядра, переподключение).
-  Future<void> disconnect({bool keepError = false, bool hold = false}) async {
+  /// [hung] — ядро зависло (самовосстановление): итог трафика у него не спрашиваем — оно не ответит,
+  /// и отключение ждало бы ~3 с.
+  Future<void> disconnect({bool keepError = false, bool hold = false, bool hung = false}) async {
     if (status == ConnStatus.disconnected) return;
     // Подключение ещё идёт — отменяем его; всё уберёт сам connect().
     if (status == ConnStatus.connecting) return cancelConnect();
@@ -2504,7 +2506,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     // Последний замер, пока ядра ещё работают: итог сеанса остаётся в журнале.
     _statsTimer?.cancel();
-    if (_xray.running) await _pollStats?.call();
+    if (_xray.running && !hung) await _pollStats?.call();
     final summary = trafficSummary(stats);
     await _teardown();
     if (!hold) await KillSwitch.release();
