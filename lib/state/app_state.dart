@@ -2797,9 +2797,11 @@ class AppState extends ChangeNotifier {
     updateProgress = null;
     notifyListeners();
     try {
-      // Программа обычно работает с правами администратора и запускает установщик с ними же. Поэтому
-      // качаем его не во временную папку пользователя (там файл успела бы подменить любая программа),
-      // а в папку рядом с программой: в Program Files писать могут только администраторы.
+      // Запускать установщик из временной папки пользователя опасно: между сверкой и запуском его успела бы
+      // подменить любая программа. Поэтому запускаем копию в папке рядом с программой — в Program Files
+      // писать могут только администраторы. С правами качаем туда сразу, без прав копию делает и сверяет
+      // служба SkipIt. Только если нет ни того, ни другого, установщик сверяется во временной папке.
+      final viaService = !isAdmin && serviceVersion == ServiceClient.protocol;
       var dir = Directory.systemTemp;
       if (isAdmin) {
         try {
@@ -2819,6 +2821,17 @@ class AppState extends ChangeNotifier {
       });
       // Запускаем только то, что совпало с контрольной суммой из релиза.
       final expected = await Updates.expectedSha256(release, proxyPort: _updateProxy);
+      if (viaService && expected != null) {
+        try {
+          final staged = await ServiceClient.stageUpdate(path, expected);
+          log.add('update', 'Скачан установщик ${release.version}, служба SkipIt сверила его копию: контрольная сумма совпала');
+          return staged;
+        } finally {
+          try {
+            await File(path).delete();
+          } catch (_) {}
+        }
+      }
       await Updates.verify(path, expected);
       log.add('update', 'Скачан установщик ${release.version}, контрольная сумма совпала');
       return path;

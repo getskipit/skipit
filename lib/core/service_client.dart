@@ -17,9 +17,9 @@ class ServiceClient {
   static String get name => AppPaths.isDev ? 'SkipItDev' : 'SkipIt';
 
   /// Версия протокола, с которой умеет работать программа.
-  static const protocol = 'skipit-service 3';
+  static const protocol = 'skipit-service 4';
 
-  /// Версия протокола службы («skipit-service 3») или null, если служба не установлена, не запущена
+  /// Версия протокола службы («skipit-service 4») или null, если служба не установлена, не запущена
   /// или не отвечает.
   static Future<String?> hello({String? serviceName}) {
     final target = serviceName ?? name;
@@ -28,6 +28,16 @@ class ServiceClient {
 
   /// Остановить ядро, которое запустила служба.
   static Future<void> stop(int pid) => command('stop $pid');
+
+  /// Служба копирует скачанный установщик [path] в папку программы (туда без прав не записать) и сверяет
+  /// копию с контрольной суммой [sha256]. Возвращает путь к копии; ошибка — с причиной от службы.
+  static Future<String> stageUpdate(String path, String sha256) async {
+    final reply = await command('update stage\n$path\n$sha256').timeout(const Duration(minutes: 2));
+    if (reply != null && reply.startsWith('ok ')) return reply.substring(3);
+    throw Exception(reply != null && reply.startsWith('error ')
+        ? 'Служба SkipIt не приняла установщик: ${reply.substring(6)}'
+        : 'Служба SkipIt не ответила');
+  }
 
   /// Одна команда службе — её ответ или null.
   static Future<String?> command(String request) {

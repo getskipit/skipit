@@ -38,8 +38,13 @@
 //   «ks status»                      → «<1|0 — фильтры стоят> <фильтров в Windows>».
 //   «cleanup own» / «cleanup stale»  → «ok»: убрать свои зависшие адаптеры или неработающие чужие
 //       (Wintun). Скрипт зашит в службу, программа присылает только команду.
+//   «update stage\n<путь к скачанному установщику>\n<SHA-256>» → «ok <путь к копии>» или «error <текст>»:
+//       копия установщика в папке update рядом со службой (в Program Files без прав не записать) и сверка
+//       её контрольной суммы. Программа запускает уже эту копию — подменить файл между сверкой и запуском
+//       нельзя. Скачанный файл служба открывает от имени программы (с её правами, не с правами системы).
 
 #include <windows.h>
+#include <bcrypt.h>
 #include <sddl.h>
 
 #include "kill_switch.h"
@@ -58,7 +63,7 @@
 namespace {
 
 // Версия протокола между программой и службой: растёт, когда меняются команды.
-constexpr char kProtocol[] = "skipit-service 3";
+constexpr char kProtocol[] = "skipit-service 4";
 constexpr size_t kMaxMessage = 16 * 1024 * 1024;
 
 std::wstring g_name;
@@ -852,6 +857,129 @@ void Cleanup(HANDLE pipe, bool own) {
   PipeWrite(pipe, "ok");
 }
 
+// ---------- обновление программы ----------
+
+std::string Utf8(const std::wstring& w) {
+  if (w.empty()) return "";
+  const int n = ::WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()), nullptr, 0, nullptr, nullptr);
+  if (n <= 0) return "";
+  std::string s(static_cast<size_t>(n), '\0');
+  ::WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()), s.data(), n, nullptr, nullptr);
+  return s;
+}
+
+// Имя установщика из релиза: SkipIt-Setup-Windows-<версия>.exe, в версии — буквы, цифры, точки и дефисы.
+bool InstallerNameOk(const std::wstring& name) {
+  const std::wstring prefix = L"SkipIt-Setup-Windows-", suffix = L".exe";
+  if (name.size() <= prefix.size() + suffix.size() || name.size() > 100) return false;
+  if (name.compare(0, prefix.size(), prefix) != 0 || name.compare(name.size() - suffix.size(), suffix.size(), suffix) != 0) {
+    return false;
+  }
+  for (size_t i = prefix.size(); i < name.size() - suffix.size(); i++) {
+    const wchar_t c = name[i];
+    if (!((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') || c == L'.' || c == L'-')) {
+      return false;
+    }
+  }
+  return name.find(L"..") == std::wstring::npos;
+}
+
+void ClearDir(const std::wstring& dir) {
+  WIN32_FIND_DATAW fd;
+  HANDLE find = ::FindFirstFileW((dir + L"\\*").c_str(), &fd);
+  if (find == INVALID_HANDLE_VALUE) return;
+  do {
+    if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) ::DeleteFileW((dir + L"\\" + fd.cFileName).c_str());
+  } while (::FindNextFileW(find, &fd));
+  ::FindClose(find);
+}
+
+// Копирует [src] в [dst] и считает SHA-256 копии (строчными шестнадцатеричными); пусто — сбой.
+std::string CopyWithSha256(HANDLE src, HANDLE dst) {
+  constexpr ULONGLONG kMaxSize = 512ull * 1024 * 1024;
+  BCRYPT_ALG_HANDLE alg = nullptr;
+  BCRYPT_HASH_HANDLE hash = nullptr;
+  if (!BCRYPT_SUCCESS(::BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0))) return "";
+  std::string result;
+  if (BCRYPT_SUCCESS(::BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0))) {
+    std::vector<unsigned char> buf(1024 * 1024);
+    ULONGLONG total = 0;
+    bool ok = true;
+    while (ok) {
+      DWORD n = 0;
+      if (!::ReadFile(src, buf.data(), static_cast<DWORD>(buf.size()), &n, nullptr)) ok = false;
+      if (!ok || n == 0) break;
+      total += n;
+      DWORD written = 0;
+      ok = total <= kMaxSize && ::WriteFile(dst, buf.data(), n, &written, nullptr) && written == n &&
+           BCRYPT_SUCCESS(::BCryptHashData(hash, buf.data(), n, 0));
+    }
+    unsigned char digest[32];
+    if (ok && total > 0 && BCRYPT_SUCCESS(::BCryptFinishHash(hash, digest, sizeof(digest), 0))) {
+      static const char hex[] = "0123456789abcdef";
+      for (unsigned char b : digest) {
+        result += hex[b >> 4];
+        result += hex[b & 15];
+      }
+    }
+    ::BCryptDestroyHash(hash);
+  }
+  ::BCryptCloseAlgorithmProvider(alg, 0);
+  return result;
+}
+
+void StageUpdate(HANDLE pipe, const std::string& request) {
+  // «update stage\n<путь>\n<sha256>»
+  const size_t a = request.find('\n');
+  const size_t b = a == std::string::npos ? a : request.find('\n', a + 1);
+  if (b == std::string::npos) {
+    PipeWrite(pipe, "error неверная команда");
+    return;
+  }
+  const std::wstring src = Wide(request.substr(a + 1, b - a - 1));
+  std::string expected = request.substr(b + 1);
+  std::transform(expected.begin(), expected.end(), expected.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const bool hex_ok = expected.size() == 64 &&
+                      std::all_of(expected.begin(), expected.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); });
+  const size_t slash = src.find_last_of(L"\\/");
+  const std::wstring name = slash == std::wstring::npos ? L"" : src.substr(slash + 1);
+  if (!hex_ok || !InstallerNameOk(name)) {
+    PipeWrite(pipe, "error неверная команда");
+    return;
+  }
+  // Файл открываем с правами программы: служба не должна читать за неё то, что ей самой недоступно.
+  if (!::ImpersonateNamedPipeClient(pipe)) {
+    PipeWrite(pipe, "error не удалось открыть файл");
+    return;
+  }
+  HANDLE in = ::CreateFileW(src.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                            FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+  ::RevertToSelf();
+  if (in == INVALID_HANDLE_VALUE) {
+    PipeWrite(pipe, "error не удалось открыть файл");
+    return;
+  }
+  const std::wstring dir = g_dir + L"\\update";
+  ::CreateDirectoryW(dir.c_str(), nullptr);
+  ClearDir(dir);
+  const std::wstring dst = dir + L"\\" + name;
+  HANDLE out = ::CreateFileW(dst.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (out == INVALID_HANDLE_VALUE) {
+    ::CloseHandle(in);
+    PipeWrite(pipe, "error не удалось записать копию");
+    return;
+  }
+  const std::string actual = CopyWithSha256(in, out);
+  ::CloseHandle(in);
+  ::CloseHandle(out);
+  if (actual != expected) {
+    ::DeleteFileW(dst.c_str());
+    PipeWrite(pipe, actual.empty() ? "error не удалось скопировать файл" : "error контрольная сумма не совпала");
+    return;
+  }
+  PipeWrite(pipe, "ok " + Utf8(dst));
+}
+
 void Serve(HANDLE pipe) {
   const std::wstring client = ClientPath(pipe);
   if (client.empty() || _wcsicmp(client.c_str(), g_client.c_str()) != 0) return;
@@ -873,6 +1001,8 @@ void Serve(HANDLE pipe) {
       KsStatus(pipe);
     } else if (request == "cleanup own" || request == "cleanup stale") {
       Cleanup(pipe, request == "cleanup own");
+    } else if (request.rfind("update stage\n", 0) == 0) {
+      StageUpdate(pipe, request);
     } else if (!PipeWrite(pipe, "error неизвестная команда")) {
       return;
     }
