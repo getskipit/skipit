@@ -9,6 +9,7 @@
 #include "kill_switch.h"
 #include "net_watch.h"
 #include "resource.h"
+#include "screen_image.h"
 #include "utils.h"
 
 namespace {
@@ -494,6 +495,19 @@ void FlutterWindow::HandleTrayCall(
     }
     SetCustomIcon(images);
     result->Success();
+  } else if (method == "captureScreen" || method == "clipboardImage") {
+    // Картинка для поиска QR-кода: {w, h, gray}; null — снять не удалось или в буфере нет картинки.
+    GrayImage image;
+    const bool ok = method == "captureScreen" ? CaptureScreen(GetHandle(), image) : ClipboardImage(GetHandle(), image);
+    if (!ok) {
+      result->Success();
+      return;
+    }
+    flutter::EncodableMap map;
+    map[flutter::EncodableValue("w")] = flutter::EncodableValue(image.width);
+    map[flutter::EncodableValue("h")] = flutter::EncodableValue(image.height);
+    map[flutter::EncodableValue("gray")] = flutter::EncodableValue(std::move(image.pixels));
+    result->Success(flutter::EncodableValue(std::move(map)));
   } else if (method == "show") {
     ShowFromTray();
     result->Success();

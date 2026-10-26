@@ -15,6 +15,7 @@ import '../state/app_scope.dart';
 import '../state/app_state.dart';
 import 'app_menu.dart';
 import 'flag_text.dart';
+import 'qr_ui.dart';
 import 'shell.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
@@ -166,6 +167,8 @@ class _ServersPanelState extends State<ServersPanel> {
         items: [
           const AppMenuItem('add', 'Добавить подписку', icon: Icons.add_rounded),
           const AppMenuItem('paste', 'Вставить из буфера', icon: Icons.content_paste_rounded, hint: 'Ctrl+V'),
+          const AppMenuItem('qr-screen', 'Сканировать QR-код с экрана', icon: Icons.qr_code_scanner_rounded),
+          const AppMenuItem('qr-file', 'QR-код из картинки…', icon: Icons.image_outlined),
           const AppMenuItem.divider(),
           const AppMenuItem('update', 'Обновить все подписки', icon: Icons.sync_rounded),
           const AppMenuItem.divider(),
@@ -183,6 +186,10 @@ class _ServersPanelState extends State<ServersPanel> {
               _add(context);
             case 'paste':
               importFromClipboard(context);
+            case 'qr-screen':
+              importQrFromScreen(context);
+            case 'qr-file':
+              importQrFromFile(context);
             case 'update':
               state.updateAllSubscriptions();
             case final String sort when sort.startsWith('sort-'):
@@ -670,6 +677,7 @@ class _GroupCardState extends State<_GroupCard> {
                           icon: sub.hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded),
                       const AppMenuItem('edit', 'Изменить', icon: Icons.edit_rounded),
                       const AppMenuItem('copy', 'Скопировать ссылку', icon: Icons.link_rounded),
+                      const AppMenuItem('qr', 'Показать QR-код', icon: Icons.qr_code_rounded),
                       const AppMenuItem.divider(),
                       const AppMenuItem('delete', 'Удалить подписку', icon: Icons.delete_outline_rounded, danger: true),
                     ],
@@ -690,6 +698,10 @@ class _GroupCardState extends State<_GroupCard> {
                         case 'copy':
                           await Clipboard.setData(ClipboardData(text: sub.url));
                           state.toast('Ссылка скопирована');
+                        case 'qr':
+                          if (context.mounted) {
+                            await showQrDialog(context, title: sub.displayName, text: sub.url, subscription: true);
+                          }
                         case 'delete':
                           if (context.mounted &&
                               await confirm(context, 'Удалить подписку?', 'Все её серверы тоже будут удалены.')) {
@@ -953,6 +965,8 @@ class _ServerRow extends StatelessWidget {
       const AppMenuItem('ping', 'Проверить задержку (пинг)', icon: Icons.speed_rounded),
       const AppMenuItem('udp', 'Проверить UDP (игры, звонки)', icon: Icons.sports_esports_rounded),
       const AppMenuItem('json', 'Показать JSON', icon: Icons.data_object_rounded),
+      // У сервера из JSON-конфига ссылки нет — переносить на телефон нечего.
+      if (!server.isJson) const AppMenuItem('qr', 'Показать QR-код', icon: Icons.qr_code_rounded),
       AppMenuItem('hide', server.hidden ? 'Показывать на главной' : 'Скрыть с главной',
           icon: server.hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded),
       if (server.subscriptionId == null) ...const [
@@ -968,6 +982,8 @@ class _ServerRow extends StatelessWidget {
         await state.checkUdp([server]);
       case 'json':
         await _showJson(context, state);
+      case 'qr':
+        await showQrDialog(context, title: server.name, text: server.link);
       case 'hide':
         state.setServerHidden(server, !server.hidden);
         if (server.hidden) state.toast('Сервер скрыт с главной', detail: 'Вернуть его можно в разделе «Серверы»');

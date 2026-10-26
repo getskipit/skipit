@@ -11,6 +11,7 @@ add_executable(${BINARY_NAME} WIN32
   "kill_switch.cpp"
   "main.cpp"
   "net_watch.cpp"
+  "screen_image.cpp"
   "tray_menu.cpp"
   "utils.cpp"
   "win32_window.cpp"

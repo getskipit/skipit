@@ -13,6 +13,7 @@ import '../state/app_state.dart';
 import '../version.dart';
 import 'check_page.dart';
 import 'home_page.dart';
+import 'qr_ui.dart';
 import 'logs_page.dart';
 import 'routing_hub_page.dart';
 import 'servers_panel.dart';
@@ -209,6 +210,9 @@ Future<void> importFromClipboard(BuildContext context) async {
   final text = data?.text?.trim() ?? '';
   if (!context.mounted) return;
   if (text.isEmpty) {
+    // В буфере может быть картинка с QR-кодом (скриншот).
+    if (await importQrFromClipboardImage(context)) return;
+    if (!context.mounted) return;
     AppScope.read(context).toast('Буфер обмена пуст');
     return;
   }

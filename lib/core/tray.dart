@@ -40,6 +40,22 @@ class Tray {
     });
   }
 
+  /// Снимок всех мониторов (окно SkipIt на это время прячется) в оттенках серого; null — снять не удалось.
+  static Future<({Uint8List gray, int w, int h})?> captureScreen() => _image('captureScreen');
+
+  /// Картинка из буфера обмена в оттенках серого; null — картинки там нет.
+  static Future<({Uint8List gray, int w, int h})?> clipboardImage() => _image('clipboardImage');
+
+  static Future<({Uint8List gray, int w, int h})?> _image(String method) async {
+    try {
+      final r = await _channel.invokeMethod<Map<Object?, Object?>>(method);
+      if (r == null) return null;
+      return (gray: r['gray'] as Uint8List, w: r['w'] as int, h: r['h'] as int);
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   static Future<void> _call(String method, [Object? args]) async {
     try {
       await _channel.invokeMethod<void>(method, args);
