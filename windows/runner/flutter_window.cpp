@@ -7,6 +7,7 @@
 
 #include "flutter/generated_plugin_registrant.h"
 #include "kill_switch.h"
+#include "net_watch.h"
 #include "resource.h"
 #include "utils.h"
 
@@ -17,6 +18,10 @@ constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT kQuitMessage = WM_APP + 2;
 // Выбран пункт меню значка в трее (wParam — команда).
 constexpr UINT kTrayMenuCommand = WM_APP + 3;
+// Сменилась сеть (net_watch.cpp). Уведомления идут пачками — в Dart уходит одно, через 2 с после последнего.
+constexpr UINT kNetChangeMessage = WM_APP + 4;
+constexpr UINT_PTR kNetChangeTimer = 1;
+constexpr UINT kNetChangeDelayMs = 2000;
 constexpr UINT kCmdOpen = 1;
 constexpr UINT kCmdToggle = 2;
 constexpr UINT kCmdExit = 3;
@@ -90,6 +95,7 @@ bool FlutterWindow::OnCreate() {
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
         HandleKillSwitchCall(call, std::move(result));
       });
+  NetWatchStart(GetHandle(), kNetChangeMessage);
 
   // При автозапуске с Windows окно не показываем — программа сразу живёт в трее.
   const bool start_hidden = wcsstr(GetCommandLineW(), L"--autostart") != nullptr;
@@ -111,6 +117,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  NetWatchStop();
   RemoveTrayIcon();
   if (icon_small_) DestroyIcon(icon_small_);
   if (icon_big_) DestroyIcon(icon_big_);
@@ -600,6 +607,20 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
           break;
       }
       return 0;
+    case kNetChangeMessage:
+      SetTimer(hwnd, kNetChangeTimer, kNetChangeDelayMs, nullptr);
+      return 0;
+    case WM_TIMER:
+      if (wparam != kNetChangeTimer) break;
+      KillTimer(hwnd, kNetChangeTimer);
+      if (tray_channel_) tray_channel_->InvokeMethod("network", std::make_unique<flutter::EncodableValue>(false));
+      return 0;
+    case WM_POWERBROADCAST:
+      // Компьютер проснулся: соединение ядра с сервером, скорее всего, оборвалось — Dart проверит связь.
+      if (wparam == PBT_APMRESUMEAUTOMATIC && tray_channel_) {
+        tray_channel_->InvokeMethod("network", std::make_unique<flutter::EncodableValue>(true));
+      }
+      break;
     case kQuitMessage:
       SavePlacement();
       DestroyWindow(hwnd);

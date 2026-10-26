@@ -9,7 +9,7 @@ class Tray {
 
   /// [onToggle] — пункт «Подключить/Отключить», [onExit] — «Выход».
   /// [onMode], [onCore] и [onServer] — выбор режима, ядра TUN и сервера в меню значка
-  /// (приходит номер пункта).
+  /// (приходит номер пункта). [onNetwork] — компьютер проснулся ([resume] — true) или сменилась сеть.
   static void init({
     required Future<void> Function() onToggle,
     required Future<void> Function() onExit,
@@ -17,6 +17,7 @@ class Tray {
     required Future<void> Function(int index) onCore,
     required Future<void> Function(int index) onServer,
     required Future<void> Function() onKillSwitch,
+    required void Function(bool resume) onNetwork,
   }) {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
@@ -32,6 +33,8 @@ class Tray {
           await onServer(call.arguments as int);
         case 'killSwitch':
           await onKillSwitch();
+        case 'network':
+          onNetwork(call.arguments == true);
       }
       return null;
     });

@@ -609,17 +609,37 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     // После неудачи перепроверяем быстрее: и чтобы не тревожить зря, и чтобы скорее снять тревогу.
     _linkTimer?.cancel();
-    _linkTimer = Timer(Duration(seconds: ok ? 30 : 3), _checkLink);
+    _linkTimer = Timer(Duration(seconds: ok ? 15 : 3), _checkLink);
     if (!ok) unawaited(_healIfStuck());
+  }
+
+  /// Когда компьютер в последний раз проснулся или сменилась сеть (сообщает оболочка на C++); null — не было.
+  DateTime? _netChangedAt;
+
+  /// Компьютер проснулся или сменилась сеть (Wi-Fi, кабель, новый адрес): соединение ядра с сервером, скорее
+  /// всего, оборвалось. Связь проверяем сразу, не дожидаясь очередной проверки, а если её нет — перезапускаем
+  /// подключение без обычных 20 с ожидания. Первые 15 с после подключения не считаются: сеть тогда меняет
+  /// сам адаптер VPN.
+  void onNetworkChanged({required bool resume}) {
+    Pinger.forgetSources();
+    final since = connectedAt;
+    if (!isConnected || since == null || DateTime.now().difference(since) < const Duration(seconds: 15)) return;
+    _netChangedAt = DateTime.now();
+    if (resume) log.add('app', 'Компьютер проснулся — проверяю связь через VPN');
+    _linkTimer?.cancel();
+    unawaited(_checkLink());
   }
 
   /// Сколько связи через сервер нет, прежде чем подключение перезапускается само.
   static const healAfter = Duration(seconds: 20);
 
-  /// Перезапускать ли подключение из-за «Нет связи»: связи нет дольше [healAfter], и с прошлого такого
-  /// перезапуска прошло не меньше 5 минут (если он не помог, повторы лишь дёргали бы сеть).
-  static bool shouldHeal({required DateTime downSince, required DateTime now, DateTime? lastHeal}) =>
-      now.difference(downSince) >= healAfter &&
+  /// Перезапускать ли подключение из-за «Нет связи»: связи нет дольше [healAfter] (или меньше минуты назад
+  /// компьютер проснулся либо сменилась сеть — [netChangedAt]), и с прошлого такого перезапуска прошло
+  /// не меньше 5 минут (если он не помог, повторы лишь дёргали бы сеть).
+  static bool shouldHeal(
+          {required DateTime downSince, required DateTime now, DateTime? lastHeal, DateTime? netChangedAt}) =>
+      (now.difference(downSince) >= healAfter ||
+          (netChangedAt != null && now.difference(netChangedAt) <= const Duration(minutes: 1))) &&
       (lastHeal == null || now.difference(lastHeal) >= const Duration(minutes: 5));
 
   /// Ядро живо, но связи через сервер нет, а напрямую интернет есть: соединение ядра с сервером зависло
@@ -629,7 +649,9 @@ class AppState extends ChangeNotifier {
   Future<void> _healIfStuck() async {
     final since = _linkDownSince;
     if (!settings.autoReconnect || _healing || since == null || !isConnected) return;
-    if (!shouldHeal(downSince: since, now: DateTime.now(), lastHeal: _lastHeal)) return;
+    if (!shouldHeal(downSince: since, now: DateTime.now(), lastHeal: _lastHeal, netChangedAt: _netChangedAt)) {
+      return;
+    }
     _healing = true;
     try {
       // Обе проверки сразу: при зависшем ядре вторая ждёт своего срока, и по очереди перезапуск
@@ -2581,8 +2603,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// Ядро завершилось само. Сначала сразу отключаемся — иначе TUN продолжает перехватывать трафик
-  /// и отправлять его в пустоту, и у пользователя пропадает интернет. Переподключаемся не больше
-  /// одного раза за 5 минут и только если ядро успело нормально поработать: частые падения
+  /// и отправлять его в пустоту, и у пользователя пропадает интернет. Переподключаемся с растущей паузой
+  /// ([crashRetryDelay]) и только если ядро успело нормально поработать: частые падения
   /// обычно значат, что его закрывает другая программа, и повторы лишь дёргают сеть.
   void _onCoreCrash(int code) {
     if (status != ConnStatus.connected) return;
@@ -2591,7 +2613,7 @@ class AppState extends ChangeNotifier {
     _crashTimes
       ..add(now)
       ..removeWhere((t) => now.difference(t) > const Duration(minutes: 10));
-    final delay = settings.autoReconnect ? crashRetryDelay(_crashTimes.length) : null;
+    final delay = settings.autoReconnect ? crashRetryDelay(_crashTimes.length, uptime: uptime) : null;
     log.add('app', 'Ядро завершилось (код $code) через ${uptime.inSeconds} с работы'
         '${delay != null ? ', переподключаюсь через ${delay.inSeconds} с' : ''}');
     unawaited(() async {
@@ -2632,12 +2654,16 @@ class AppState extends ChangeNotifier {
 
   /// Пауза перед повтором после [attempt]-го падения ядра за 10 минут: 3 с, 30 с, 2 мин. После четвёртого —
   /// null, не повторяем: так часто ядро обычно закрывает другая программа, и повторы лишь дёргают сеть.
-  static Duration? crashRetryDelay(int attempt) => switch (attempt) {
-        1 => const Duration(seconds: 3),
-        2 => const Duration(seconds: 30),
-        3 => const Duration(minutes: 2),
-        _ => null,
-      };
+  /// Не повторяем и тогда, когда ядро проработало меньше 30 с ([uptime]): оно падает на этом подключении
+  /// (сломанный конфиг, его закрывает другая программа), и повтор упал бы так же.
+  static Duration? crashRetryDelay(int attempt, {required Duration uptime}) => uptime < const Duration(seconds: 30)
+      ? null
+      : switch (attempt) {
+          1 => const Duration(seconds: 3),
+          2 => const Duration(seconds: 30),
+          3 => const Duration(minutes: 2),
+          _ => null,
+        };
 
   /// Меняется, когда человек сам подключается или открывает интернет без VPN: отложенный повтор после
   /// падения ядра тогда отменяется.

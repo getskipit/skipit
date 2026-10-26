@@ -149,6 +149,7 @@ Future<void> main(List<String> rawArgs) async {
       }
     },
     onKillSwitch: () => state.setKillSwitch(!state.settings.killSwitch),
+    onNetwork: (resume) => state.onNetworkChanged(resume: resume),
     onServer: (index) async {
       if (index < 0 || index >= trayServers.length) return;
       try {
