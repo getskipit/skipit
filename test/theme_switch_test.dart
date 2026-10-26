@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/paths.dart';
+import 'package:skipit/l10n/l10n.dart';
 import 'package:skipit/main.dart';
 import 'package:skipit/models/routing.dart';
 import 'package:skipit/models/settings.dart';
@@ -50,5 +52,45 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(background(), Palette.dark.bg);
     C.use(Palette.dark);
+  });
+
+  testWidgets('смена языка: снимок прежнего окна плавно тает, с «Меньше анимаций» — сразу', (tester) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(() => lang = Lang.ru);
+
+    final state = AppState()..settings.language = 'ru';
+    state.routingProfiles.add(RoutingProfile.global());
+    await tester.pumpWidget(SkipItApp(state: state));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byIcon(Icons.tune_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Настройки'), findsWidgets);
+
+    double shotOpacity() => tester
+        .widget<FadeTransition>(find.ancestor(of: find.byKey(const ValueKey('lang-shot')), matching: find.byType(FadeTransition)).first)
+        .opacity
+        .value;
+
+    state.settings.language = 'en';
+    state.openPage(state.pageIndex);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('lang-shot')), findsOneWidget);
+    expect(find.text('Settings'), findsWidgets);
+    await tester.pump(const Duration(milliseconds: 130));
+    expect(shotOpacity(), inExclusiveRange(0.0, 1.0));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byKey(const ValueKey('lang-shot')), findsNothing);
+
+    state.settings
+      ..reduceMotion = true
+      ..language = 'ru';
+    state.openPage(state.pageIndex);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('lang-shot')), findsNothing);
+    expect(find.text('Настройки'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    timeDilation = 1;
   });
 }

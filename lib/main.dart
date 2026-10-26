@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'dart:ui' show AppExitResponse, lerpDouble;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -248,7 +250,31 @@ class SkipItApp extends StatefulWidget {
   State<SkipItApp> createState() => _SkipItAppState();
 }
 
-class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, TickerProviderStateMixin {
+  /// Смена языка: снимок окна до смены плавно тает поверх уже переведённого окна — без него все надписи
+  /// и ширины кнопок менялись за один кадр. Снимок делается с [_windowKey].
+  final _windowKey = GlobalKey();
+  ui.Image? _langShot;
+  late final _langFade = AnimationController(vsync: this, duration: const Duration(milliseconds: 260))
+    ..addStatusListener((s) {
+      if (s != AnimationStatus.completed) return;
+      setState(() {
+        _langShot?.dispose();
+        _langShot = null;
+      });
+    });
+
+  /// Снимок окна для плавной смены языка; null — снять нельзя (окно ещё не нарисовано).
+  ui.Image? _snapshot() {
+    final boundary = _windowKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary || !boundary.hasSize) return null;
+    try {
+      return boundary.toImageSync(pixelRatio: View.of(context).devicePixelRatio);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Плавная смена скругления углов: всё окно меняет углы разом, а не часть сразу, а часть — догоняя.
   late final _corners = AnimationController(vsync: this, duration: const Duration(milliseconds: 260))
     ..addListener(_stepCorners);
@@ -327,6 +353,14 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Sing
     if (identical(p, _palette) && l == lang) return;
     void apply() {
       if (!mounted) return;
+      if (l != lang && !widget.state.settings.reduceMotion) {
+        final shot = _snapshot();
+        if (shot != null) {
+          _langShot?.dispose();
+          _langShot = shot;
+          _langFade.forward(from: 0);
+        }
+      }
       lang = l;
       final from = (_live ?? _palette).corners;
       setState(() => _palette = p);
@@ -379,6 +413,8 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Sing
     WidgetsBinding.instance.removeObserver(this);
     widget.state.removeListener(_syncTheme);
     _corners.dispose();
+    _langFade.dispose();
+    _langShot?.dispose();
     _lifecycle.dispose();
     super.dispose();
   }
@@ -399,7 +435,16 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Sing
         // Свои цвета окна (C) меняются сразу — тема Flutter тоже, иначе её цвет текста 200 мс догонял бы
         // фон и названия строк на середине перехода сливались с ним.
         themeAnimationDuration: Duration.zero,
-        builder: (context, child) => _UiScale(child: child!),
+        builder: (context, child) => Stack(fit: StackFit.expand, children: [
+          RepaintBoundary(key: _windowKey, child: _UiScale(child: child!)),
+          if (_langShot != null)
+            IgnorePointer(
+              child: FadeTransition(
+                opacity: ReverseAnimation(CurvedAnimation(parent: _langFade, curve: Curves.easeInOut)),
+                child: RawImage(key: const ValueKey('lang-shot'), image: _langShot, fit: BoxFit.fill),
+              ),
+            ),
+        ]),
         home: const Shell(),
       ),
     );
