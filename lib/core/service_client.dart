@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'paths.dart';
+import '../l10n/l10n.dart';
 
 /// Связь со службой SkipIt (windows\service\service.cpp) по именованному каналу.
 ///
@@ -26,6 +27,17 @@ class ServiceClient {
     return Isolate.run(() => _request(target, 'hello'));
   }
 
+  /// Постоянные ответы службы об ошибках (windows\service\service.cpp) — служба пишет по-русски, а на
+  /// экран они идут на языке интерфейса. Причины из проверки конфига и Kill Switch остаются как есть.
+  static const _reasons = {
+    'неверная команда', 'неизвестное ядро', 'неверная папка гео-баз', 'не удалось создать канал ядра',
+    'неверный адрес адаптера', 'нет папки Windows', 'не удалось открыть файл', 'не удалось записать копию',
+    'контрольная сумма не совпала', 'неизвестная команда',
+  };
+
+  /// Причина отказа службы на языке интерфейса.
+  static String reason(String text) => _reasons.contains(text) ? tr(text) : text;
+
   /// Остановить ядро, которое запустила служба.
   static Future<void> stop(int pid) => command('stop $pid');
 
@@ -35,8 +47,8 @@ class ServiceClient {
     final reply = await command('update stage\n$path\n$sha256').timeout(const Duration(minutes: 2));
     if (reply != null && reply.startsWith('ok ')) return reply.substring(3);
     throw Exception(reply != null && reply.startsWith('error ')
-        ? 'Служба SkipIt не приняла установщик: ${reply.substring(6)}'
-        : 'Служба SkipIt не ответила');
+        ? tr('Служба SkipIt не приняла установщик: {0}', [reason(reply.substring(6))])
+        : tr('Служба SkipIt не ответила'));
   }
 
   /// Одна команда службе — её ответ или null.
@@ -133,7 +145,7 @@ class ServiceCore {
         case 'started':
           started.complete(msg[1] as int);
         case 'error':
-          if (!started.isCompleted) started.completeError(ServiceException(msg[1] as String));
+          if (!started.isCompleted) started.completeError(ServiceException(ServiceClient.reason(msg[1] as String)));
           port.close();
         case 'o':
           onOutput(msg[1] as Uint8List);
@@ -141,7 +153,7 @@ class ServiceCore {
           finish(msg[1] as int);
         case 'gone':
           if (!started.isCompleted) {
-            started.completeError(ServiceException('служба SkipIt не отвечает'));
+            started.completeError(ServiceException(tr('служба SkipIt не отвечает')));
             port.close();
           } else {
             finish(-1);

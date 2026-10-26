@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 import 'paths.dart';
+import '../l10n/l10n.dart';
 
 /// Значок в системном трее. Сам значок и меню живут в C++-оболочке окна
 /// (windows/runner/flutter_window.cpp), здесь — только канал управления.
@@ -89,9 +90,9 @@ class Tray {
     required double uiScale,
   }) =>
       _call('update', {
-        'modeLabel': 'РЕЖИМ',
-        'serversLabel': 'СЕРВЕР',
-        'coreLabel': 'РЕЖИМ TUN',
+        'modeLabel': tr('РЕЖИМ'),
+        'serversLabel': tr('СЕРВЕР'),
+        'coreLabel': tr('РЕЖИМ TUN'),
         'modes': modes,
         'mode': mode,
         'cores': cores,
@@ -110,14 +111,14 @@ class Tray {
         'accentLight': accentLight.toARGB32() & 0xFFFFFF,
         // У Windows ограничение подсказки — 127 символов.
         'tooltip': tooltip.length > 120 ? '${tooltip.substring(0, 119)}…' : tooltip,
-        'open': 'Открыть ${AppPaths.appName}',
-        'toggle': connected ? 'Отключить' : 'Подключить',
-        'exit': 'Выход',
+        'open': tr('Открыть {0}', [AppPaths.appName]),
+        'toggle': connected ? tr('Отключить') : tr('Подключить'),
+        'exit': tr('Выход'),
         'closeToTray': closeToTray,
         // Масштаб интерфейса: во столько же раз меньше наименьший размер окна.
         'uiScale': uiScale,
         // Уведомление при закрытии окна крестиком (раз за запуск); пустая строка его выключает.
-        'closeHint': notifications ? 'Продолжает работать в трее' : '',
+        'closeHint': notifications ? tr('Продолжает работать в трее') : '',
       });
 
   static Future<void> show() => _call('show');

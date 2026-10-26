@@ -5,6 +5,7 @@ import '../state/app_scope.dart';
 import 'app_icon.dart';
 import 'app_menu.dart';
 import 'theme.dart';
+import '../l10n/l10n.dart';
 
 /// Настройка «Меньше анимаций» (для слабых компьютеров): время всех анимаций окна ускоряется в
 /// двадцать раз — раскрытия, переходы и подсветки срабатывают за один кадр. Значки «идёт работа»
@@ -716,7 +717,7 @@ class DelayBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = ms == null ? (testing ? '…' : '—') : (ms! < 0 ? 'нет' : '$ms мс');
+    final text = ms == null ? (testing ? '…' : '—') : (ms! < 0 ? tr('нет') : tr('{0} мс', [ms]));
     final color = C.delay(ms);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -888,8 +889,8 @@ Future<String?> promptText(
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
-        GradientButton(label: ok, onPressed: () => Navigator.pop(ctx, ctrl.text)),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена'))),
+        GradientButton(label: tr(ok), onPressed: () => Navigator.pop(ctx, ctrl.text)),
       ],
     ),
   );
@@ -902,8 +903,8 @@ Future<bool> confirm(BuildContext context, String title, String text, {String ok
         title: Text(title),
         content: Text(text),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          GradientButton(label: ok, onPressed: () => Navigator.pop(ctx, true)),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+          GradientButton(label: tr(ok), onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     ) ??

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'paths.dart';
+import '../l10n/l10n.dart';
 
 /// Релиз SkipIt на GitHub. Все адреса строятся из тега — обращаться к API GitHub не нужно.
 class Release {
@@ -40,7 +41,7 @@ class CoreSpec {
 class UpdateLimitedException implements Exception {
   const UpdateLimitedException();
   @override
-  String toString() => 'GitHub временно ограничил проверки с вашего адреса — попробуйте позже';
+  String toString() => tr('GitHub временно ограничил проверки с вашего адреса — попробуйте позже');
 }
 
 class Updates {
@@ -104,15 +105,15 @@ class Updates {
       final r = await _getOnGithub('https://github.com/$repo/releases/latest', proxyPort, stopAt: _tagInUrl.hasMatch);
       final tag = _tagInUrl.firstMatch(r.location ?? '')?.group(1);
       if (tag != null) return Release(Uri.decodeComponent(tag), repo);
-      if (r.status >= 500) throw HttpException('GitHub ответил ${r.status}');
+      if (r.status >= 500) throw HttpException(tr('GitHub ответил {0}', [r.status]));
       // Стабильных релизов ещё нет (выходили только пре-релизы) — «Стабильный» канал берёт их,
       // чтобы пользователи с настройками по умолчанию не остались без обновлений.
     }
     final feed = await _get('https://github.com/$repo/releases.atom', proxyPort);
-    if (feed.status == 404) throw const HttpException('релизов пока нет');
-    if (feed.status != 200) throw HttpException('GitHub ответил ${feed.status}');
+    if (feed.status == 404) throw HttpException(tr('релизов пока нет'));
+    if (feed.status != 200) throw HttpException(tr('GitHub ответил {0}', [feed.status]));
     final tags = {for (final m in _tagInUrl.allMatches(feed.body)) Uri.decodeComponent(m.group(1)!)}.toList();
-    if (tags.isEmpty) throw const HttpException('релизов пока нет');
+    if (tags.isEmpty) throw HttpException(tr('релизов пока нет'));
     tags.sort((a, b) => compare(b, a));
     return Release(tags.first, repo);
   }
@@ -131,14 +132,14 @@ class Updates {
     // 4551 — политика целостности кода (Интеллектуальный контроль приложений), 1260 — запрет политикой,
     // 225 — файл остановлен антивирусом.
     return switch (code) {
-      4551 || 1260 => 'Установщик не подписан сертификатом издателя, а на этом компьютере Windows запускает '
+      4551 || 1260 => tr('Установщик не подписан сертификатом издателя, а на этом компьютере Windows запускает '
           'только подписанные программы (Интеллектуальный контроль приложений или политика безопасности). '
-          'Файл скачан и сверен с контрольной суммой, но запустить его программа не может.',
-      225 => 'Антивирус остановил запуск установщика. Файл скачан и сверен с контрольной суммой — '
-          'проверьте журнал антивируса.',
-      _ => 'Файл скачан и сверен с контрольной суммой, но Windows не дала его запустить'
-          '${e is ProcessException && e.message.isNotEmpty ? ': ${e.message.trim()}' : ''}'
-          '${code != 0 ? ' (код $code)' : ''}.',
+          'Файл скачан и сверен с контрольной суммой, но запустить его программа не может.'),
+      225 => tr('Антивирус остановил запуск установщика. Файл скачан и сверен с контрольной суммой — '
+          'проверьте журнал антивируса.'),
+      _ => tr('Файл скачан и сверен с контрольной суммой, но Windows не дала его запустить'
+          '{0}'
+          '{1}.', [e is ProcessException && e.message.isNotEmpty ? ': ${e.message.trim()}' : '', code != 0 ? tr(' (код {0})', [code]) : '']),
     };
   }
 
@@ -146,7 +147,7 @@ class Updates {
   static Future<String> sha256Of(String path) async {
     final r = await Process.run(AppPaths.system('certutil'), ['-hashfile', path, 'SHA256']);
     final m = RegExp(r'^[0-9a-fA-F ]{64,}$', multiLine: true).firstMatch(r.stdout as String);
-    if (r.exitCode != 0 || m == null) throw Exception('Не удалось посчитать контрольную сумму');
+    if (r.exitCode != 0 || m == null) throw Exception(tr('Не удалось посчитать контрольную сумму'));
     return m.group(0)!.replaceAll(' ', '').toLowerCase();
   }
 
@@ -165,8 +166,8 @@ class Updates {
       await File(path).delete();
     } catch (_) {}
     throw Exception(expected == null
-        ? 'Не удалось получить контрольную сумму установщика — без сверки он не запускается. Попробуйте ещё раз'
-        : 'Файл повреждён или подменён: контрольная сумма не совпала');
+        ? tr('Не удалось получить контрольную сумму установщика — без сверки он не запускается. Попробуйте ещё раз')
+        : tr('Файл повреждён или подменён: контрольная сумма не совпала'));
   }
 
   /// Версия установленного ядра (`xray version` / `sing-box version`).

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import '../l10n/l10n.dart';
 
 /// Отчёт для разбора: одним текстовым файлом то, по чему можно понять, что не так у человека, —
 /// версия, настройки, устройство конфигов ядер и журнал подключения. Ключей, ссылок подписок и
@@ -14,8 +15,8 @@ class DiagReport {
   /// узнаёт их у DNS в первые секунды подключения, и из обрезанного журнала эти строки выпадают.
   static const _headLimit = 256 * 1024;
 
-  static const _hidden = '<VPN-сервер>';
-  static const _hiddenDomain = '<адрес провайдера>';
+  static String get _hidden => tr('<VPN-сервер>');
+  static String get _hiddenDomain => tr('<адрес провайдера>');
 
   static String _count(Object? list, String what) => '(${list is List ? list.length : 1} $what)';
 
@@ -66,9 +67,9 @@ class DiagReport {
           for (final r in (routing['rules'] as List? ?? const []).whereType<Map>())
             {
               ...?_pick(r, const ['inboundTag', 'outboundTag', 'balancerTag', 'port', 'network', 'protocol']),
-              if (r['domain'] != null) 'domain': _count(r['domain'], 'имён'),
-              if (r['ip'] != null) 'ip': _count(r['ip'], 'адресов'),
-              if (r['process'] != null) 'process': _count(r['process'], 'программ'),
+              if (r['domain'] != null) 'domain': _count(r['domain'], tr('имён')),
+              if (r['ip'] != null) 'ip': _count(r['ip'], tr('адресов')),
+              if (r['process'] != null) 'process': _count(r['process'], tr('программ')),
             },
         ],
       },
@@ -82,14 +83,14 @@ class DiagReport {
           'disableFallbackIfMatch',
           'enableParallelQuery',
         ]),
-        if (dns['hosts'] is Map) 'hosts': '(${(dns['hosts'] as Map).length} записей)',
+        if (dns['hosts'] is Map) 'hosts': tr('({0} записей)', [(dns['hosts'] as Map).length]),
         'servers': [
           for (final s in dns['servers'] as List? ?? const [])
             if (s is Map)
               {
                 ...?_pick(s, const ['address', 'port', 'skipFallback', 'timeoutMs', 'queryStrategy', 'finalQuery']),
-                if (s['domains'] != null) 'domains': _count(s['domains'], 'имён'),
-                if (s['expectedIPs'] != null) 'expectedIPs': _count(s['expectedIPs'], 'адресов'),
+                if (s['domains'] != null) 'domains': _count(s['domains'], tr('имён')),
+                if (s['expectedIPs'] != null) 'expectedIPs': _count(s['expectedIPs'], tr('адресов')),
               }
             else
               s,
@@ -113,11 +114,11 @@ class DiagReport {
     return {
       for (final e in node.entries)
         if (const ['username', 'password', 'secret'].contains(e.key))
-          e.key: '(скрыто)'
+          e.key: tr('(скрыто)')
         else if (const ['process_name', 'process_path', 'process_path_regex'].contains(e.key))
-          e.key: _count(e.value, 'программ')
+          e.key: _count(e.value, tr('программ'))
         else if (e.key == 'domain' || e.key == 'domain_suffix')
-          e.key: _count(e.value, 'имён')
+          e.key: _count(e.value, tr('имён'))
         else
           e.key: singboxShape(e.value),
     };
@@ -210,7 +211,7 @@ class DiagReport {
     for (final d in domains) {
       text = text.replaceAll(_whole(d, subdomains: true), _hiddenDomain);
     }
-    return text.replaceAll(_userDir, r'\Users\<пользователь>');
+    return text.replaceAll(_userDir, tr(r'\Users\<пользователь>'));
   }
 
   /// Читает журнал подключения из его файлов [files] (части по порядку): конец — то, что пойдёт в
@@ -284,8 +285,8 @@ class DiagReport {
         if (_isName(h)) domainOf(h),
     };
     final b = StringBuffer()
-      ..writeln('Отчёт SkipIt для разбора')
-      ..writeln('Ключей, ссылок подписок и адресов VPN-серверов здесь нет. Адреса сайтов из журнала есть.')
+      ..writeln(tr('Отчёт SkipIt для разбора'))
+      ..writeln(tr('Ключей, ссылок подписок и адресов VPN-серверов здесь нет. Адреса сайтов из журнала есть.'))
       ..writeln();
     for (final e in facts.entries) {
       b.writeln('${e.key}: ${e.value ?? '—'}');
@@ -297,19 +298,19 @@ class DiagReport {
     if (nodes.isNotEmpty) {
       b
         ..writeln()
-        ..writeln('=== Адреса DNS-серверов, записанных именем (как их называет DNS ядра) ===')
+        ..writeln(tr('=== Адреса DNS-серверов, записанных именем (как их называет DNS ядра) ==='))
         ..writeAll(nodes, '\n')
         ..writeln();
     }
     b
       ..writeln()
-      ..writeln('=== Конфиг Xray (устройство) ===')
-      ..writeln(xray == null ? 'ядро в этом запуске не запускалось' : json.convert(xrayShape(xray)))
+      ..writeln(tr('=== Конфиг Xray (устройство) ==='))
+      ..writeln(xray == null ? tr('ядро в этом запуске не запускалось') : json.convert(xrayShape(xray)))
       ..writeln()
-      ..writeln('=== Конфиг sing-box (устройство) ===')
-      ..writeln(singbox == null ? 'ядро в этом запуске не запускалось' : json.convert(singboxShape(singbox)))
+      ..writeln(tr('=== Конфиг sing-box (устройство) ==='))
+      ..writeln(singbox == null ? tr('ядро в этом запуске не запускалось') : json.convert(singboxShape(singbox)))
       ..writeln()
-      ..writeln('=== Журнал подключения${logCut ? ' (конец, последние ${logLimit ~/ (1024 * 1024)} МБ)' : ''} ===')
+      ..writeln(tr('=== Журнал подключения{0} ===', [logCut ? tr(' (конец, последние {0} МБ)', [logLimit ~/ (1024 * 1024)]) : '']))
       ..writeln(log);
     return mask(b.toString(), servers, domains: domains);
   }

@@ -17,6 +17,7 @@ import 'groups.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n/l10n.dart';
 
 class LogsPage extends StatefulWidget {
   const LogsPage({super.key});
@@ -39,11 +40,11 @@ enum _LogTab {
 
 extension on _LogTab {
   String get label => switch (this) {
-        _LogTab.all => 'Все',
-        _LogTab.app => 'Приложение',
+        _LogTab.all => tr('Все'),
+        _LogTab.app => tr('Приложение'),
         _LogTab.xray => 'Xray',
         _LogTab.singbox => 'sing-box',
-        _LogTab.connections => 'Соединения',
+        _LogTab.connections => tr('Соединения'),
       };
 
   bool matches(String source) => switch (this) {
@@ -59,26 +60,26 @@ extension on _LogTab {
 String _two(int n) => n.toString().padLeft(2, '0');
 String _clock(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
 
-const _months = [
-  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+List<String> get _months => [
+  tr('января'), tr('февраля'), tr('марта'), tr('апреля'), tr('мая'), tr('июня'),
+  tr('июля'), tr('августа'), tr('сентября'), tr('октября'), tr('ноября'), tr('декабря'),
 ];
 
 /// «Сегодня», «Вчера» или «29 сентября».
 String _dayLabel(DateTime day) {
   final now = DateTime.now();
   final diff = DateTime(now.year, now.month, now.day).difference(DateTime(day.year, day.month, day.day)).inDays;
-  if (diff == 0) return 'Сегодня';
-  if (diff == 1) return 'Вчера';
+  if (diff == 0) return tr('Сегодня');
+  if (diff == 1) return tr('Вчера');
   return '${day.day} ${_months[day.month - 1]}';
 }
 
 /// Длительность отрезка коротко: «меньше минуты», «44 мин», «2 ч 5 мин».
 String _span(Duration d) {
-  if (d.inMinutes < 1) return 'меньше минуты';
-  if (d.inHours < 1) return '${d.inMinutes} мин';
+  if (d.inMinutes < 1) return tr('меньше минуты');
+  if (d.inHours < 1) return tr('{0} мин', [d.inMinutes]);
   final m = d.inMinutes % 60;
-  return m == 0 ? '${d.inHours} ч' : '${d.inHours} ч $m мин';
+  return m == 0 ? tr('{0} ч', [d.inHours]) : tr('{0} ч {1} мин', [d.inHours, m]);
 }
 
 class _LogsPageState extends State<LogsPage> {
@@ -177,21 +178,21 @@ class _LogsPageState extends State<LogsPage> {
         final shown = _shown = listMode ? _listGroup : _group;
         final groups = _groups(current, sessions);
         final header = GroupHeader(
-          page: 'Логи',
-          backTooltip: 'Все логи',
+          page: tr('Логи'),
+          backTooltip: tr('Все логи'),
           group: !listMode && _group != null ? groups[_group!] : null,
-          hint: 'Журнал хранится ${LogBuffer.keepDays} дней. Под строками ядра — пояснения простыми словами',
+          hint: tr('Журнал хранится {0} дней. Под строками ядра — пояснения простыми словами', [LogBuffer.keepDays]),
           // В узком окне кнопки переносятся на вторую строку.
           trailing: Wrap(spacing: 8, runSpacing: 8, children: [
             // Уровень журнала здесь же, где его читают: «поставь info и повтори» — без похода в настройки.
             Tooltip(
-              message: 'Насколько подробно ядра пишут журнал. Новый уровень — со следующего подключения',
+              message: tr('Насколько подробно ядра пишут журнал. Новый уровень — со следующего подключения'),
               waitDuration: const Duration(milliseconds: 400),
               // Такая же кнопка, как «Отчёт» и «Папка» рядом (выпадающий список был выше них), — меню
               // уровней появляется под ней.
               child: Builder(
                 builder: (context) => GhostButton(
-                  label: 'Уровень: ${state.settings.logLevel}',
+                  label: tr('Уровень: {0}', [state.settings.logLevel]),
                   icon: Icons.tune_rounded,
                   onPressed: () async {
                     final level = await showAppMenu<String>(context, items: [
@@ -206,16 +207,16 @@ class _LogsPageState extends State<LogsPage> {
               ),
             ),
             Tooltip(
-              message: 'Отчёт для разбора: версия, настройки и журнал последнего подключения одним файлом',
+              message: tr('Отчёт для разбора: версия, настройки и журнал последнего подключения одним файлом'),
               waitDuration: const Duration(milliseconds: 400),
               child: GhostButton(
-                label: 'Отчёт',
+                label: tr('Отчёт'),
                 icon: Icons.summarize_rounded,
                 onPressed: () => makeReportWithDialog(context, state),
               ),
             ),
             GhostButton(
-              label: 'Папка',
+              label: tr('Папка'),
               icon: Icons.folder_open_rounded,
               onPressed: () => Process.run(AppPaths.explorer, [AppPaths.logDir.path]),
             ),
@@ -230,12 +231,12 @@ class _LogsPageState extends State<LogsPage> {
           null => ListView(primary: false, padding: const EdgeInsets.only(top: 2), children: [
               GroupGrid(groups: groups, onOpen: (i) => setState(() => _group = i)),
             ]),
-          0 || 1 when current == null => _padded(_card(_empty('Здесь пока пусто'))),
+          0 || 1 when current == null => _padded(_card(_empty(tr('Здесь пока пусто')))),
           0 => _padded(_card(_view(state, current!, tabs: _LogTab.lines))),
           1 => _padded(_card(_view(state, current!, tabs: const [_LogTab.connections]))),
           _ => picked != null
               ? _padded(_card(_view(state, picked, tabs: _LogTab.values, onBack: () => setState(() => _historyId = null))))
-              : _padded(_card(sessions.isEmpty ? _empty('Здесь пока пусто') : _history(sessions))),
+              : _padded(_card(sessions.isEmpty ? _empty(tr('Здесь пока пусто')) : _history(sessions))),
         };
 
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -303,27 +304,27 @@ class _LogsPageState extends State<LogsPage> {
     // (например, обновления подписок) на плитке не считаются сбоем.
     final connected = current != null && current.live && current.connection;
     if (current == null) {
-      now = 'Журнала пока нет';
+      now = tr('Журнала пока нет');
     } else if (current.live && !current.connection) {
-      now = 'Не подключено';
+      now = tr('Не подключено');
     } else if (current.live) {
-      now = 'Идёт ${_span(DateTime.now().difference(current.start))}'
-          '${current.errors > 0 ? ' · ошибок: ${current.errors}' : ''}';
+      now = tr('Идёт {0}'
+          '{1}', [_span(DateTime.now().difference(current.start)), current.errors > 0 ? tr(' · ошибок: {0}', [current.errors]) : '']);
     } else {
-      now = 'Последний: ${_dayLabel(current.start).toLowerCase()}, ${_clock(current.start)}';
+      now = tr('Последний: {0}, {1}', [_dayLabel(current.start).toLowerCase(), _clock(current.start)]);
     }
     final total = current?.connectionsTotal ?? 0;
     final proxy = current?.connectionCounts[ConnRoute.proxy] ?? 0;
     final past = sessions.where((s) => !s.live).length;
     return [
-      PageGroup(Icons.receipt_long_rounded, 'Текущее подключение',
-          'Что происходит сейчас: события программы и вывод ядер с пояснениями', now,
+      PageGroup(Icons.receipt_long_rounded, tr('Текущее подключение'),
+          tr('Что происходит сейчас: события программы и вывод ядер с пояснениями'), now,
           alert: connected && current.errors > 0 ? C.red : null),
-      PageGroup(Icons.swap_horiz_rounded, 'Соединения',
-          'Какая программа или сайт куда идёт: через VPN, напрямую или блокируется',
-          total == 0 ? 'Пока нет' : '$total ${plural(total, 'соединение', 'соединения', 'соединений')} · через VPN $proxy'),
-      PageGroup(Icons.history_rounded, 'История', 'Журналы прошлых подключений по дням. Хранятся ${LogBuffer.keepDays} дней',
-          past == 0 ? 'Пока пусто' : '$past ${plural(past, 'журнал', 'журнала', 'журналов')}'),
+      PageGroup(Icons.swap_horiz_rounded, tr('Соединения'),
+          tr('Какая программа или сайт куда идёт: через VPN, напрямую или блокируется'),
+          total == 0 ? tr('Пока нет') : tr('{0} {1} · через VPN {2}', [total, plural(total, tr('соединение'), tr('соединения'), tr('соединений')), proxy])),
+      PageGroup(Icons.history_rounded, tr('История'), tr('Журналы прошлых подключений по дням. Хранятся {0} дней', [LogBuffer.keepDays]),
+          past == 0 ? tr('Пока пусто') : '$past ${plural(past, tr('журнал'), tr('журнала'), tr('журналов'))}'),
     ];
   }
 
@@ -335,13 +336,13 @@ class _LogsPageState extends State<LogsPage> {
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
         child: Row(children: [
-          _Chip('Только с ошибками', withErrors.length, C.red, _errorsOnly,
+          _Chip(tr('Только с ошибками'), withErrors.length, C.red, _errorsOnly,
               () => setState(() => _errorsOnly = !_errorsOnly)),
           const Spacer(),
           // Builder: меню выбора дня появляется под самой кнопкой.
           Builder(
             builder: (context) => GhostButton(
-              label: 'Очистить историю',
+              label: tr('Очистить историю'),
               icon: Icons.delete_sweep_rounded,
               onPressed: sessions.any((s) => !s.live) ? () => _clearHistory(context, sessions) : null,
             ),
@@ -350,7 +351,7 @@ class _LogsPageState extends State<LogsPage> {
       ),
       Expanded(
         child: shown.isEmpty
-            ? _empty('Журналов с ошибками нет')
+            ? _empty(tr('Журналов с ошибками нет'))
             : _SessionList(
                 // Другой отбор — другой список: дни снова свёрнуты и развёрнуты как по умолчанию.
                 key: ValueKey(_errorsOnly),
@@ -370,13 +371,13 @@ class _LogsPageState extends State<LogsPage> {
           onChanged: (v) => setState(() => _query = v),
           style: const TextStyle(fontSize: 13),
           decoration: InputDecoration(
-            hintText: 'Поиск',
+            hintText: tr('Поиск'),
             isDense: true,
             prefixIcon: const Icon(Icons.search_rounded, size: 18),
             suffixIcon: _query.isEmpty
                 ? null
                 : IconButton(
-                    tooltip: 'Очистить',
+                    tooltip: tr('Очистить'),
                     icon: const Icon(Icons.close_rounded, size: 16),
                     onPressed: () => setState(() {
                       _search.clear();
@@ -411,7 +412,7 @@ class _LogsPageState extends State<LogsPage> {
         onLevel: (v) => setState(() => _level = v),
         open: _open,
         onToggle: (key) => setState(() => _open.remove(key) || _open.add(key)),
-        onCopied: () => state.toast('Журнал скопирован'),
+        onCopied: () => state.toast(tr('Журнал скопирован')),
         onBack: onBack,
         onDelete: () {
           setState(() => _historyId = null);
@@ -429,20 +430,20 @@ class _LogsPageState extends State<LogsPage> {
     }
     // 0 — за всё время, дальше — номер дня в списке плюс один.
     final picked = await showAppMenu<int>(context, items: [
-      const AppMenuItem(0, 'За всё время', icon: Icons.delete_sweep_rounded, danger: true),
+      AppMenuItem(0, tr('За всё время'), icon: Icons.delete_sweep_rounded, danger: true),
       const AppMenuItem.divider(),
       for (final (i, day) in days.indexed) AppMenuItem(i + 1, _dayLabel(day)),
     ]);
     if (picked == null || !context.mounted) return;
     final day = picked == 0 ? null : days[picked - 1];
     final ok = day == null
-        ? await confirm(context, 'Очистить историю?',
-            'Журналы прошлых подключений будут удалены. Текущий журнал останется.')
-        : await confirm(context, 'Удалить журналы за ${_dayLabel(day).toLowerCase()}?',
+        ? await confirm(context, tr('Очистить историю?'),
+            tr('Журналы прошлых подключений будут удалены. Текущий журнал останется.'))
+        : await confirm(context, tr('Удалить журналы за {0}?', [_dayLabel(day).toLowerCase()]),
             // Текущий журнал начат сегодня — про него есть смысл говорить только тут.
-            _dayLabel(day) == 'Сегодня'
-                ? 'Все журналы за сегодня, кроме текущего, будут удалены.'
-                : 'Все журналы за этот день будут удалены.');
+            _dayLabel(day) == tr('Сегодня')
+                ? tr('Все журналы за сегодня, кроме текущего, будут удалены.')
+                : tr('Все журналы за этот день будут удалены.'));
     if (!ok || !mounted) return;
     setState(() => _historyId = null);
     AppScope.read(this.context).log.clearHistory(day: day);
@@ -663,7 +664,7 @@ class _SessionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = session;
     final (country, name) = Flags.leading(s.title);
-    final time = s.live ? 'с ${_clock(s.start)}' : '${_clock(s.start)} – ${_clock(s.end)}';
+    final time = s.live ? tr('с {0}', [_clock(s.start)]) : '${_clock(s.start)} – ${_clock(s.end)}';
     return Hover(
       builder: (context, hovered) => GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -713,8 +714,8 @@ class _SessionTile extends StatelessWidget {
                 ]),
               ]),
             ),
-            if (s.errors > 0) _Count(s.errors, C.red, 'Ошибок: ${s.errors}'),
-            if (s.warnings > 0) _Count(s.warnings, C.warnText, 'Предупреждений: ${s.warnings}'),
+            if (s.errors > 0) _Count(s.errors, C.red, tr('Ошибок: {0}', [s.errors])),
+            if (s.warnings > 0) _Count(s.warnings, C.warnText, tr('Предупреждений: {0}', [s.warnings])),
             const SizedBox(width: 12),
           ]),
         ),
@@ -822,7 +823,7 @@ class _SessionView extends StatelessWidget {
         : (r == null ? s.connectionsTotal : s.connectionCounts[r] ?? 0);
     final showConns = tab == _LogTab.connections;
     final when = '${_dayLabel(s.start)}, ${_clock(s.start)}'
-        '${s.live ? ' · идёт сейчас' : ' – ${_clock(s.end)} · ${_span(s.end.difference(s.start))}'}'
+        '${s.live ? tr(' · идёт сейчас') : ' – ${_clock(s.end)} · ${_span(s.end.difference(s.start))}'}'
         '${s.detail.isNotEmpty ? ' · ${s.detail}' : ''}';
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -831,7 +832,7 @@ class _SessionView extends StatelessWidget {
         child: Row(children: [
           if (onBack != null) ...[
             IconButton(
-              tooltip: 'Ко всем журналам',
+              tooltip: tr('Ко всем журналам'),
               icon: Icon(Icons.arrow_back_rounded, size: 20, color: C.muted),
               onPressed: onBack,
             ),
@@ -850,7 +851,7 @@ class _SessionView extends StatelessWidget {
           search,
           const SizedBox(width: 6),
           IconButton(
-            tooltip: 'Скопировать',
+            tooltip: tr('Скопировать'),
             icon: Icon(Icons.copy_rounded, size: 18, color: C.muted),
             onPressed: (showConns ? conns.isEmpty : lines.isEmpty)
                 ? null
@@ -867,7 +868,7 @@ class _SessionView extends StatelessWidget {
           ),
           if (!s.live)
             IconButton(
-              tooltip: 'Удалить этот журнал',
+              tooltip: tr('Удалить этот журнал'),
               icon: Icon(Icons.delete_outline_rounded, size: 19, color: C.muted),
               onPressed: onDelete,
             ),
@@ -901,25 +902,25 @@ class _SessionView extends StatelessWidget {
             alignment: Alignment.centerLeft,
             // В узком окне кнопки переносятся на вторую строку.
             child: Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              _Chip('Все', count(null), C.text, route == null, () => onRoute(null)),
+              _Chip(tr('Все'), count(null), C.text, route == null, () => onRoute(null)),
               for (final r in const [ConnRoute.proxy, ConnRoute.direct, ConnRoute.block])
                 _Chip(_routeTitle(r), count(r), _routeColor(r), route == r, () => onRoute(r)),
               if (s.live) ...[
                 Container(width: 1, height: 18, color: C.border),
-                _Chip('Последняя минута', null, C.orange, recent, () => onRecent(!recent)),
+                _Chip(tr('Последняя минута'), null, C.orange, recent, () => onRecent(!recent)),
               ],
               if (!recentOnly && s.connectionsTotal > stored.length)
-                Text('в списке — последние ${stored.length}', style: TextStyle(color: C.muted, fontSize: 11.5)),
+                Text(tr('в списке — последние {0}', [stored.length]), style: TextStyle(color: C.muted, fontSize: 11.5)),
               if (s.unknownProcess > 0)
                 Tooltip(
-                  message: 'Для этих соединений ядро не смогло узнать, какая программа их открыла, и правила '
+                  message: tr('Для этих соединений ядро не смогло узнать, какая программа их открыла, и правила '
                       'по приложениям к ним не применились.\nОбычно это службы Windows. Но если игра из списка '
-                      '«напрямую» идёт через VPN — причина в этом: её соединения помечены в списке.',
+                      '«напрямую» идёт через VPN — причина в этом: её соединения помечены в списке.'),
                   waitDuration: const Duration(milliseconds: 300),
                   // Счёт идёт по сообщениям ядра, а их на одно соединение бывает несколько — поэтому
                   // «раз», а не «соединений».
                   child: Text(
-                      'ядро не узнало программу: ${s.unknownProcess} ${plural(s.unknownProcess, 'раз', 'раза', 'раз')}',
+                      tr('ядро не узнало программу: {0} {1}', [s.unknownProcess, plural(s.unknownProcess, tr('раз'), tr('раза'), tr('раз'))]),
                       style: TextStyle(color: C.warnText, fontSize: 11.5)),
                 ),
             ]),
@@ -932,9 +933,9 @@ class _SessionView extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerLeft,
             child: Wrap(spacing: 6, runSpacing: 6, children: [
-              _Chip('Все', tabLines.length, C.text, level == null, () => onLevel(null)),
-              _Chip('Ошибки', tabLines.where((l) => l.level == 2).length, C.red, level == 2, () => onLevel(2)),
-              _Chip('Предупреждения', tabLines.where((l) => l.level == 1).length,
+              _Chip(tr('Все'), tabLines.length, C.text, level == null, () => onLevel(null)),
+              _Chip(tr('Ошибки'), tabLines.where((l) => l.level == 2).length, C.red, level == 2, () => onLevel(2)),
+              _Chip(tr('Предупреждения'), tabLines.where((l) => l.level == 1).length,
                   C.warnText, level == 1, () => onLevel(1)),
             ]),
           ),
@@ -948,14 +949,14 @@ class _SessionView extends StatelessWidget {
                       padding: const EdgeInsets.all(24),
                       child: Text(
                         q.isNotEmpty
-                            ? 'Ничего не найдено по «${query.trim()}»'
+                            ? tr('Ничего не найдено по «{0}»', [query.trim()])
                             : stored.isNotEmpty
                             ? (recentOnly
-                                ? 'За последнюю минуту таких соединений не было'
-                                : 'Среди последних ${stored.length} соединений таких нет')
+                                ? tr('За последнюю минуту таких соединений не было')
+                                : tr('Среди последних {0} соединений таких нет', [stored.length]))
                             : s.live
-                            ? 'Соединений пока нет. Здесь появится, какая программа или сайт куда идёт: через VPN, напрямую или блокируется'
-                            : 'Список соединений не сохраняется на диск — он виден только до закрытия программы',
+                            ? tr('Соединений пока нет. Здесь появится, какая программа или сайт куда идёт: через VPN, напрямую или блокируется')
+                            : tr('Список соединений не сохраняется на диск — он виден только до закрытия программы'),
                         textAlign: TextAlign.center,
                         style: TextStyle(color: C.muted),
                       ),
@@ -965,7 +966,7 @@ class _SessionView extends StatelessWidget {
                     // Другая вкладка или другой фильтр — выделение и место чтения сбрасываются.
                     key: ValueKey('${s.id}-connections-${route?.name}-$recentOnly-$q'),
                     items: conns,
-                    newLabel: 'Новые соединения',
+                    newLabel: tr('Новые соединения'),
                     // Одинаковые соединения склеены в одну строку со счётчиком; клик разворачивает их.
                     builder: (context, shown) {
                       final groups = groupConnections(shown);
@@ -991,12 +992,12 @@ class _SessionView extends StatelessWidget {
                 child: Spinner(size: 24))
             : lines.isEmpty
                 ? Center(
-                    child: Text(q.isNotEmpty ? 'Ничего не найдено по «${query.trim()}»' : 'В этом журнале таких записей нет',
+                    child: Text(q.isNotEmpty ? tr('Ничего не найдено по «{0}»', [query.trim()]) : tr('В этом журнале таких записей нет'),
                         style: TextStyle(color: C.muted)))
                 : _HoldWhileReading<LogLine>(
                     key: ValueKey('${s.id}-${tab.name}-$level-$q'),
                     items: lines,
-                    newLabel: 'Новые строки',
+                    newLabel: tr('Новые строки'),
                     // Свежие строки внизу, список «прилипает» к низу — как в консоли.
                     // У каждой строки свой ключ: с приходом новых строк выделение остаётся на том же
                     // тексте, а не на том же месте списка.
@@ -1107,7 +1108,7 @@ class _HoldWhileReadingState<T extends Object> extends State<_HoldWhileReading<T
                       boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 10, offset: Offset(0, 3))],
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Text(pending > 0 ? '${widget.newLabel}: $pending' : 'К последним записям',
+                      Text(pending > 0 ? '${widget.newLabel}: $pending' : tr('К последним записям'),
                           style: TextStyle(color: C.text, fontSize: 12, fontWeight: FontWeight.w600)),
                       const SizedBox(width: 4),
                       Icon(Icons.arrow_downward_rounded, size: 14, color: hovered ? C.orange : C.muted),
@@ -1219,8 +1220,8 @@ class _LineTextState extends State<_LineText> {
         padding: const EdgeInsets.only(left: 30, top: 2, bottom: 4),
         child: Text.rich(
           TextSpan(children: [
-            TextSpan(text: 'Повторилась: ', style: TextStyle(color: C.muted, fontFamily: 'Segoe UI')),
-            if (missing > 0) TextSpan(text: '… ещё $missing раньше, ', style: TextStyle(color: C.muted)),
+            TextSpan(text: tr('Повторилась: '), style: TextStyle(color: C.muted, fontFamily: 'Segoe UI')),
+            if (missing > 0) TextSpan(text: tr('… ещё {0} раньше, ', [missing]), style: TextStyle(color: C.muted)),
             TextSpan(text: line.repeatTimes.map(_clock).join('  '), style: TextStyle(color: C.text)),
           ]),
           style: _style,
@@ -1231,7 +1232,7 @@ class _LineTextState extends State<_LineText> {
 
   /// Счётчик повторов — кнопка: стрелка и курсор-«рука» показывают, что её можно нажать.
   Widget _repeatsButton(LogLine line, Color orange) => Tooltip(
-        message: _open ? 'Свернуть' : 'Показать время каждого повтора',
+        message: _open ? tr('Свернуть') : tr('Показать время каждого повтора'),
         waitDuration: const Duration(milliseconds: 600),
         child: MouseRegion(
           cursor: SystemMouseCursors.click,
@@ -1262,17 +1263,17 @@ class _LineTextState extends State<_LineText> {
 }
 
 String _routeLabel(ConnRoute r) => switch (r) {
-      ConnRoute.proxy => 'через VPN',
-      ConnRoute.direct => 'напрямую',
-      ConnRoute.block => 'заблокировано',
+      ConnRoute.proxy => tr('через VPN'),
+      ConnRoute.direct => tr('напрямую'),
+      ConnRoute.block => tr('заблокировано'),
       ConnRoute.dns => 'DNS',
     };
 
 /// Название пути для фильтра.
 String _routeTitle(ConnRoute r) => switch (r) {
       ConnRoute.proxy => 'VPN',
-      ConnRoute.direct => 'Напрямую',
-      ConnRoute.block => 'Заблокировано',
+      ConnRoute.direct => tr('Напрямую'),
+      ConnRoute.block => tr('Заблокировано'),
       ConnRoute.dns => 'DNS',
     };
 
@@ -1321,8 +1322,8 @@ class _Chip extends StatelessWidget {
 
 /// Откуда соединение попало в ядро — по тегу входа.
 String _inboundLabel(String tag) => switch (tag) {
-      'socks' => 'SOCKS-порт',
-      'http' => 'HTTP-прокси',
+      'socks' => tr('SOCKS-порт'),
+      'http' => tr('HTTP-прокси'),
       'skipit-tun' => 'TUN',
       _ => tag,
     };
@@ -1331,9 +1332,9 @@ String _inboundLabel(String tag) => switch (tag) {
 String _target(ConnEntry c) => c.port > 0 ? '${c.host}:${c.port}' : c.host;
 
 /// Соединение одной строкой — для копирования.
-String _connLine(ConnEntry c) => '${c.time.toIso8601String()} ${c.network} ${_target(c)} → ${_routeLabel(c.route)}'
-    '${c.outbound.isEmpty ? '' : ' (${c.outbound})'} · вход: ${_inboundLabel(c.inbound)}'
-    '${c.unknownProcess ? ' · программа не определена' : ''}';
+String _connLine(ConnEntry c) => tr('{0} {1} {2} → {3}'
+    '{4} · вход: {5}'
+    '{6}', [c.time.toIso8601String(), c.network, _target(c), _routeLabel(c.route), c.outbound.isEmpty ? '' : ' (${c.outbound})', _inboundLabel(c.inbound), c.unknownProcess ? tr(' · программа не определена') : '']);
 
 /// Строка списка соединений: куда шли → каким путём отправлено. Несколько одинаковых соединений —
 /// одна строка со счётчиком и временем последнего; клик по счётчику разворачивает их все.
@@ -1349,7 +1350,7 @@ class _ConnGroupText extends StatelessWidget {
 
   /// Через какой выход и с какого входа пришло соединение.
   static String _via(ConnEntry c) =>
-      '${c.outbound.isEmpty ? '' : ' (${c.outbound})'} · вход: ${_inboundLabel(c.inbound)}';
+      tr('{0} · вход: {1}', [c.outbound.isEmpty ? '' : ' (${c.outbound})', _inboundLabel(c.inbound)]);
 
   @override
   Widget build(BuildContext context) {
@@ -1365,7 +1366,7 @@ class _ConnGroupText extends StatelessWidget {
         if (!many) TextSpan(text: _via(c), style: TextStyle(color: C.muted)),
         // Правило по приложениям к соединению не применилось: ядро не узнало программу.
         if (group.items.any((e) => e.unknownProcess))
-          TextSpan(text: ' · программа не определена', style: TextStyle(color: C.warnText)),
+          TextSpan(text: tr(' · программа не определена'), style: TextStyle(color: C.warnText)),
       ]),
       style: _style,
     );
@@ -1379,7 +1380,7 @@ class _ConnGroupText extends StatelessWidget {
         // Раскрывается только кнопкой-счётчиком, как повторы в журнале: по самой строке можно
         // спокойно кликать и выделять текст.
         Tooltip(
-          message: open ? 'Свернуть' : 'Показать все соединения: $count',
+          message: open ? tr('Свернуть') : tr('Показать все соединения: {0}', [count]),
           waitDuration: const Duration(milliseconds: 600),
           child: MouseRegion(
             cursor: SystemMouseCursors.click,

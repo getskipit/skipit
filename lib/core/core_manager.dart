@@ -8,6 +8,7 @@ import 'log_store.dart';
 import 'paths.dart';
 import 'service_client.dart';
 import 'util.dart';
+import '../l10n/l10n.dart';
 
 export 'log_store.dart';
 
@@ -57,7 +58,7 @@ class CoreProcess {
   /// [input] — текст, который ядро прочитает со стандартного входа (конфиг: так он не лежит на диске).
   Future<void> start(String exe, List<String> args, {Map<String, String>? env, String? input}) async {
     if (!File(exe).existsSync()) {
-      throw CoreException('Не найден $exe. Запустите tools\\setup.ps1, чтобы скачать ядра.');
+      throw CoreException(tr('Не найден {0}. Запустите tools\\setup.ps1, чтобы скачать ядра.', [exe]));
     }
     _stopping = false;
     final p = await Process.start(exe, args,
@@ -80,7 +81,7 @@ class CoreProcess {
     unawaited(p.exitCode.then((code) {
       if (!identical(_process, p)) return;
       _process = null;
-      log.add(name, '[$name завершился с кодом $code]');
+      log.add(name, tr('[{0} завершился с кодом {1}]', [name, code]));
       if (!_stopping) onUnexpectedExit?.call(code);
     }));
   }
@@ -106,13 +107,13 @@ class CoreProcess {
           exited.complete();
           if (remote == null || !identical(_remote, remote)) return;
           _remote = null;
-          log.add(name, '[$name завершился с кодом $code]');
+          log.add(name, tr('[{0} завершился с кодом {1}]', [name, code]));
           if (!_stopping) onUnexpectedExit?.call(code);
         },
       );
     } on ServiceException catch (e) {
       await out.close();
-      throw CoreException('Служба SkipIt не запустила $name: $e');
+      throw CoreException(tr('Служба SkipIt не запустила {0}: {1}', [name, e]));
     }
     _remote = remote;
     _remoteExit = exited;

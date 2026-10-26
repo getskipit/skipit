@@ -19,6 +19,7 @@ import 'ui/flag_text.dart';
 import 'ui/shell.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
+import 'l10n/l10n.dart';
 
 /// Режимы в меню значка — в том же порядке, что на главной.
 const trayModes = [ConnectionMode.mixed, ConnectionMode.tun, ConnectionMode.systemProxy, ConnectionMode.proxyOnly];
@@ -122,7 +123,7 @@ Future<void> main(List<String> rawArgs) async {
         await state.toggle();
       } on NeedAdminException catch (e) {
         await Tray.show();
-        state.toast('$e — нажмите кнопку подключения в окне');
+        state.toast(tr('{0} — нажмите кнопку подключения в окне', [e]));
       }
     },
     onExit: () async {
@@ -136,7 +137,7 @@ Future<void> main(List<String> rawArgs) async {
         await state.setMode(trayModes[index]);
       } on NeedAdminException catch (e) {
         await Tray.show();
-        state.toast('$e — нажмите кнопку подключения в окне');
+        state.toast(tr('{0} — нажмите кнопку подключения в окне', [e]));
       }
     },
     onCore: (index) async {
@@ -145,7 +146,7 @@ Future<void> main(List<String> rawArgs) async {
         await state.setTunCore(TunCore.values[index]);
       } on NeedAdminException catch (e) {
         await Tray.show();
-        state.toast('$e — нажмите кнопку подключения в окне');
+        state.toast(tr('{0} — нажмите кнопку подключения в окне', [e]));
       }
     },
     onKillSwitch: () => state.setKillSwitch(!state.settings.killSwitch),
@@ -156,7 +157,7 @@ Future<void> main(List<String> rawArgs) async {
         await state.selectServer(trayServers[index]);
       } on NeedAdminException catch (e) {
         await Tray.show();
-        state.toast('$e — нажмите кнопку подключения в окне');
+        state.toast(tr('{0} — нажмите кнопку подключения в окне', [e]));
       }
     },
   );
@@ -168,10 +169,10 @@ Future<void> main(List<String> rawArgs) async {
     final name = state.selectedServer?.name;
     final server = name == null ? null : Flags.forTray(name);
     final status = switch (state.status) {
-      ConnStatus.connected => 'Подключено',
-      ConnStatus.connecting => 'Подключение…',
-      ConnStatus.disconnecting => 'Отключение…',
-      ConnStatus.disconnected => state.killSwitchHolding ? 'Интернет закрыт: Kill Switch' : 'Не подключено',
+      ConnStatus.connected => tr('Подключено'),
+      ConnStatus.connecting => tr('Подключение…'),
+      ConnStatus.disconnecting => tr('Отключение…'),
+      ConnStatus.disconnected => state.killSwitchHolding ? tr('Интернет закрыт: Kill Switch') : tr('Не подключено'),
     };
     final tooltip = '${AppPaths.appName} — $status${server != null ? '\n$server' : ''}';
     // Тема берётся из настроек, а не из уже применённой палитры: этот обработчик срабатывает раньше,
@@ -187,7 +188,7 @@ Future<void> main(List<String> rawArgs) async {
     // Провайдер каждого сервера — для заголовков в списке. Если провайдер один, заголовки не нужны.
     String groupOf(ServerProfile s) {
       final sub = state.subscriptionById(s.subscriptionId);
-      return sub == null ? 'Свои серверы' : Flags.forTray(sub.displayName);
+      return sub == null ? tr('Свои серверы') : Flags.forTray(sub.displayName);
     }
 
     final groups = [for (final s in servers) groupOf(s)];
@@ -204,12 +205,12 @@ Future<void> main(List<String> rawArgs) async {
       closeToTray: state.settings.closeToTray,
       notifications: state.settings.notifications,
       status: status,
-      server: server ?? 'Сервер не выбран',
+      server: server ?? tr('Сервер не выбран'),
       state: state.isConnected ? 2 : (state.isBusy ? 1 : 0),
       dark: dark,
       accent: accent.main,
       accentLight: accent.light,
-      modes: [for (final m in trayModes) m == ConnectionMode.proxyOnly ? 'Порты' : m.label],
+      modes: [for (final m in trayModes) m == ConnectionMode.proxyOnly ? tr('Порты') : m.label],
       mode: trayModes.indexOf(state.settings.mode),
       // Ядро TUN выбирается только в режимах с адаптером — в остальных переключателя в меню нет.
       cores: state.usesTun ? const ['Xray', 'sing-box'] : const [],
@@ -321,9 +322,12 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Sing
     _syncIcon();
     Motion.apply(widget.state.settings.reduceMotion);
     final p = _resolvePalette();
-    if (identical(p, _palette)) return;
+    // Сменился язык — окно перестраивается целиком, как при смене темы.
+    final l = resolveLang(widget.state.settings.language);
+    if (identical(p, _palette) && l == lang) return;
     void apply() {
       if (!mounted) return;
+      lang = l;
       final from = (_live ?? _palette).corners;
       setState(() => _palette = p);
       C.use(p);
@@ -387,9 +391,9 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Sing
       child: MaterialApp(
         title: AppPaths.appName,
         debugShowCheckedModeBanner: false,
-        // Интерфейс на русском: встроенные подписи Flutter (меню полей ввода, подсказки кнопок) — тоже.
-        locale: const Locale('ru'),
-        supportedLocales: const [Locale('ru')],
+        // Встроенные подписи Flutter (меню полей ввода, подсказки кнопок) — на языке интерфейса.
+        locale: Locale(lang == Lang.en ? 'en' : 'ru'),
+        supportedLocales: const [Locale('ru'), Locale('en')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         theme: buildTheme(),
         // Свои цвета окна (C) меняются сразу — тема Flutter тоже, иначе её цвет текста 200 мс догонял бы

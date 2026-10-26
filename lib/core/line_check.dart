@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'site_check.dart';
+import '../l10n/l10n.dart';
 
 /// Замер одного пути: сколько пробных пакетов ушло и за сколько миллисекунд пришёл каждый ответ.
 class LinePath {
@@ -35,10 +36,10 @@ class LinePath {
   bool get rough => !silent && measured && (lossPercent >= 1 || (spikes >= 3 && spikes * 50 >= replies.length));
 
   String get summary => !measured
-      ? 'не измерялось'
+      ? tr('не измерялось')
       : silent
-          ? 'ответов нет'
-          : 'потери ${lossText()}, обычный ответ $usual мс, худший $worst мс, всплесков $spikes';
+          ? tr('ответов нет')
+          : tr('потери {0}, обычный ответ {1} мс, худший {2} мс, всплесков {3}', [lossText(), usual, worst, spikes]);
 
   String lossText() => lost == 0 ? '0 %' : '${lossPercent < 10 ? lossPercent.toStringAsFixed(1) : lossPercent.round()} %';
 }
@@ -75,54 +76,54 @@ class LineReport {
       add(SiteNoteKind.bad, error!);
       return found;
     }
-    String detail(LinePath p) => 'потери ${p.lossText()}, всплесков ${p.spikes}, худший ответ ${p.worst} мс';
+    String detail(LinePath p) => tr('потери {0}, всплесков {1}, худший ответ {2} мс', [p.lossText(), p.spikes, p.worst]);
     if (vpn.silent) {
-      add(SiteNoteKind.info, 'Через VPN ответы на пробные пакеты не пришли: сервер может такие пакеты не пропускать. '
-          'О ровности пути через VPN этот замер ничего не говорит');
+      add(SiteNoteKind.info, tr('Через VPN ответы на пробные пакеты не пришли: сервер может такие пакеты не пропускать. '
+          'О ровности пути через VPN этот замер ничего не говорит'));
     }
     if (direct.silent) {
-      add(SiteNoteKind.info, 'Напрямую ответы на пробные пакеты не пришли — этот путь остался неизмеренным');
+      add(SiteNoteKind.info, tr('Напрямую ответы на пробные пакеты не пришли — этот путь остался неизмеренным'));
     }
     // Почему путь не измерялся, говорим словами: в плитке причина целиком не помещается.
-    if (directSkipped != null) add(SiteNoteKind.info, 'Напрямую не измерялось: $directSkipped');
-    if (vpnSkipped != null) add(SiteNoteKind.info, 'Через VPN не измерялось: $vpnSkipped');
+    if (directSkipped != null) add(SiteNoteKind.info, tr('Напрямую не измерялось: {0}', [directSkipped]));
+    if (vpnSkipped != null) add(SiteNoteKind.info, tr('Через VPN не измерялось: {0}', [vpnSkipped]));
     if (stalled.isNotEmpty) {
       add(SiteNoteKind.info,
-          'Ответы опоздали сразу на обоих путях (пакетов: ${stalled.length}). Два разных пути одновременно не '
-          'тормозят — это запнулась сама программа или компьютер; в счёт такие ответы не идут');
+          tr('Ответы опоздали сразу на обоих путях (пакетов: {0}). Два разных пути одновременно не '
+          'тормозят — это запнулась сама программа или компьютер; в счёт такие ответы не идут', [stalled.length]));
     }
     final vpnOk = vpn.measured && !vpn.silent, directOk = direct.measured && !direct.silent;
     // Запинку программы видно только в сравнении двух путей: один и тот же опоздавший ответ на обоих.
     // Когда путь измерен один, сказать, чей всплеск, нельзя — об этом и пишем.
     if (vpnOk != directOk && (vpnOk ? vpn : direct).spikes > 0) {
       add(SiteNoteKind.info,
-          'Измерен только один путь, поэтому всплеск на линии нельзя отличить от запинки самой программы: '
-          'часть всплесков может быть не про связь');
+          tr('Измерен только один путь, поэтому всплеск на линии нельзя отличить от запинки самой программы: '
+          'часть всплесков может быть не про связь'));
     }
     if (directOk && direct.rough) {
       add(SiteNoteKind.warn,
-          'Связь неровная и напрямую, без VPN (${detail(direct)}): дело в вашей линии или интернет-провайдере, а не в VPN');
+          tr('Связь неровная и напрямую, без VPN ({0}): дело в вашей линии или интернет-провайдере, а не в VPN', [detail(direct)]));
     }
     if (vpnOk && vpn.rough) {
       if (directOk && !direct.rough) {
         add(SiteNoteKind.warn,
-            'Напрямую связь ровная, а через VPN — ${detail(vpn)}: неровность даёт путь до VPN-сервера или сам сервер');
+            tr('Напрямую связь ровная, а через VPN — {0}: неровность даёт путь до VPN-сервера или сам сервер', [detail(vpn)]));
       } else if (!directOk) {
-        add(SiteNoteKind.warn, 'Через VPN — ${detail(vpn)}. Без замера напрямую не видно, чья это неровность');
+        add(SiteNoteKind.warn, tr('Через VPN — {0}. Без замера напрямую не видно, чья это неровность', [detail(vpn)]));
       }
     }
     if (!found.any((n) => n.kind == SiteNoteKind.warn) && (vpnOk || directOk)) {
       add(
           SiteNoteKind.ok,
           vpnOk && directOk
-              ? 'Связь ровная и через VPN, и напрямую'
-              : 'Связь ровная ${vpnOk ? 'через VPN' : 'напрямую'}; другой путь не измерялся');
+              ? tr('Связь ровная и через VPN, и напрямую')
+              : tr('Связь ровная {0}; другой путь не измерялся', [vpnOk ? tr('через VPN') : tr('напрямую')]));
     }
     return found;
   }
 
   String get copyText => [
-        'Стабильность связи — через VPN: ${vpnSkipped ?? vpn.summary}; напрямую: ${directSkipped ?? direct.summary}',
+        tr('Стабильность связи — через VPN: {0}; напрямую: {1}', [vpnSkipped ?? vpn.summary, directSkipped ?? direct.summary]),
         for (final n in notes) '  • ${n.text}',
       ].join('\n');
 }
@@ -264,14 +265,14 @@ class LineCheck {
       });
       await sending.future;
       if (report.stopped) {
-        report.error = 'Замер прерван: VPN отключился или переподключился';
+        report.error = tr('Замер прерван: VPN отключился или переподключился');
         return;
       }
       // Опоздавшие ответы ещё могут прийти.
       await Future.delayed(const Duration(milliseconds: 1500));
       settle(total);
     } catch (e) {
-      report.error = 'Не удалось начать замер: $e';
+      report.error = tr('Не удалось начать замер: {0}', [e]);
     } finally {
       for (final s in sockets) {
         s?.close();

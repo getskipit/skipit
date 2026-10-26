@@ -31,6 +31,7 @@ import '../models/server.dart';
 import '../models/settings.dart';
 import '../models/subscription.dart';
 import '../version.dart';
+import '../l10n/l10n.dart';
 
 enum ConnStatus { disconnected, connecting, connected, disconnecting }
 
@@ -45,9 +46,13 @@ class ToastMessage {
   /// Вторая строка мельче: подробность к заголовку.
   final String? detail;
 
-  static final _error = RegExp(r'не удалось|ошибк|не найден|не действует|заблокирован|отказ|сначала |не файл|повреждён',
+  // Слова и русских, и английских сообщений (см. lib/l10n/en.dart: переводы держатся тех же слов).
+  static final _error = RegExp(
+      r'не удалось|ошибк|не найден|не действует|заблокирован|отказ|сначала |не файл|повреждён|'
+      r'failed|could not|couldn.t|error|not found|blocked|refused|denied|first |corrupt|not a file',
       caseSensitive: false);
-  static final _success = RegExp(r'обновлен|добавлен|сохранен|скопирован|загружен|последняя версия',
+  static final _success = RegExp(r'обновлен|добавлен|сохранен|скопирован|загружен|последняя версия|'
+      r'updated|added|saved|copied|loaded|latest version',
       caseSensitive: false);
 
   /// Сообщения программа пишет сама, поэтому вид узнаётся по словам: «не удалось», «ошибка» — сбой,
@@ -58,7 +63,7 @@ class ToastMessage {
 
 class NeedAdminException implements Exception {
   @override
-  String toString() => 'Для режима TUN нужны права администратора';
+  String toString() => tr('Для режима TUN нужны права администратора');
 }
 
 class AppState extends ChangeNotifier {
@@ -150,8 +155,8 @@ class AppState extends ChangeNotifier {
     final n = log.addUnknownProcess();
     // В журнал — на 1-м, 10-м, 100-м… соединении: иначе строк было бы столько же, сколько соединений.
     if (appRules.mode != AppRoutingMode.off && const {1, 10, 100, 1000, 10000}.contains(n)) {
-      log.add('app', 'Ядро не узнало, какая программа открыла соединение (таких уже $n). Правила по приложениям '
-          'к ним не применились — какие это соединения, отмечено в «Логах» → «Соединения»');
+      log.add('app', tr('Ядро не узнало, какая программа открыла соединение (таких уже {0}). Правила по приложениям '
+          'к ним не применились — какие это соединения, отмечено в «Логах» → «Соединения»', [n]));
     }
   }
 
@@ -304,7 +309,7 @@ class AppState extends ChangeNotifier {
                     c.network == 'tcp' &&
                     c.source.startsWith('127.0.0.1:') &&
                     (c.host == report.host || c.host == XrayConfig.checkHost)));
-        log.add('app', 'Проверка сайта ${report.shown}: ${report.summary}');
+        log.add('app', tr('Проверка сайта {0}: {1}', [report.shown, report.summary]));
         notifyListeners();
       }
     } finally {
@@ -331,11 +336,11 @@ class AppState extends ChangeNotifier {
     try {
       final viaVpn = WinSys.ownTunActive();
       final source = (await _pastVpnSources()).where((a) => a.type == InternetAddressType.IPv4).firstOrNull;
-      if (!viaVpn) report.vpnSkipped = 'в этом режиме нет адаптера VPN — такие пакеты через VPN не идут';
+      if (!viaVpn) report.vpnSkipped = tr('в этом режиме нет адаптера VPN — такие пакеты через VPN не идут');
       // При Kill Switch всё, что идёт мимо VPN, закрыто — такой замер показал бы только потери.
       final pastVpn = viaVpn && source != null && !killSwitchOn;
-      if (viaVpn && killSwitchOn) report.directSkipped = 'включён Kill Switch — напрямую пакеты не выпускаются';
-      if (viaVpn && source == null) report.directSkipped = 'не нашлось сетевой карты, кроме адаптера VPN';
+      if (viaVpn && killSwitchOn) report.directSkipped = tr('включён Kill Switch — напрямую пакеты не выпускаются');
+      if (viaVpn && source == null) report.directSkipped = tr('не нашлось сетевой карты, кроме адаптера VPN');
       final server = (await InternetAddress.lookup(LineCheck.host, type: InternetAddressType.IPv4)
               .timeout(const Duration(seconds: 4)))
           .first;
@@ -352,12 +357,12 @@ class AppState extends ChangeNotifier {
       if (own?.route == ConnRoute.direct) {
         report
           ..vpn = LinePath()
-          ..vpnSkipped = 'по правилам маршрутизации проверочный адрес идёт напрямую';
+          ..vpnSkipped = tr('по правилам маршрутизации проверочный адрес идёт напрямую');
       }
       log.add('app', report.copyText.split('\n').first);
     } catch (e) {
       report
-        ..error = 'Не удалось начать замер: ${describeNetError(e)}'
+        ..error = tr('Не удалось начать замер: {0}', [describeNetError(e)])
         ..done = true;
     } finally {
       _watchConns = false;
@@ -377,7 +382,7 @@ class AppState extends ChangeNotifier {
     speedStamp = _stampNow();
     final alive = _sameConnection();
     final report = speedReport = SpeedReport()
-      ..stage = 'через VPN…'
+      ..stage = tr('через VPN…')
       ..running = 0;
     checkingSpeed = true;
     notifyListeners();
@@ -394,15 +399,15 @@ class AppState extends ChangeNotifier {
         SpeedServer server, List<double> samples, Future<SpeedResult> Function(SpeedProgress) run) async {
       samples.clear();
       report.step = silent == null
-          ? 'соединяюсь с ${server.host} — ждём ответа до ${SpeedTest.timeoutSeconds} с'
-          : '$silent не ответил — пробую ${server.host}…';
+          ? tr('соединяюсь с {0} — ждём ответа до {1} с', [server.host, SpeedTest.timeoutSeconds])
+          : tr('{0} не ответил — пробую {1}…', [silent, server.host]);
       notifyListeners();
       final show = live(samples);
       var started = false;
       final result = await run((mbit, done) {
         if (!started) {
           started = true;
-          report.step = 'качаю файл с ${server.host}…';
+          report.step = tr('качаю файл с {0}…', [server.host]);
           notifyListeners();
         }
         show(mbit, done);
@@ -423,20 +428,20 @@ class AppState extends ChangeNotifier {
         ..vpnMbit = vpn.mbit
         ..vpnError = vpn.error
         ..vpnHost = vpn.unreachable ? null : vpn.host
-        ..stage = 'напрямую…'
+        ..stage = tr('напрямую…')
         ..step = ''
         ..running = 1
         ..progress = 0;
       notifyListeners();
       if (!alive()) {
-        report.directError = 'замер прерван: VPN отключился или переподключился';
+        report.directError = tr('замер прерван: VPN отключился или переподключился');
       } else if (killSwitchOn) {
-        report.directError = 'включён Kill Switch — напрямую программа ничего не отправляет';
+        report.directError = tr('включён Kill Switch — напрямую программа ничего не отправляет');
       } else {
         final tunnel = WinSys.tunnelOnDefaultRoute();
         final source = (await _pastVpnSources()).where((a) => a.type == InternetAddressType.IPv4).firstOrNull;
         if (tunnel != null && source == null) {
-          report.directError = 'не нашлось сетевой карты, кроме адаптера VPN';
+          report.directError = tr('не нашлось сетевой карты, кроме адаптера VPN');
         } else {
           // Сначала тот же сервер, что и через VPN: тогда разница скоростей — это сам VPN.
           final order = [
@@ -502,7 +507,7 @@ class AppState extends ChangeNotifier {
       for (final probe in dnsProbes) {
         if (!alive()) {
           probe
-            ..error = 'проверка прервана: VPN отключился или переподключился'
+            ..error = tr('проверка прервана: VPN отключился или переподключился')
             ..done = true;
           continue;
         }
@@ -519,14 +524,14 @@ class AppState extends ChangeNotifier {
         // Строка журнала ядра о том, куда ушёл запрос, приходит чуть позже ответа.
         await Future.delayed(const Duration(milliseconds: 200));
         probe.route = _dnsCheckRoute;
-        log.add('app', 'Проверка DNS: ${probe.label} — ${probe.path}, ${probe.result}'
-            '${probe.reachMs == null ? '' : ', до названных адресов напрямую ${probe.reachMs} мс'}');
+        log.add('app', tr('Проверка DNS: {0} — {1}, {2}'
+            '{3}', [probe.label, probe.path, probe.result, probe.reachMs == null ? '' : tr(', до названных адресов напрямую {0} мс', [probe.reachMs])]));
         notifyListeners();
       }
       DnsCheck.compare(dnsProbes);
       for (final probe in dnsProbes.where((p) => p.far)) {
-        log.add('app', 'Проверка DNS: адреса от ${probe.label} заметно дальше, чем от ${probe.nearerLabel} — '
-            '${probe.reachMs} мс против ${probe.nearerMs} мс напрямую');
+        log.add('app', tr('Проверка DNS: адреса от {0} заметно дальше, чем от {1} — '
+            '{2} мс против {3} мс напрямую', [probe.label, probe.nearerLabel, probe.reachMs, probe.nearerMs]));
       }
     } finally {
       checkingDns = false;
@@ -595,15 +600,15 @@ class AppState extends ChangeNotifier {
       _healSkipNoted = false;
       if (country != null) exitCountry = country;
       if (wasDown) {
-        log.add('app', 'Связь через VPN восстановилась');
-        _notify('Связь через VPN восстановилась');
+        log.add('app', tr('Связь через VPN восстановилась'));
+        _notify(tr('Связь через VPN восстановилась'));
       }
     } else {
       _linkFails++;
       _linkDownSince ??= DateTime.now();
       if (!wasDown && linkDown) {
-        log.add('app', 'Ошибка: VPN подключён, но связи через сервер нет');
-        _notify('VPN подключён, но связи через сервер нет');
+        log.add('app', tr('Ошибка: VPN подключён, но связи через сервер нет'));
+        _notify(tr('VPN подключён, но связи через сервер нет'));
       }
     }
     notifyListeners();
@@ -625,7 +630,7 @@ class AppState extends ChangeNotifier {
     final since = connectedAt;
     if (!isConnected || since == null || DateTime.now().difference(since) < const Duration(seconds: 15)) return;
     _netChangedAt = DateTime.now();
-    if (resume) log.add('app', 'Компьютер проснулся — проверяю связь через VPN');
+    if (resume) log.add('app', tr('Компьютер проснулся — проверяю связь через VPN'));
     _linkTimer?.cancel();
     unawaited(_checkLink());
   }
@@ -665,7 +670,7 @@ class AppState extends ChangeNotifier {
       if (!direct) {
         if (!_healSkipNoted) {
           _healSkipNoted = true;
-          log.add('app', 'Связи нет и напрямую: пропал сам интернет, перезапуск VPN не поможет — жду, когда он вернётся');
+          log.add('app', tr('Связи нет и напрямую: пропал сам интернет, перезапуск VPN не поможет — жду, когда он вернётся'));
         }
         return;
       }
@@ -676,13 +681,13 @@ class AppState extends ChangeNotifier {
         _lastHeal = DateTime.now();
         if (!_healSkipNoted) {
           _healSkipNoted = true;
-          log.add('app', 'Сайт проверки связи не отвечает, но другой сайт через VPN открывается — подключение не перезапускаю');
+          log.add('app', tr('Сайт проверки связи не отвечает, но другой сайт через VPN открывается — подключение не перезапускаю'));
         }
         return;
       }
       _lastHeal = DateTime.now();
-      log.add('app', 'Предупреждение: связи через сервер нет ${DateTime.now().difference(since).inSeconds} с, '
-          'а напрямую интернет есть — перезапускаю подключение');
+      log.add('app', tr('Предупреждение: связи через сервер нет {0} с, '
+          'а напрямую интернет есть — перезапускаю подключение', [DateTime.now().difference(since).inSeconds]));
       // Kill Switch на время перезапуска не снимается — мимо VPN ничего не уходит.
       await disconnect(keepError: true, hold: true, hung: true);
       final token = ++_crashRetry;
@@ -692,7 +697,7 @@ class AppState extends ChangeNotifier {
       // Пока обновлялась подписка, человек мог сам подключиться или открыть интернет без VPN.
       if (token != _crashRetry || isBusy || isConnected) return;
       await connect();
-      _notify(isConnected ? 'Связи через сервер не было — VPN переподключён' : 'Не удалось переподключиться. $_withoutVpn');
+      _notify(isConnected ? tr('Связи через сервер не было — VPN переподключён') : tr('Не удалось переподключиться. {0}', [_withoutVpn]));
     } finally {
       _healing = false;
     }
@@ -711,7 +716,7 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
     final after = selectedServer;
     if (after != null && after.id == server.id && after.link != before) {
-      log.add('app', 'Данные сервера в подписке изменились — подключаюсь с новыми');
+      log.add('app', tr('Данные сервера в подписке изменились — подключаюсь с новыми'));
     }
   }
 
@@ -770,15 +775,15 @@ class AppState extends ChangeNotifier {
     final sites = server == null || XrayConfig.providerConfig(server) == null
         ? selectedRouting.name
         : XrayConfig.hasOwnRules(selectedRouting)
-            ? 'Правила провайдера + ${selectedRouting.name}'
-            : 'Правила провайдера';
+            ? tr('Правила провайдера + {0}', [selectedRouting.name])
+            : tr('Правила провайдера');
     final count = appRules.enabledMatches.length;
     final apps = !usesTun
         ? null
         : switch (appRules.mode) {
             AppRoutingMode.off => null,
-            AppRoutingMode.allExcept => count == 0 ? null : 'Программ напрямую, мимо VPN: $count',
-            AppRoutingMode.onlySelected => 'Через VPN только выбранные программы: $count',
+            AppRoutingMode.allExcept => count == 0 ? null : tr('Программ напрямую, мимо VPN: {0}', [count]),
+            AppRoutingMode.onlySelected => tr('Через VPN только выбранные программы: {0}', [count]),
           };
     return (sites: sites, apps: apps);
   }
@@ -839,8 +844,8 @@ class AppState extends ChangeNotifier {
     KillSwitch.onLog = (text) => log.add('app', text);
     await load();
     if (protectedUnreadable) {
-      lastError = 'Сохранённые подписки зашифрованы для другой учётной записи Windows и не читаются. '
-          'Добавьте подписки заново или загрузите файл экспорта: Настройки → Программа → Импорт.';
+      lastError = tr('Сохранённые подписки зашифрованы для другой учётной записи Windows и не читаются. '
+          'Добавьте подписки заново или загрузите файл экспорта: Настройки → Программа → Импорт.');
     }
     // Окно должно узнать о данных сразу, даже если дальше что-то пойдёт не так.
     notifyListeners();
@@ -850,27 +855,27 @@ class AppState extends ChangeNotifier {
       try {
         await f();
       } catch (e) {
-        log.add('app', 'Сбой при запуске ($name): $e');
+        log.add('app', tr('Сбой при запуске ({0}): {1}', [name, e]));
       }
     }
 
-    await step('восстановление', _recoverAfterCrash);
+    await step(tr('восстановление'), _recoverAfterCrash);
     // Установщик прошлого обновления больше не нужен.
-    await step('уборка обновлений', () async {
+    await step(tr('уборка обновлений'), () async {
       final dir = Directory('${File(AppPaths.exe).parent.path}\\update');
       if (dir.existsSync()) await dir.delete(recursive: true);
     });
-    await step('ссылки skipit://', WinSys.registerUrlScheme);
-    await step('автозапуск', () async => autostart = await WinSys.isAutostartEnabled());
-    unawaited(step('версии ядер', detectCoreVersions));
-    unawaited(step('служба', () async {
+    await step(tr('ссылки skipit://'), WinSys.registerUrlScheme);
+    await step(tr('автозапуск'), () async => autostart = await WinSys.isAutostartEnabled());
+    unawaited(step(tr('версии ядер'), detectCoreVersions));
+    unawaited(step(tr('служба'), () async {
       serviceVersion = await ServiceClient.hello();
-      log.add('app', serviceVersion == null ? 'Служба SkipIt не отвечает' : 'Служба SkipIt на месте: $serviceVersion');
+      log.add('app', serviceVersion == null ? tr('Служба SkipIt не отвечает') : tr('Служба SkipIt на месте: {0}', [serviceVersion]));
       notifyListeners();
     }));
     // Тихая проверка обновлений через несколько секунд после запуска и потом раз в шесть часов:
     // программу держат открытой сутками, и без повтора о новой версии узнавали бы только после перезапуска.
-    Timer(const Duration(seconds: 8), () => step('обновления', () => checkUpdates(silent: true)));
+    Timer(const Duration(seconds: 8), () => step(tr('обновления'), () => checkUpdates(silent: true)));
     _updateTimer = Timer.periodic(const Duration(hours: 6), (_) {
       if (!downloadingAppUpdate) checkUpdates(silent: true);
     });
@@ -923,7 +928,7 @@ class AppState extends ChangeNotifier {
         text = await _readWithRetry(file);
       } catch (e) {
         _stateUnreadable = true;
-        log.add('app', 'Файл данных занят или недоступен, сохранение отключено до перезапуска: $e');
+        log.add('app', tr('Файл данных занят или недоступен, сохранение отключено до перезапуска: {0}', [e]));
         text = '';
       }
       if (text.isNotEmpty) try {
@@ -931,7 +936,7 @@ class AppState extends ChangeNotifier {
         _applyData(j, secret: await _readSecret(j, file));
       } catch (e) {
         // Файл повреждён: откладываем копию и продолжаем с чистого листа.
-        log.add('app', 'Не удалось разобрать файл данных, копия сохранена как state.json.broken: $e');
+        log.add('app', tr('Не удалось разобрать файл данных, копия сохранена как state.json.broken: {0}', [e]));
         try {
           await file.copy('${file.path}.broken');
         } catch (_) {}
@@ -950,6 +955,7 @@ class AppState extends ChangeNotifier {
   /// в файле они зашифрованы, в старом файле и в файле экспорта лежат открыто рядом с настройками.
   void _applyData(Map<String, dynamic> j, {required Map<String, dynamic> secret}) {
     settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>? ?? const {});
+    lang = resolveLang(settings.language);
     subscriptions.addAll(((secret['subscriptions'] as List?) ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(Subscription.fromJson));
@@ -971,8 +977,8 @@ class AppState extends ChangeNotifier {
     // Чужой ключ: файл принесли с другого компьютера или из-под другой учётной записи.
     // Зашифрованную часть откладываем — вдруг её ещё откроют там, где она была создана.
     protectedUnreadable = true;
-    log.add('app', 'Ошибка: подписки в файле данных зашифрованы для другой учётной записи Windows и не читаются. '
-        'Копия сохранена как state.json.locked');
+    log.add('app', tr('Ошибка: подписки в файле данных зашифрованы для другой учётной записи Windows и не читаются. '
+        'Копия сохранена как state.json.locked'));
     try {
       final locked = File('${file.path}.locked');
       if (!locked.existsSync()) await file.copy(locked.path);
@@ -1018,7 +1024,7 @@ class AppState extends ChangeNotifier {
   Future<String> exportData(String dir) async {
     final now = DateTime.now();
     String two(int n) => n.toString().padLeft(2, '0');
-    final path = '$dir\\${AppPaths.appName} — настройки ${now.year}-${two(now.month)}-${two(now.day)}.json';
+    final path = tr('{0}\\{1} — настройки {2}-{3}-{4}.json', [dir, AppPaths.appName, now.year, two(now.month), two(now.day)]);
     final data = _dataForFile(encrypt: false);
     // Состояние текущего подключения в перенос не идёт.
     (data['settings'] as Map<String, dynamic>)
@@ -1027,7 +1033,7 @@ class AppState extends ChangeNotifier {
       ..remove('lastXrayPid')
       ..remove('lastSingboxPid');
     await File(path).writeAsString(const JsonEncoder.withIndent('  ').convert({'skipitExport': 1, ...data}), flush: true);
-    log.add('app', 'Настройки сохранены в файл экспорта');
+    log.add('app', tr('Настройки сохранены в файл экспорта'));
     return path;
   }
 
@@ -1038,13 +1044,13 @@ class AppState extends ChangeNotifier {
 
   /// Что в отчёте сказано о сервере и правилах: при подключённом VPN — те, с которыми он подключался.
   Map<String, Object?> _connFacts(ServerProfile? server, RoutingProfile routing) => {
-        'Сервер': server == null
-            ? 'не выбран'
+        tr('Сервер'): server == null
+            ? tr('не выбран')
             : XrayConfig.providerConfig(server) != null
-                ? 'конфиг провайдера'
+                ? tr('конфиг провайдера')
                 : server.protocolLabel,
-        'Свои правила': XrayConfig.hasOwnRules(routing) ? 'есть' : 'нет',
-        'Правила по программам': '${appRules.mode.name}, в списке ${appRules.enabledMatches.length}',
+        tr('Свои правила'): XrayConfig.hasOwnRules(routing) ? tr('есть') : tr('нет'),
+        tr('Правила по программам'): tr('{0}, в списке {1}', [appRules.mode.name, appRules.enabledMatches.length]),
       };
 
   /// Собирает отчёт для разбора (см. [DiagReport]) в файл в папке [dir] и возвращает путь к нему.
@@ -1052,8 +1058,8 @@ class AppState extends ChangeNotifier {
   Future<String> makeReport(String dir) async {
     final now = DateTime.now();
     String two(int n) => n.toString().padLeft(2, '0');
-    final path = '$dir\\${AppPaths.appName} — отчёт ${now.year}-${two(now.month)}-${two(now.day)} '
-        '${two(now.hour)}-${two(now.minute)}.txt';
+    final path = tr('{0}\\{1} — отчёт {2}-{3}-{4} '
+        '{5}-{6}.txt', [dir, AppPaths.appName, now.year, two(now.month), two(now.day), two(now.hour), two(now.minute)]);
     var session = log.current;
     if (session?.connection != true) session = log.sessions.where((s) => s.connection).lastOrNull ?? session;
     var journal = await DiagReport.readLog(session?.files ?? const []);
@@ -1091,29 +1097,29 @@ class AppState extends ChangeNotifier {
     }
     final report = DiagReport.build(
       facts: {
-        'Собран': now.toIso8601String(),
-        'Версия': '$appVersion${AppPaths.isDev ? ' (тестовая копия)' : ''}',
+        tr('Собран'): now.toIso8601String(),
+        tr('Версия'): '$appVersion${AppPaths.isDev ? tr(' (тестовая копия)') : ''}',
         'Windows': Platform.operatingSystemVersion,
-        'Состояние': '${status.name}${linkDown ? ', связи через сервер нет' : ''}',
-        'Режим': settings.mode.label,
-        'Режим TUN': tun ? settings.tunCore.name : null,
-        'Стек sing-box': tun && settings.tunCore == TunCore.singbox ? settings.singboxStack : null,
-        'Kill Switch': tun ? (settings.killSwitch ? 'включён' : 'выключен') : null,
-        'Служба': serviceVersion ?? 'не отвечает',
+        tr('Состояние'): '${status.name}${linkDown ? tr(', связи через сервер нет') : ''}',
+        tr('Режим'): settings.mode.label,
+        tr('Режим TUN'): tun ? settings.tunCore.name : null,
+        tr('Стек sing-box'): tun && settings.tunCore == TunCore.singbox ? settings.singboxStack : null,
+        'Kill Switch': tun ? (settings.killSwitch ? tr('включён') : tr('выключен')) : null,
+        tr('Служба'): serviceVersion ?? tr('не отвечает'),
         ...(connected ? _reportConn : null) ?? _connFacts(selectedServer, selectedRouting),
-        'Страна выхода': exitCountry,
-        'Мой DNS': settings.ownDns ? 'включён' : 'выключен',
-        'IPv6': settings.ipv6 ? 'включён' : 'выключен',
-        'Сниффинг': settings.sniffing ? 'включён' : 'выключен',
+        tr('Страна выхода'): exitCountry,
+        tr('Мой DNS'): settings.ownDns ? tr('включён') : tr('выключен'),
+        'IPv6': settings.ipv6 ? tr('включён') : tr('выключен'),
+        tr('Сниффинг'): settings.sniffing ? tr('включён') : tr('выключен'),
         'MTU': settings.mtu,
-        'Пароль на порты': settings.portAuth ? 'включён' : 'выключен',
-        'Уровень логов': settings.logLevel,
-        'Подписок': subscriptions.length,
-        'Системный прокси Windows': proxy.enabled ? 'включён, ${proxy.server}' : 'выключен',
-        'Исключения прокси': proxy.override.isEmpty ? null : proxy.override,
-        'Файл автонастройки прокси': (proxy.autoConfig ?? '').isEmpty ? null : proxy.autoConfig,
-        'Маршрут по умолчанию через адаптер': WinSys.tunnelOnDefaultRoute(),
-        'Журнал': session == null ? 'нет' : '${session.id}, ${session.detail}',
+        tr('Пароль на порты'): settings.portAuth ? tr('включён') : tr('выключен'),
+        tr('Уровень логов'): settings.logLevel,
+        tr('Подписок'): subscriptions.length,
+        tr('Системный прокси Windows'): proxy.enabled ? tr('включён, {0}', [proxy.server]) : tr('выключен'),
+        tr('Исключения прокси'): proxy.override.isEmpty ? null : proxy.override,
+        tr('Файл автонастройки прокси'): (proxy.autoConfig ?? '').isEmpty ? null : proxy.autoConfig,
+        tr('Маршрут по умолчанию через адаптер'): WinSys.tunnelOnDefaultRoute(),
+        tr('Журнал'): session == null ? tr('нет') : '${session.id}, ${session.detail}',
       },
       xray: _reportXray,
       singbox: _reportSingbox,
@@ -1131,28 +1137,28 @@ class AppState extends ChangeNotifier {
       logCut: journal.cut,
     );
     await File(path).writeAsString(report, flush: true);
-    log.add('app', 'Отчёт для разбора сохранён в файл');
+    log.add('app', tr('Отчёт для разбора сохранён в файл'));
     return path;
   }
 
   /// Заменяет настройки, подписки и серверы содержимым файла экспорта (или старого state.json).
   /// Возвращает текст ошибки или null, если всё получилось.
   Future<String?> importData(String path) async {
-    if (status != ConnStatus.disconnected) return 'Сначала отключите VPN';
+    if (status != ConnStatus.disconnected) return tr('Сначала отключите VPN');
     final Map<String, dynamic> j;
     try {
       j = jsonDecode(await File(path).readAsString()) as Map<String, dynamic>;
     } catch (_) {
-      return 'Это не файл настроек SkipIt';
+      return tr('Это не файл настроек SkipIt');
     }
     if (j['settings'] is! Map || (j['subscriptions'] is! List && j['protected'] is! String)) {
-      return 'Это не файл настроек SkipIt';
+      return tr('Это не файл настроек SkipIt');
     }
     final Map<String, dynamic> secret;
     if (j['protected'] is String) {
       final plain = WinSys.unprotect(base64Decode(j['protected'] as String));
       if (plain == null) {
-        return 'Файл зашифрован для другой учётной записи Windows. Нужен файл, сохранённый кнопкой «Экспорт»';
+        return tr('Файл зашифрован для другой учётной записи Windows. Нужен файл, сохранённый кнопкой «Экспорт»');
       }
       secret = jsonDecode(utf8.decode(plain)) as Map<String, dynamic>;
     } else {
@@ -1177,7 +1183,7 @@ class AppState extends ChangeNotifier {
         ..clear()
         ..addAll(before.$4);
       appRules = before.$5;
-      return 'Файл настроек повреждён';
+      return tr('Файл настроек повреждён');
     }
     // Состояние системы — от этого компьютера, а не из файла.
     settings
@@ -1193,7 +1199,7 @@ class AppState extends ChangeNotifier {
     }
     protectedUnreadable = false;
     _stateUnreadable = false;
-    log.add('app', 'Настройки загружены из файла: подписок — ${subscriptions.length}, серверов — ${servers.length}');
+    log.add('app', tr('Настройки загружены из файла: подписок — {0}, серверов — {1}', [subscriptions.length, servers.length]));
     await saveNow();
     notifyListeners();
     return null;
@@ -1203,7 +1209,7 @@ class AppState extends ChangeNotifier {
   /// маршрутизации и правила программ остаются, а из настроек — HWID, логин и пароль портов (они вписаны
   /// в другие программы) и выбор сервера и профиля. Возвращает текст ошибки или null.
   Future<String?> resetSettings() async {
-    if (status != ConnStatus.disconnected) return 'Сначала отключите VPN';
+    if (status != ConnStatus.disconnected) return tr('Сначала отключите VPN');
     final old = settings;
     settings = _resetKeeping(old)
       ..portUser = old.portUser
@@ -1211,15 +1217,15 @@ class AppState extends ChangeNotifier {
       ..selectedServerId = old.selectedServerId
       ..selectedRoutingId = old.selectedRoutingId
       ..updateNotified = old.updateNotified;
-    await _afterReset('Настройки сброшены к стандартным');
+    await _afterReset(tr('Настройки сброшены к стандартным'));
     return null;
   }
 
   /// «Удалить все данные» (Настройки → Программа → Сброс): подписки, серверы, профили, правила программ и настройки —
   /// как после новой установки. Возвращает текст ошибки или null.
   Future<String?> deleteAllData() async {
-    if (status != ConnStatus.disconnected) return 'Сначала отключите VPN';
-    if (checking) return 'Дождитесь окончания проверки';
+    if (status != ConnStatus.disconnected) return tr('Сначала отключите VPN');
+    if (checking) return tr('Дождитесь окончания проверки');
     // Результаты проверок — про серверы, которых сейчас не станет.
     for (final kind in CheckKind.values) {
       clearCheck(kind);
@@ -1232,7 +1238,7 @@ class AppState extends ChangeNotifier {
     appRules = AppRules();
     settings = _resetKeeping(settings)..selectedRoutingId = RoutingProfile.globalPresetId;
     protectedUnreadable = false;
-    await _afterReset('Все данные удалены: подписки, серверы, профили, правила программ и настройки');
+    await _afterReset(tr('Все данные удалены: подписки, серверы, профили, правила программ и настройки'));
     return null;
   }
 
@@ -1262,7 +1268,7 @@ class AppState extends ChangeNotifier {
     repairing = true;
     notifyListeners();
     try {
-      log.add('app', 'Починка сети');
+      log.add('app', tr('Починка сети'));
       await disconnect();
       await KillSwitch.release();
       for (final pid in WinSys.processesUnder(AppPaths.coreDir.path)) {
@@ -1276,7 +1282,7 @@ class AppState extends ChangeNotifier {
       await (_tunCleanup = WinSys.removeOwnTunAdapters());
       _flushDns();
       await saveNow();
-      log.add('app', 'Починка сети закончена');
+      log.add('app', tr('Починка сети закончена'));
     } finally {
       repairing = false;
       notifyListeners();
@@ -1308,7 +1314,7 @@ class AppState extends ChangeNotifier {
           try {
             await File(AppPaths.stateFile).writeAsString(text, flush: true);
           } catch (_) {
-            log.add('app', 'Не удалось сохранить данные: $e');
+            log.add('app', tr('Не удалось сохранить данные: {0}', [e]));
           }
           return;
         }
@@ -1421,7 +1427,7 @@ class AppState extends ChangeNotifier {
     if (selected == null || isShown(selected)) return;
     final next = serversInListOrder.firstOrNull;
     if (next == null) return;
-    toast('Выбранный сервер скрыт', detail: 'Теперь выбран «${next.name}»');
+    toast(tr('Выбранный сервер скрыт'), detail: tr('Теперь выбран «{0}»', [next.name]));
     unawaited(selectServer(next.id));
   }
 
@@ -1469,7 +1475,7 @@ class AppState extends ChangeNotifier {
     if (r.servers.isNotEmpty) {
       servers.addAll(r.servers);
       settings.selectedServerId ??= r.servers.first.id;
-      parts.add('серверов: ${r.servers.length}');
+      parts.add(tr('серверов: {0}', [r.servers.length]));
     }
     for (final rd in r.routing) {
       parts.add(_applyRoutingDeeplink(rd));
@@ -1479,19 +1485,19 @@ class AppState extends ChangeNotifier {
       if (existing != null) {
         // Без отдельного сообщения: итог вставки скажет то же самое одним сообщением.
         await updateSubscription(existing, silent: true);
-        parts.add(existing.error == null ? 'подписка обновлена' : 'подписка с ошибкой: ${existing.error}');
+        parts.add(existing.error == null ? tr('подписка обновлена') : tr('подписка с ошибкой: {0}', [existing.error]));
       } else {
         final sub = Subscription(url: url);
         subscriptions.add(sub);
         await updateSubscription(sub, silent: true);
-        parts.add(sub.error == null ? 'подписка «${sub.displayName}»' : 'подписка с ошибкой: ${sub.error}');
+        parts.add(sub.error == null ? tr('подписка «{0}»', [sub.displayName]) : tr('подписка с ошибкой: {0}', [sub.error]));
       }
     }
     changed();
 
     final summary = parts.isEmpty
-        ? (r.errors.isNotEmpty ? r.errors.first : 'Ничего не найдено')
-        : 'Добавлено: ${parts.join(', ')}${r.errors.isNotEmpty ? ' (ошибок: ${r.errors.length})' : ''}';
+        ? (r.errors.isNotEmpty ? r.errors.first : tr('Ничего не найдено'))
+        : tr('Добавлено: {0}{1}', [parts.join(', '), r.errors.isNotEmpty ? tr(' (ошибок: {0})', [r.errors.length]) : '']);
     for (final e in r.errors) {
       log.add('import', e);
     }
@@ -1502,7 +1508,7 @@ class AppState extends ChangeNotifier {
   String _applyRoutingDeeplink(RoutingDeeplink rd, {String? subscriptionId}) {
     if (rd.off) {
       setRouting(RoutingProfile.globalPresetId);
-      return 'маршрутизация отключена';
+      return tr('маршрутизация отключена');
     }
     final p = rd.profile!..subscriptionId = subscriptionId;
     final idx = routingProfiles.indexWhere((e) =>
@@ -1515,7 +1521,7 @@ class AppState extends ChangeNotifier {
       routingProfiles.add(p);
     }
     if (rd.activate || subscriptionId != null) setRouting(p.id);
-    return 'маршрутизация «${p.name}»';
+    return tr('маршрутизация «{0}»', [p.name]);
   }
 
   // ---------------------------------------------------------------------------
@@ -1535,7 +1541,7 @@ class AppState extends ChangeNotifier {
         _subRetryAfter[s.id] = DateTime.now().add(Duration(minutes: _subsRefused.contains(s.id) ? 60 : 5));
       } else {
         _subRetryAfter.remove(s.id);
-        if (!force) log.add('subscription', '«${s.displayName}» обновлена автоматически');
+        if (!force) log.add('subscription', tr('«{0}» обновлена автоматически', [s.displayName]));
       }
     }
   }
@@ -1572,7 +1578,7 @@ class AppState extends ChangeNotifier {
       } catch (e) {
         // Сервер ответил отказом — запрос дошёл, идти другим путём незачем.
         if (e is ServerRefused && e.isFinal) rethrow;
-        log.add('subscription', '${sub.displayName}: через VPN не удалось (${scrubUrls('$e')}), пробую напрямую');
+        log.add('subscription', tr('{0}: через VPN не удалось ({1}), пробую напрямую', [sub.displayName, scrubUrls('$e')]));
       }
       final fetched = await direct();
       _subsDirectOnly.add(key);
@@ -1606,17 +1612,17 @@ class AppState extends ChangeNotifier {
         // Основной адрес не ответил или ответил ошибкой — пробуем запасной, если провайдер его присылал.
         final spare = sub.fallbackUrl;
         if (spare == null || spare == sub.url) rethrow;
-        log.add('subscription', '${sub.displayName}: основной адрес не ответил (${scrubUrls('$e')}), '
-            'пробую запасной адрес от провайдера');
+        log.add('subscription', tr('{0}: основной адрес не ответил ({1}), '
+            'пробую запасной адрес от провайдера', [sub.displayName, scrubUrls('$e')]));
         try {
           fetched = await _fetchSubscription(sub, url: spare);
         } catch (spareError) {
           // Не ответил и запасной — в подписке остаётся ошибка основного адреса: она понятнее (например,
           // «подписка закончилась»), и по ней решается, как часто пробовать снова.
-          log.add('subscription', '${sub.displayName}: запасной адрес тоже не ответил (${scrubUrls('$spareError')})');
+          log.add('subscription', tr('{0}: запасной адрес тоже не ответил ({1})', [sub.displayName, scrubUrls('$spareError')]));
           Error.throwWithStackTrace(e, st);
         }
-        log.add('subscription', '${sub.displayName}: обновлена с запасного адреса');
+        log.add('subscription', tr('{0}: обновлена с запасного адреса', [sub.displayName]));
       }
       // Подписку удалили, пока шёл запрос («Удалить подписку», «Удалить все данные») — её серверы не возвращаем.
       if (!subscriptions.contains(sub)) return;
@@ -1649,7 +1655,7 @@ class AppState extends ChangeNotifier {
               ));
       }
       if (fresh.isEmpty && fetched.result.servers.isEmpty) {
-        sub.error = fetched.result.errors.isNotEmpty ? fetched.result.errors.first : 'Подписка пуста';
+        sub.error = fetched.result.errors.isNotEmpty ? fetched.result.errors.first : tr('Подписка пуста');
       } else {
         final insertAt = servers.indexWhere((s) => s.subscriptionId == sub.id);
         servers.removeWhere((s) => s.subscriptionId == sub.id);
@@ -1663,15 +1669,15 @@ class AppState extends ChangeNotifier {
         final rd = RoutingProfile.parseDeeplink(routingLink);
         if (rd != null) _applyRoutingDeeplink(rd, subscriptionId: sub.id);
       }
-      if (!silent) toast('Подписка «${sub.displayName}» обновлена', detail: 'Серверов: ${fresh.length}');
+      if (!silent) toast(tr('Подписка «{0}» обновлена', [sub.displayName]), detail: tr('Серверов: {0}', [fresh.length]));
     } catch (e) {
       sub.error = describeNetError(e);
       final refused = e is ServerRefused && e.isFinal;
       refused ? _subsRefused.add(sub.id) : _subsRefused.remove(sub.id);
       // Адрес подписки — ключ доступа: в журнал он не пишется, даже если попал в текст ошибки.
       log.add('subscription',
-          '${sub.displayName}: не удалось обновить подписку — ${e is ServerRefused ? e.reason : scrubUrls('$e')}');
-      if (!silent) toast('Не удалось обновить «${sub.displayName}»: ${sub.error}');
+          tr('{0}: не удалось обновить подписку — {1}', [sub.displayName, e is ServerRefused ? e.reason : scrubUrls('$e')]));
+      if (!silent) toast(tr('Не удалось обновить «{0}»: {1}', [sub.displayName, sub.error]));
     } finally {
       updatingSubs.remove(sub.id);
       changed();
@@ -1779,7 +1785,7 @@ class AppState extends ChangeNotifier {
         await Pinger.realDelayAll(list, settings.testUrl, log, onResult, cancel, settings);
       }
     } catch (e) {
-      if (!cancel.cancelled) toast('Ошибка проверки: $e');
+      if (!cancel.cancelled) toast(tr('Ошибка проверки: {0}', [e]));
     } finally {
       finish();
     }
@@ -1822,9 +1828,9 @@ class AppState extends ChangeNotifier {
         });
       }, null, settings);
       final ok = list.where((s) => (s.udpMs ?? -1) >= 0).length;
-      log.add('test', 'Проверка UDP: проходит у $ok из ${list.length}');
+      log.add('test', tr('Проверка UDP: проходит у {0} из {1}', [ok, list.length]));
     } catch (e) {
-      toast('Ошибка проверки UDP: $e');
+      toast(tr('Ошибка проверки UDP: {0}', [e]));
     } finally {
       redraw?.cancel();
       udpPending.clear();
@@ -2002,7 +2008,7 @@ class AppState extends ChangeNotifier {
   Future<void> releaseKillSwitch() async {
     _crashRetry++;
     await KillSwitch.release();
-    log.add('app', 'Интернет открыт без VPN');
+    log.add('app', tr('Интернет открыт без VPN'));
     notifyListeners();
   }
 
@@ -2034,16 +2040,16 @@ class AppState extends ChangeNotifier {
   Future<int> _pickPort(int preferred, Set<int> taken, String what) async {
     if (!taken.contains(preferred) && await _portFree(preferred)) return preferred;
     if (settings.mode == ConnectionMode.proxyOnly) {
-      throw CoreException('Порт $preferred ($what) уже занят другой программой — например, другим VPN-клиентом. '
-          'Закройте её или смените порт в Настройки → Для опытных → Локальные порты.');
+      throw CoreException(tr('Порт {0} ({1}) уже занят другой программой — например, другим VPN-клиентом. '
+          'Закройте её или смените порт в Настройки → Для опытных → Локальные порты.', [preferred, what]));
     }
     for (var p = preferred + 1000; p < preferred + 1100; p++) {
       if (!taken.contains(p) && await _portFree(p)) {
-        log.add('app', 'Порт $preferred ($what) занят другой программой, использую $p');
+        log.add('app', tr('Порт {0} ({1}) занят другой программой, использую {2}', [preferred, what, p]));
         return p;
       }
     }
-    throw CoreException('Не нашлось свободного порта для $what');
+    throw CoreException(tr('Не нашлось свободного порта для {0}', [what]));
   }
 
   /// Другие подключённые VPN, которые помешают (проверяется перед подключением).
@@ -2057,7 +2063,7 @@ class AppState extends ChangeNotifier {
   bool closingOtherVpn = false;
 
   Future<void> closeVpnConflicts(List<VpnConflict> conflicts) async {
-    log.add('app', 'Закрываю мешающие VPN: ${conflicts.map((c) => c.name).join(', ')}');
+    log.add('app', tr('Закрываю мешающие VPN: {0}', [conflicts.map((c) => c.name).join(', ')]));
     closingOtherVpn = true;
     notifyListeners();
     try {
@@ -2085,7 +2091,7 @@ class AppState extends ChangeNotifier {
   Future<void> cancelConnect() async {
     if (status != ConnStatus.connecting || _cancelConnect) return;
     _cancelConnect = true;
-    log.add('app', 'Подключение отменено');
+    log.add('app', tr('Подключение отменено'));
     // Автовыбор сервера мог ещё мерить задержку — останавливаем и его.
     await cancelPing();
     await _singbox.stop();
@@ -2094,7 +2100,7 @@ class AppState extends ChangeNotifier {
 
   /// Между шагами подключения: если его отменили, дальше не идём.
   void _checkCancel() {
-    if (_cancelConnect) throw CoreException('Подключение отменено');
+    if (_cancelConnect) throw CoreException(tr('Подключение отменено'));
   }
 
   /// [ignoreOtherVpn] — пользователь уже предупреждён о другом VPN и решил подключаться всё равно.
@@ -2112,15 +2118,15 @@ class AppState extends ChangeNotifier {
     status = ConnStatus.connecting;
     notifyListeners();
     // Каждое подключение — отдельный отрезок журнала (раздел «Логи»).
-    log.startSession(selectedServer?.name ?? 'Сервер не выбран', detail: xrayTun ? '${settings.mode.label} · Xray' : settings.mode.label);
-    log.add('app', 'Подключение…');
+    log.startSession(selectedServer?.name ?? tr('Сервер не выбран'), detail: xrayTun ? '${settings.mode.label} · Xray' : settings.mode.label);
+    log.add('app', tr('Подключение…'));
     try {
       // zapret правит пакеты, в том числе на пути к VPN-серверу, — с ним VPN может не заработать.
       // Подключаемся всё равно (пользователя спросили при нажатии кнопки), но оставляем след в журнале.
       final zapret = WinSys.zapretRunning();
       if (zapret != null) {
-        log.add('app', 'Предупреждение: запущен $zapret — он меняет соединения и может мешать VPN. Если VPN-сервер '
-            'не отвечает или сайты не открываются, добавьте адрес VPN-сервера в исключения $zapret или закройте его');
+        log.add('app', tr('Предупреждение: запущен {0} — он меняет соединения и может мешать VPN. Если VPN-сервер '
+            'не отвечает или сайты не открываются, добавьте адрес VPN-сервера в исключения {1} или закройте его', [zapret, zapret]));
       }
       // Без прав администратора ядра с адаптером, Kill Switch и уборку адаптеров берёт на себя служба SkipIt.
       final viaService = usesTun && !isAdmin;
@@ -2133,8 +2139,8 @@ class AppState extends ChangeNotifier {
       if (usesTun && !ignoreOtherVpn) {
         final other = WinSys.otherVpnAdapters();
         if (other.isNotEmpty) {
-          throw CoreException('Включён другой VPN (${other.join(', ')}). Отключите его и подключитесь снова — '
-              'два VPN одновременно мешают друг другу и ломают сеть.');
+          throw CoreException(tr('Включён другой VPN ({0}). Отключите его и подключитесь снова — '
+              'два VPN одновременно мешают друг другу и ломают сеть.', [other.join(', ')]));
         }
       }
 
@@ -2146,7 +2152,7 @@ class AppState extends ChangeNotifier {
       }
       _checkCancel();
       final server = selectedServer;
-      if (server == null) throw CoreException('Сначала добавьте и выберите сервер');
+      if (server == null) throw CoreException(tr('Сначала добавьте и выберите сервер'));
 
       final routing = routingForConfig;
       // У серверов с JSON-конфигом провайдера действуют его правила, а правила профиля — вместе с ними.
@@ -2169,14 +2175,14 @@ class AppState extends ChangeNotifier {
       taken.add(session.socksPort);
       session.httpPort = await _pickPort(settings.httpPort, taken, 'HTTP');
       taken.add(session.httpPort);
-      session.apiPort = await _pickPort(settings.apiPort, taken, 'статистика');
+      session.apiPort = await _pickPort(settings.apiPort, taken, tr('статистика'));
       _session = session;
       // Своя гео-база профиля может не знать списка рекламы — тогда Xray с таким правилом не запустился
       // бы вовсе. Подключаемся без блокировки и говорим почему.
       if (session.adBlock && !await _geoHasAds()) {
         session.adBlock = false;
-        log.add('app', 'Предупреждение: в гео-базе нет списка рекламы (${XrayConfig.adsList}) — блокировка рекламы '
-            'в этом подключении не работает. Верните стандартную гео-базу в профиле маршрутизации');
+        log.add('app', tr('Предупреждение: в гео-базе нет списка рекламы ({0}) — блокировка рекламы '
+            'в этом подключении не работает. Верните стандартную гео-базу в профиле маршрутизации', [XrayConfig.adsList]));
       }
       // Сама программа ходит через свой HTTP-порт (обновления, подписки, geo-базы) — с тем же паролем.
       Net.proxyAuth = session.httpAuth ? '${session.portUser}:${session.portPassword}' : null;
@@ -2185,8 +2191,8 @@ class AppState extends ChangeNotifier {
       final xrayTun = this.xrayTun;
       if (xrayTun) {
         if (!File(AppPaths.wintunDll).existsSync()) {
-          throw CoreException('Не найден файл wintun.dll рядом с ядром Xray — без него Xray не может создать адаптер. '
-              'Переустановите SkipIt или выберите режим TUN «sing-box».');
+          throw CoreException(tr('Не найден файл wintun.dll рядом с ядром Xray — без него Xray не может создать адаптер. '
+              'Переустановите SkipIt или выберите режим TUN «sing-box».'));
         }
         XrayConfig.addTun(config, settings: session, apps: appRules, directDomains: [
           for (final domestic in routing.domesticDnsList.map(Uri.tryParse))
@@ -2202,7 +2208,7 @@ class AppState extends ChangeNotifier {
       taken.add(session.apiPort);
       var directPort = session.apiPort + 1;
       while (taken.contains(directPort) || !await _portFree(directPort)) {
-        if (++directPort > session.apiPort + 200) throw CoreException('Не нашлось свободного порта для обновления подписок');
+        if (++directPort > session.apiPort + 200) throw CoreException(tr('Не нашлось свободного порта для обновления подписок'));
       }
       XrayConfig.addDirectInbound(config, port: directPort, settings: session, hosts: [
         for (final s in subscriptions)
@@ -2215,7 +2221,7 @@ class AppState extends ChangeNotifier {
       taken.add(directPort);
       var checkPort = directPort + 1;
       while (taken.contains(checkPort) || !await _portFree(checkPort)) {
-        if (++checkPort > directPort + 200) throw CoreException('Не нашлось свободного порта для проверки связи');
+        if (++checkPort > directPort + 200) throw CoreException(tr('Не нашлось свободного порта для проверки связи'));
       }
       taken.add(checkPort);
       XrayConfig.addCheckInbound(config, port: checkPort);
@@ -2224,7 +2230,7 @@ class AppState extends ChangeNotifier {
       if (usesTun && !xrayTun) {
         var port = checkPort + 1;
         while (taken.contains(port) || !await _portFree(port)) {
-          if (++port > checkPort + 200) throw CoreException('Не нашлось свободного порта для DNS');
+          if (++port > checkPort + 200) throw CoreException(tr('Не нашлось свободного порта для DNS'));
         }
         taken.add(port);
         dnsPort = port;
@@ -2236,7 +2242,7 @@ class AppState extends ChangeNotifier {
       // Вход проверки DNS — последним: к этому месту все правила уже на месте.
       var dnsCheckPort = checkPort + 1;
       while (taken.contains(dnsCheckPort) || !await _portFree(dnsCheckPort)) {
-        if (++dnsCheckPort > checkPort + 200) throw CoreException('Не нашлось свободного порта для проверки DNS');
+        if (++dnsCheckPort > checkPort + 200) throw CoreException(tr('Не нашлось свободного порта для проверки DNS'));
       }
       taken.add(dnsCheckPort);
       _dnsCheckPassword = randomSecret();
@@ -2298,7 +2304,7 @@ class AppState extends ChangeNotifier {
         await saveNow();
         if (!await waitForPort(session.socksPort, alive: () => _xray.running)) {
           _checkCancel();
-          throw CoreException('Xray не запустился:\n${log.tail(8, source: 'xray')}');
+          throw CoreException(tr('Xray не запустился:\n{0}', [log.tail(8, source: 'xray')]));
         }
       }
 
@@ -2306,7 +2312,7 @@ class AppState extends ChangeNotifier {
       // Ядро могло открыть порт и тут же упасть на следующей ошибке конфига — проверяем, что оно живо.
       await Future.delayed(const Duration(milliseconds: 250));
       _checkCancel();
-      if (!_xray.running) throw CoreException('Xray завершился сразу после запуска:\n${log.tail(8, source: 'xray')}');
+      if (!_xray.running) throw CoreException(tr('Xray завершился сразу после запуска:\n{0}', [log.tail(8, source: 'xray')]));
 
       if (xrayTun) {
         // Адаптер поднимает сам Xray: ждём, пока трафик пойдёт через него.
@@ -2323,7 +2329,7 @@ class AppState extends ChangeNotifier {
         // попытка обычно проходит за доли секунды (так было у пользователей: отменили — подключились
         // сразу), поэтому зависшее ядро один раз перезапускается, а не держит человека до ошибки.
         if (!ignoreOtherVpn && _xray.running && !WinSys.ownTunActive() && _xrayAdapterStuck()) {
-          log.add('app', 'Предупреждение: Windows не включила адаптер VPN за 4 с — перезапускаю ядро и пробую ещё раз');
+          log.add('app', tr('Предупреждение: Windows не включила адаптер VPN за 4 с — перезапускаю ядро и пробую ещё раз'));
           await _xray.stop();
           _checkCancel();
           await startXray();
@@ -2344,7 +2350,7 @@ class AppState extends ChangeNotifier {
         // Порт списка соединений sing-box — для счётчика трафика, который он выпускает напрямую сам.
         var port = checkPort + 1;
         while (taken.contains(port) || !await _portFree(port)) {
-          if (++port > checkPort + 200) throw CoreException('Не нашлось свободного порта для счётчика трафика');
+          if (++port > checkPort + 200) throw CoreException(tr('Не нашлось свободного порта для счётчика трафика'));
         }
         final random = Random.secure();
         tunStatsPort = port;
@@ -2397,7 +2403,7 @@ class AppState extends ChangeNotifier {
         // Поднимаем адаптер без IPv6 — уходить мимо VPN по IPv6 тогда нечему.
         if (!_singbox.running &&
             log.lines.skip(logStart).any((l) => l.source == 'sing-box' && l.text.contains('set ipv6 address'))) {
-          log.add('app', 'Предупреждение: в Windows выключен IPv6 — адаптер VPN поднят без него');
+          log.add('app', tr('Предупреждение: в Windows выключен IPv6 — адаптер VPN поднят без него'));
           await buildTun(adapterIpv6: false);
           _checkCancel();
           logStart = log.lines.length;
@@ -2407,7 +2413,7 @@ class AppState extends ChangeNotifier {
         // Как и у Xray: Windows иногда зависает на создании адаптера, а повторная попытка проходит сразу.
         // sing-box сам сообщает о зависании только через 10 секунд — перезапускаем его раньше, один раз.
         if (!ignoreOtherVpn && _singbox.running && !WinSys.ownTunActive()) {
-          log.add('app', 'Предупреждение: Windows не включила адаптер VPN за 4 с — перезапускаю sing-box и пробую ещё раз');
+          log.add('app', tr('Предупреждение: Windows не включила адаптер VPN за 4 с — перезапускаю sing-box и пробую ещё раз'));
           await _singbox.stop();
           _checkCancel();
           logStart = log.lines.length;
@@ -2444,7 +2450,7 @@ class AppState extends ChangeNotifier {
 
       status = ConnStatus.connected;
       connectedAt = DateTime.now();
-      log.add('app', 'Подключено');
+      log.add('app', tr('Подключено'));
       _flushDns();
       stats.reset();
       _statsTimer?.cancel();
@@ -2473,13 +2479,13 @@ class AppState extends ChangeNotifier {
         tunFailed = false;
       } else {
         lastError = e.toString();
-        log.add('app', 'Ошибка подключения: $e');
+        log.add('app', tr('Ошибка подключения: {0}', [e]));
       }
       await _teardown();
       // Подключались с открытым интернетом — возвращаем как было. Если же Kill Switch уже держал
       // его закрытым, оставляем закрытым: решение открыть — за пользователем.
       if (!held) await KillSwitch.release();
-      if (KillSwitch.active) log.add('app', 'Kill Switch держит интернет закрытым');
+      if (KillSwitch.active) log.add('app', tr('Kill Switch держит интернет закрытым'));
       log.endSession();
       status = ConnStatus.disconnected;
       notifyListeners();
@@ -2496,8 +2502,8 @@ class AppState extends ChangeNotifier {
       if (list.any((i) => i.addresses.any((a) => a.address == XrayConfig.tunV4))) return;
       await Future.delayed(const Duration(milliseconds: 50));
     }
-    log.add('app', 'Предупреждение: у адаптера VPN долго не появлялся адрес — первую минуту правила по программам '
-        'могут не действовать');
+    log.add('app', tr('Предупреждение: у адаптера VPN долго не появлялся адрес — первую минуту правила по программам '
+        'могут не действовать'));
   }
 
   /// sing-box сообщает, что Windows не отдаёт ему сетевой адаптер.
@@ -2529,14 +2535,14 @@ class AppState extends ChangeNotifier {
     final tail = log.tail(8, source: core);
     final lower = tail.toLowerCase();
     if (_adapterTrouble(lower) || tail.trim().isEmpty || (core == 'xray' && _xrayAdapterStuck())) {
-      return 'Windows не смогла включить сетевой адаптер VPN — это сбой на стороне Windows, не настроек. '
+      return tr('Windows не смогла включить сетевой адаптер VPN — это сбой на стороне Windows, не настроек. '
           'Обычно помогает перезагрузка компьютера. Прямо сейчас можно подключиться в режиме «Прокси»: '
-          'он работает без адаптера.';
+          'он работает без адаптера.');
     }
     if (lower.contains('access is denied')) {
-      return 'Windows не разрешила создать сетевой адаптер VPN — запустите SkipIt от имени администратора.';
+      return tr('Windows не разрешила создать сетевой адаптер VPN — запустите SkipIt от имени администратора.');
     }
-    return 'Не удалось поднять TUN:\n$tail';
+    return tr('Не удалось поднять TUN:\n{0}', [tail]);
   }
 
   /// [hold] — не снимать Kill Switch: отключение не по воле пользователя (сбой ядра, переподключение).
@@ -2556,9 +2562,9 @@ class AppState extends ChangeNotifier {
     if (!hold) await KillSwitch.release();
     await KillSwitch.verifyReleased();
     _flushDns();
-    log.add('app', 'Отключено');
+    log.add('app', tr('Отключено'));
     if (summary != null) log.add('app', summary);
-    if (KillSwitch.active) log.add('app', 'Kill Switch держит интернет закрытым');
+    if (KillSwitch.active) log.add('app', tr('Kill Switch держит интернет закрытым'));
     log.endSession();
     if (!keepError) lastError = null;
     status = ConnStatus.disconnected;
@@ -2569,9 +2575,9 @@ class AppState extends ChangeNotifier {
   /// Строка журнала с трафиком за подключение; null — трафика не было.
   static String? trafficSummary(TrafficStats s) {
     if (s.up + s.down == 0) return null;
-    String part(int down, int up) => '${formatBytes(down)} получено, ${formatBytes(up)} отправлено';
-    return 'Трафик за подключение — через VPN: ${part(s.vpnDown, s.vpnUp)}; '
-        'напрямую: ${part(s.directDown, s.directUp)}';
+    String part(int down, int up) => tr('{0} получено, {1} отправлено', [formatBytes(down), formatBytes(up)]);
+    return tr('Трафик за подключение — через VPN: {0}; '
+        'напрямую: {1}', [part(s.vpnDown, s.vpnUp), part(s.directDown, s.directUp)]);
   }
 
   /// Сервер файла автонастройки прокси, пока подключён «Смешанный».
@@ -2614,15 +2620,15 @@ class AppState extends ChangeNotifier {
       ..add(now)
       ..removeWhere((t) => now.difference(t) > const Duration(minutes: 10));
     final delay = settings.autoReconnect ? crashRetryDelay(_crashTimes.length, uptime: uptime) : null;
-    log.add('app', 'Ядро завершилось (код $code) через ${uptime.inSeconds} с работы'
-        '${delay != null ? ', переподключаюсь через ${delay.inSeconds} с' : ''}');
+    log.add('app', tr('Ядро завершилось (код {0}) через {1} с работы'
+        '{2}', [code, uptime.inSeconds, delay != null ? tr(', переподключаюсь через {0} с', [delay.inSeconds]) : '']));
     unawaited(() async {
       // Включённый Kill Switch остаётся стоять: пока VPN не вернулся, трафик напрямую не идёт.
       await disconnect(keepError: true, hold: true);
       if (delay != null) {
-        _notify('VPN оборвался, переподключаюсь');
+        _notify(tr('VPN оборвался, переподключаюсь'));
         final token = ++_crashRetry;
-        final waiting = 'Ядро VPN неожиданно закрылось — переподключусь через ${delay.inSeconds} с';
+        final waiting = tr('Ядро VPN неожиданно закрылось — переподключусь через {0} с', [delay.inSeconds]);
         if (delay > const Duration(seconds: 5)) {
           lastError = waiting;
           notifyListeners();
@@ -2639,15 +2645,15 @@ class AppState extends ChangeNotifier {
         }
         await connect();
         if (isConnected) {
-          _notify('VPN снова подключён');
+          _notify(tr('VPN снова подключён'));
         } else {
-          _notify('Не удалось переподключиться. $_withoutVpn');
+          _notify(tr('Не удалось переподключиться. {0}', [_withoutVpn]));
         }
       } else {
-        lastError = 'Ядро VPN неожиданно закрылось, подключение остановлено. Если запущен другой VPN-клиент '
-            '(например, Happ) — закройте его: он может закрывать ядро SkipIt.';
+        lastError = tr('Ядро VPN неожиданно закрылось, подключение остановлено. Если запущен другой VPN-клиент '
+            '(например, Happ) — закройте его: он может закрывать ядро SkipIt.');
         notifyListeners();
-        _notify('VPN отключился: ядро неожиданно закрылось. $_withoutVpn');
+        _notify(tr('VPN отключился: ядро неожиданно закрылось. {0}', [_withoutVpn]));
       }
     }());
   }
@@ -2672,11 +2678,11 @@ class AppState extends ChangeNotifier {
   /// Очистка кэша DNS Windows (при подключении и отключении) с записью результата в журнал:
   /// иначе адреса сайтов, запомненные до смены пути, остались бы прежними.
   void _flushDns() => log.add(
-      'app', WinSys.flushDnsCache() ? 'Кэш DNS Windows очищен' : 'Не удалось очистить кэш DNS Windows');
+      'app', WinSys.flushDnsCache() ? tr('Кэш DNS Windows очищен') : tr('Не удалось очистить кэш DNS Windows'));
 
   /// Что с интернетом, когда VPN отключился сам, — для уведомления.
   String get _withoutVpn =>
-      killSwitchHolding ? 'Интернет закрыт: Kill Switch' : 'Интернет идёт без VPN';
+      killSwitchHolding ? tr('Интернет закрыт: Kill Switch') : tr('Интернет идёт без VPN');
 
   /// Уведомление Windows о сбое или восстановлении VPN. Показывается, только когда окно спрятано
   /// или свёрнуто (это решает оболочка окна) и уведомления не выключены в настройках.
@@ -2698,10 +2704,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       final proxy = isConnected ? (_session ?? settings).httpPort : null;
-      log.add('app', 'Загрузка geoip/geosite…');
+      log.add('app', tr('Загрузка geoip/geosite…'));
       await Net.download(r.geoipUrl, AppPaths.geoipFile, proxyPort: proxy);
       await Net.download(r.geositeUrl, AppPaths.geositeFile, proxyPort: proxy);
-      log.add('app', 'Геофайлы обновлены');
+      log.add('app', tr('Геофайлы обновлены'));
     } finally {
       updatingGeo = false;
       notifyListeners();
@@ -2736,7 +2742,7 @@ class AppState extends ChangeNotifier {
     if (checkingUpdates) return;
     // Тестовая сборка не обновляется из релизов: установщик заменил бы установленную программу.
     if (AppPaths.isDev || appRepo.isEmpty) {
-      if (!silent) toast('Тестовая сборка не обновляется из релизов');
+      if (!silent) toast(tr('Тестовая сборка не обновляется из релизов'));
       return;
     }
     checkingUpdates = true;
@@ -2755,19 +2761,19 @@ class AppState extends ChangeNotifier {
         // «Установить» в боковом меню.
         final version = appUpdate!.version;
         if (!silent || settings.updateNotified != version) {
-          toast('Доступна новая версия', kind: ToastKind.update, detail: 'SkipIt $version');
+          toast(tr('Доступна новая версия'), kind: ToastKind.update, detail: 'SkipIt $version');
         }
         if (settings.updateNotified != version) {
           settings.updateNotified = version;
           save();
         }
       } else if (!silent) {
-        toast('У вас установлена последняя версия');
+        toast(tr('У вас установлена последняя версия'));
       }
     } catch (e) {
-      log.add('update', 'Проверка обновлений: $e');
+      log.add('update', tr('Проверка обновлений: {0}', [e]));
       if (!silent) {
-        toast(e is UpdateLimitedException ? '$e' : 'Не удалось проверить обновления: ${describeNetError(e)}');
+        toast(e is UpdateLimitedException ? '$e' : tr('Не удалось проверить обновления: {0}', [describeNetError(e)]));
       }
     } finally {
       checkingUpdates = false;
@@ -2782,12 +2788,12 @@ class AppState extends ChangeNotifier {
 
   /// Подпись хода скачивания для окна: «Скачиваю обновление… 43 %».
   String get updateProgressLabel => updateProgress == null
-      ? 'Скачиваю обновление…'
-      : 'Скачиваю обновление… ${(updateProgress! * 100).round()} %';
+      ? tr('Скачиваю обновление…')
+      : tr('Скачиваю обновление… {0} %', [(updateProgress! * 100).round()]);
 
   /// То же коротко — для строки версии в боковом меню: длинная подпись не помещается в её рамку.
   String get updateProgressShort =>
-      updateProgress == null ? 'Скачиваю…' : 'Скачиваю… ${(updateProgress! * 100).round()} %';
+      updateProgress == null ? tr('Скачиваю…') : tr('Скачиваю… {0} %', [(updateProgress! * 100).round()]);
 
   /// Скачивает установщик новой версии SkipIt из релиза на GitHub и сверяет его контрольную сумму.
   Future<String?> downloadAppUpdate() async {
@@ -2824,7 +2830,7 @@ class AppState extends ChangeNotifier {
       if (viaService && expected != null) {
         try {
           final staged = await ServiceClient.stageUpdate(path, expected);
-          log.add('update', 'Скачан установщик ${release.version}, служба SkipIt сверила его копию: контрольная сумма совпала');
+          log.add('update', tr('Скачан установщик {0}, служба SkipIt сверила его копию: контрольная сумма совпала', [release.version]));
           return staged;
         } finally {
           try {
@@ -2833,7 +2839,7 @@ class AppState extends ChangeNotifier {
         }
       }
       await Updates.verify(path, expected);
-      log.add('update', 'Скачан установщик ${release.version}, контрольная сумма совпала');
+      log.add('update', tr('Скачан установщик {0}, контрольная сумма совпала', [release.version]));
       return path;
     } finally {
       downloadingAppUpdate = false;

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'dns_check.dart';
 import 'log_store.dart';
+import '../l10n/l10n.dart';
 
 /// Насколько строка вывода тревожна: всё в порядке, к сведению, причина задержки, сайт не открылся.
 enum SiteNoteKind { ok, info, warn, bad }
@@ -63,10 +64,10 @@ class SiteReport {
   int? otherMs;
 
   String get path => switch (route) {
-        ConnRoute.proxy => 'через VPN',
-        ConnRoute.direct => 'напрямую',
-        ConnRoute.block => 'заблокирован правилом',
-        _ => 'путь не определён',
+        ConnRoute.proxy => tr('через VPN'),
+        ConnRoute.direct => tr('напрямую'),
+        ConnRoute.block => tr('заблокирован правилом'),
+        _ => tr('путь не определён'),
       };
 
   /// Адрес от Google DNS заметно ближе: больше чем в полтора раза и не меньше чем на 60 мс.
@@ -78,18 +79,18 @@ class SiteReport {
     final found = <SiteNote>[];
     void add(SiteNoteKind kind, String text) => found.add((kind: kind, text: text));
     if (stopped) {
-      add(SiteNoteKind.bad, 'Проверка прервана: VPN отключился или переподключился');
+      add(SiteNoteKind.bad, tr('Проверка прервана: VPN отключился или переподключился'));
       return found;
     }
     if (route == ConnRoute.block) {
-      add(SiteNoteKind.bad, 'Сайт заблокирован правилом маршрутизации — поэтому он не открывается');
+      add(SiteNoteKind.bad, tr('Сайт заблокирован правилом маршрутизации — поэтому он не открывается'));
       return found;
     }
     // Время самой дороги — лучшее из двух соединений: ядро могло пойти к разным адресам сайта.
     final warm = firstMs == null || warmMs == null ? (warmMs ?? firstMs) : (firstMs! < warmMs! ? firstMs : warmMs);
     if (warm == null) {
-      add(SiteNoteKind.bad, 'Этим путём сайт не открылся${error == null ? '' : ': $error'}');
-      if (addressMs != null) add(SiteNoteKind.info, 'Сам адрес сайта при этом отвечает напрямую за $addressMs мс');
+      add(SiteNoteKind.bad, tr('Этим путём сайт не открылся{0}', [error == null ? '' : ': $error']));
+      if (addressMs != null) add(SiteNoteKind.info, tr('Сам адрес сайта при этом отвечает напрямую за {0} мс', [addressMs]));
       return found;
     }
     // Первое обращение дольше повторных: на него уходят поиск адреса и установка связи. Говорим об этом,
@@ -99,32 +100,32 @@ class SiteReport {
     if (firstMs != null && sameWayMs != null && firstMs! - sameWayMs! >= 400) {
       final extra = firstMs! - sameWayMs!;
       add(extra >= 1500 ? SiteNoteKind.warn : SiteNoteKind.info,
-          'Первое соединение на $extra мс дольше повторного тем же путём: столько заняло первое обращение — '
-          'поиск адреса и установка связи. Это разовая задержка, дальше быстрее');
+          tr('Первое соединение на {0} мс дольше повторного тем же путём: столько заняло первое обращение — '
+          'поиск адреса и установка связи. Это разовая задержка, дальше быстрее', [extra]));
     }
     if (farAddress) {
       add(SiteNoteKind.warn,
-          'DNS подключения назвал далёкий адрес: до него $addressMs мс, а до адреса от Google DNS — $otherMs мс. '
-          'Серверы можно проверить ниже, в карточке «Как отвечают DNS-серверы»');
+          tr('DNS подключения назвал далёкий адрес: до него {0} мс, а до адреса от Google DNS — {1} мс. '
+          'Серверы можно проверить ниже, в карточке «Как отвечают DNS-серверы»', [addressMs, otherMs]));
     }
     final compared = route == ConnRoute.proxy && vpnSiteMs != null && vpnBaseMs != null;
     if (compared && vpnSiteMs! - vpnBaseMs! >= 150 && vpnSiteMs! * 2 > vpnBaseMs! * 3) {
       add(SiteNoteKind.warn,
-          'Сайт далеко от VPN-сервера: соединение с ним $vpnSiteMs мс, а с проверочным адресом тем же '
-          'путём — $vpnBaseMs мс');
+          tr('Сайт далеко от VPN-сервера: соединение с ним {0} мс, а с проверочным адресом тем же '
+          'путём — {1} мс', [vpnSiteMs, vpnBaseMs]));
     }
     if (replyMs == null) {
-      add(SiteNoteKind.warn, 'Соединение открылось, но на запрос сайт не ответил за ${SiteCheck.timeout.inSeconds} с');
+      add(SiteNoteKind.warn, tr('Соединение открылось, но на запрос сайт не ответил за {0} с', [SiteCheck.timeout.inSeconds]));
     } else if (replyMs! >= 1500 && replyMs! > warm * 2) {
       add(SiteNoteKind.warn,
-          'Сайт сам долго отвечает: $replyMs мс после того, как соединение уже установлено. VPN и DNS тут ни при чём');
+          tr('Сайт сам долго отвечает: {0} мс после того, как соединение уже установлено. VPN и DNS тут ни при чём', [replyMs]));
     }
     if (!found.any((n) => n.kind == SiteNoteKind.warn)) {
       add(
           SiteNoteKind.ok,
-          'Задержек по дороге не видно: соединение $warm мс'
-          '${compared ? ' — обычное время пути через VPN-сервер' : ''}, '
-          'ответ сайта ${replyMs ?? '—'} мс');
+          tr('Задержек по дороге не видно: соединение {0} мс'
+          '{1}, '
+          'ответ сайта {2} мс', [warm, compared ? tr(' — обычное время пути через VPN-сервер') : '', replyMs ?? '—']));
     }
     return found;
   }
@@ -137,14 +138,14 @@ class SiteReport {
 
   /// Одной строкой для журнала.
   String get summary => stopped
-      ? 'проверка прервана: VPN отключился или переподключился'
+      ? tr('проверка прервана: VPN отключился или переподключился')
       : [
         path,
-        if (firstMs != null) 'соединение $firstMs мс${warmMs == null ? '' : ', повторное $warmMs мс'}',
-        if (replyMs != null) 'ответ сайта $replyMs мс',
-        if (addressMs != null) 'адрес от DNS подключения ${address ?? ''} напрямую $addressMs мс'.replaceAll('  ', ' '),
-        if (otherMs != null && otherAddress != address) 'адрес от Google DNS ${otherAddress ?? ''} $otherMs мс'.replaceAll('  ', ' '),
-        if (vpnBaseMs != null) 'тем же путём через VPN: сайт $vpnSiteMs мс, проверочный адрес $vpnBaseMs мс',
+        if (firstMs != null) tr('соединение {0} мс{1}', [firstMs, warmMs == null ? '' : tr(', повторное {0} мс', [warmMs])]),
+        if (replyMs != null) tr('ответ сайта {0} мс', [replyMs]),
+        if (addressMs != null) tr('адрес от DNS подключения {0} напрямую {1} мс', [address ?? '', addressMs]).replaceAll('  ', ' '),
+        if (otherMs != null && otherAddress != address) tr('адрес от Google DNS {0} {1} мс', [otherAddress ?? '', otherMs]).replaceAll('  ', ' '),
+        if (vpnBaseMs != null) tr('тем же путём через VPN: сайт {0} мс, проверочный адрес {1} мс', [vpnSiteMs, vpnBaseMs]),
         if (error != null) error!,
       ].join(', ');
 }
@@ -285,7 +286,7 @@ class SiteCheck {
         return (
           readyMs: null,
           replyMs: null,
-          error: status.isEmpty ? 'ядро не ответило' : 'ядро ответило «$status»',
+          error: status.isEmpty ? tr('ядро не ответило') : tr('ядро ответило «{0}»', [status]),
           localPort: localPort
         );
       }
@@ -316,12 +317,12 @@ class SiteCheck {
         localPort: localPort
       );
     } on TimeoutException {
-      return (readyMs: null, replyMs: null, error: 'нет ответа за ${timeout.inSeconds} с', localPort: localPort);
+      return (readyMs: null, replyMs: null, error: tr('нет ответа за {0} с', [timeout.inSeconds]), localPort: localPort);
     } catch (_) {
       return (
         readyMs: null,
         replyMs: null,
-        error: 'соединение закрылось, не успев установиться',
+        error: tr('соединение закрылось, не успев установиться'),
         localPort: localPort
       );
     } finally {

@@ -4,6 +4,7 @@ import 'dart:io';
 import '../models/settings.dart';
 import 'link_parser.dart';
 import 'util.dart';
+import '../l10n/l10n.dart';
 
 class FetchedSubscription {
   FetchedSubscription(this.result, this.meta);
@@ -105,7 +106,7 @@ class Net {
       final req = await client.getUrl(Uri.parse('https://$host/cdn-cgi/trace')).timeout(const Duration(seconds: 5));
       final res = await req.close().timeout(const Duration(seconds: 5));
       final body = await res.transform(utf8.decoder).join().timeout(const Duration(seconds: 5));
-      if (res.statusCode >= 400) throw HttpException('Сервер ответил ${res.statusCode}');
+      if (res.statusCode >= 400) throw HttpException(tr('Сервер ответил {0}', [res.statusCode]));
       return RegExp(r'^loc=([A-Za-z]{2})\s*$', multiLine: true).firstMatch(body)?.group(1)?.toLowerCase();
     } finally {
       client.close(force: true);
@@ -136,7 +137,7 @@ class Net {
     try {
       final req = await client.getUrl(Uri.parse(url));
       final res = await req.close();
-      if (res.statusCode >= 400) throw HttpException('HTTP ${res.statusCode} при загрузке $url');
+      if (res.statusCode >= 400) throw HttpException(tr('HTTP {0} при загрузке {1}', [res.statusCode, url]));
       final tmp = File('$path.part');
       final sink = tmp.openWrite();
       var received = 0;

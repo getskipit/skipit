@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n/l10n.dart';
 
 /// Пункт всплывающего меню: значок, подпись, отметка выбранного.
 class AppMenuItem<T> {
@@ -81,7 +82,7 @@ class _MenuRoute<T> extends PopupRoute<T> {
   bool get barrierDismissible => true;
 
   @override
-  String? get barrierLabel => 'Закрыть меню';
+  String? get barrierLabel => tr('Закрыть меню');
 
   @override
   Duration get transitionDuration => const Duration(milliseconds: 110);

@@ -11,6 +11,7 @@ import '../state/app_state.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n/l10n.dart';
 
 class AppsPage extends StatefulWidget {
   const AppsPage({super.key, this.tabs});
@@ -68,7 +69,7 @@ class _AppsPageState extends State<AppsPage> {
       added++;
     }
     if (added == 0) {
-      state.toast('Уже в списке');
+      state.toast(tr('Уже в списке'));
     } else {
       _touch(state);
     }
@@ -108,21 +109,21 @@ class _AppsPageState extends State<AppsPage> {
     final empty = rules.entries.isEmpty;
     final hint = switch (rules.mode) {
       AppRoutingMode.off => empty
-          ? 'Правила выключены: все программы идут через VPN.'
-          : 'Правила выключены: все программы идут через VPN, список ниже не применяется.',
+          ? tr('Правила выключены: все программы идут через VPN.')
+          : tr('Правила выключены: все программы идут через VPN, список ниже не применяется.'),
       AppRoutingMode.allExcept => empty
-          ? 'Все программы идут через VPN. Добавьте программы, которые должны идти напрямую.'
-          : 'Все программы идут через VPN, а программы из списка — напрямую.',
+          ? tr('Все программы идут через VPN. Добавьте программы, которые должны идти напрямую.')
+          : tr('Все программы идут через VPN, а программы из списка — напрямую.'),
       AppRoutingMode.onlySelected => empty
-          ? 'Через VPN пойдут только программы из списка. Сейчас он пуст — через VPN не идёт ничего.'
-          : 'Через VPN идут только программы из списка, остальные — напрямую.',
+          ? tr('Через VPN пойдут только программы из списка. Сейчас он пуст — через VPN не идёт ничего.')
+          : tr('Через VPN идут только программы из списка, остальные — напрямую.'),
     };
 
     return Column(children: [
-      PageHeader('Маршрутизация', below: widget.tabs, actions: [
-        GhostButton(label: 'Из запущенных', icon: Icons.memory_rounded, onPressed: () => _pickRunning(state)),
+      PageHeader(tr('Маршрутизация'), below: widget.tabs, actions: [
+        GhostButton(label: tr('Из запущенных'), icon: Icons.memory_rounded, onPressed: () => _pickRunning(state)),
         GhostButton(
-          label: 'Папка',
+          label: tr('Папка'),
           icon: Icons.folder_open_rounded,
           onPressed: () async {
             final dir = await WinSys.pickFolder();
@@ -130,20 +131,20 @@ class _AppsPageState extends State<AppsPage> {
           },
         ),
         GhostButton(
-          label: 'По имени',
+          label: tr('По имени'),
           icon: Icons.text_fields_rounded,
           onPressed: () async {
-            final name = await promptText(context, title: 'Имя процесса', hint: 'Например: Telegram или chrome.exe');
+            final name = await promptText(context, title: tr('Имя процесса'), hint: tr('Например: Telegram или chrome.exe'));
             if (name != null && name.trim().isNotEmpty) {
               _addEntries(state, [(match: AppEntry.nameFromPath(name.trim()), label: name.trim(), exe: null)]);
             }
           },
         ),
         GradientButton(
-          label: 'Выбрать .exe',
+          label: tr('Выбрать .exe'),
           icon: Icons.add_rounded,
           onPressed: () async {
-            final path = await WinSys.pickFile(filter: 'Программы (*.exe)|*.exe');
+            final path = await WinSys.pickFile(filter: tr('Программы (*.exe)|*.exe'));
             if (path != null) {
               _addEntries(state, [_entryForExe(path, AppEntry.nameFromPath(path))]);
             }
@@ -163,12 +164,12 @@ class _AppsPageState extends State<AppsPage> {
                     Icon(Icons.info_rounded, color: C.orange),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text('Правила по приложениям работают в режимах «Смешанный» и TUN.',
+                      child: Text(tr('Правила по приложениям работают в режимах «Смешанный» и TUN.'),
                           style: TextStyle(color: C.text)),
                     ),
                     TextButton(
                       onPressed: () => state.setMode(ConnectionMode.mixed),
-                      child: const Text('Включить «Смешанный»'),
+                      child: Text(tr('Включить «Смешанный»')),
                     ),
                   ]),
                 ),
@@ -176,10 +177,10 @@ class _AppsPageState extends State<AppsPage> {
             Center(
               child: Segmented<AppRoutingMode>(
                 value: rules.mode,
-                items: const {
-                  AppRoutingMode.off: 'Выключено',
-                  AppRoutingMode.allExcept: 'Все через VPN, кроме списка',
-                  AppRoutingMode.onlySelected: 'Только выбранные через VPN',
+                items: {
+                  AppRoutingMode.off: tr('Выключено'),
+                  AppRoutingMode.allExcept: tr('Все через VPN, кроме списка'),
+                  AppRoutingMode.onlySelected: tr('Только выбранные через VPN'),
                 },
                 onChanged: (m) {
                   rules.mode = m;
@@ -208,16 +209,16 @@ class _AppsPageState extends State<AppsPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('Изменения ещё не применены',
+                      Text(tr('Изменения ещё не применены'),
                           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
                       const SizedBox(height: 2),
-                      Text('Нажмите «Применить» — VPN переподключится на секунду с новыми правилами',
+                      Text(tr('Нажмите «Применить» — VPN переподключится на секунду с новыми правилами'),
                           style: TextStyle(color: C.muted, fontSize: 12.5)),
                     ]),
                   ),
                   const SizedBox(width: 12),
                   GradientButton(
-                    label: 'Применить',
+                    label: tr('Применить'),
                     icon: Icons.refresh_rounded,
                     onPressed: state.isBusy ? null : state.reconnect,
                   ),
@@ -227,7 +228,7 @@ class _AppsPageState extends State<AppsPage> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 40),
                 child: Center(
-                  child: Text('Программ пока нет. Добавьте их кнопками вверху: программу, папку или имя процесса.',
+                  child: Text(tr('Программ пока нет. Добавьте их кнопками вверху: программу, папку или имя процесса.'),
                       style: TextStyle(color: C.muted)),
                 ),
               ),
@@ -254,7 +255,7 @@ class _AppsPageState extends State<AppsPage> {
                           ]),
                         ),
                         Tooltip(
-                          message: e.enabled ? 'Правило включено' : 'Правило выключено',
+                          message: e.enabled ? tr('Правило включено') : tr('Правило выключено'),
                           child: AppSwitch(
                             value: e.enabled,
                             onChanged: (v) {
@@ -264,7 +265,7 @@ class _AppsPageState extends State<AppsPage> {
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Убрать из списка',
+                          tooltip: tr('Убрать из списка'),
                           icon: Icon(Icons.close_rounded, color: C.muted),
                           onPressed: () {
                             rules.entries.remove(e);
@@ -327,11 +328,11 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
-              const Expanded(
-                child: Text('Запущенные программы', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+              Expanded(
+                child: Text(tr('Запущенные программы'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
               ),
               IconButton(
-                tooltip: 'Закрыть',
+                tooltip: tr('Закрыть'),
                 icon: Icon(Icons.close_rounded, color: C.muted),
                 onPressed: () => Navigator.pop(context),
               ),
@@ -339,13 +340,13 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
             const SizedBox(height: 12),
             TextField(
               autofocus: true,
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'Поиск'),
+              decoration: InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: tr('Поиск')),
               onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
             ),
             const SizedBox(height: 12),
             Expanded(
               child: list.isEmpty
-                  ? Center(child: Text('Ничего не найдено', style: TextStyle(color: C.muted)))
+                  ? Center(child: Text(tr('Ничего не найдено'), style: TextStyle(color: C.muted)))
                   // Края списка растворяются, а не обрезаются резкой линией под поиском и над кнопками.
                   : FadeEdges(
                       child: ListView.builder(
@@ -392,7 +393,7 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
                                         ),
                                         const SizedBox(width: 10),
                                         if (added)
-                                          Text('в списке', style: TextStyle(color: C.muted, fontSize: 12))
+                                          Text(tr('в списке'), style: TextStyle(color: C.muted, fontSize: 12))
                                         else
                                           // Без анимации: галочка и оранжевая подложка появляются вместе.
                                           Container(
@@ -419,13 +420,13 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
             ),
             const SizedBox(height: 12),
             Row(children: [
-              Text(chosen.isEmpty ? 'Отметьте программы' : 'Выбрано: ${chosen.length}',
+              Text(chosen.isEmpty ? tr('Отметьте программы') : tr('Выбрано: {0}', [chosen.length]),
                   style: TextStyle(color: C.muted, fontSize: 12.5)),
               const Spacer(),
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Отмена'))),
               const SizedBox(width: 8),
               GradientButton(
-                label: chosen.isEmpty ? 'Добавить' : 'Добавить (${chosen.length})',
+                label: chosen.isEmpty ? tr('Добавить') : tr('Добавить ({0})', [chosen.length]),
                 icon: Icons.add_rounded,
                 onPressed: chosen.isEmpty ? null : () => Navigator.pop(context, chosen),
               ),

@@ -8,6 +8,7 @@ import 'package:skipit/core/log_store.dart';
 import 'package:skipit/core/paths.dart';
 import 'package:skipit/core/util.dart';
 import 'package:skipit/models/routing.dart';
+import 'package:skipit/l10n/l10n.dart';
 import 'package:skipit/models/settings.dart';
 import 'package:skipit/models/subscription.dart';
 import 'package:skipit/state/app_scope.dart';
@@ -97,6 +98,57 @@ void main() {
       }
     });
   }
+
+  testWidgets('наименьшее окно по-английски: заголовки в одну строку', (tester) async {
+    C.use(Palette.dark);
+    tester.view.physicalSize = minClient;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    lang = Lang.en;
+    addTearDown(() => lang = Lang.ru);
+
+    final state = AppState()..settings.language = 'en';
+    state.routingProfiles.addAll([RoutingProfile.global(), ...RoutingProfile.templates()]);
+    final sub = Subscription(url: 'https://panel.example/sub', name: 'SkipIt VPN')
+      ..total = 650 * 1024 * 1024 * 1024
+      ..download = 228 * 1024 * 1024 * 1024
+      ..expire = DateTime.now().add(const Duration(days: 12));
+    state.subscriptions.add(sub);
+    final parsed = LinkParser.parseText(
+        'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.4:443?type=tcp&security=reality&pbk=x&sni=a.example#%F0%9F%87%A9%F0%9F%87%AAGermany');
+    for (final s in parsed.servers) {
+      s.subscriptionId = sub.id;
+    }
+    state.servers.addAll(parsed.servers);
+    state.settings.selectedServerId = parsed.servers.first.id;
+
+    await tester.pumpWidget(AppScope(
+      state: state,
+      child: MaterialApp(theme: buildTheme(), home: const RepaintBoundary(child: Shell())),
+    ));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Home'), findsWidgets);
+
+    const shots = String.fromEnvironment('SKIPIT_SHOTS');
+    Future<void> shot(String name) async {
+      if (shots.isEmpty) return;
+      await expectLater(find.byType(RepaintBoundary).first, matchesGoldenFile(Uri.file('$shots\\en_$name.png')));
+    }
+
+    await shot('home');
+    for (final (icon, title) in [
+      (Icons.storage_rounded, 'Servers'),
+      (Icons.alt_route_rounded, 'Routing'),
+      (Icons.troubleshoot_rounded, 'Diagnostics'),
+      (Icons.receipt_long_rounded, 'Logs'),
+      (Icons.tune_rounded, 'Settings'),
+    ]) {
+      await tester.tap(find.byIcon(icon).first);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(tester.getSize(find.text(title).last).height, lessThan(50), reason: '«$title» не поместился в строку');
+      await shot(title);
+    }
+  });
 
   testWidgets('наименьшее окно, главная при подключении: счётчики VPN и «напрямую»', (tester) async {
     C.use(Palette.dark);

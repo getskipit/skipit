@@ -15,6 +15,7 @@ import '../state/app_state.dart';
 import 'flag_text.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n/l10n.dart';
 
 /// Раздел «Проверка»: всё, чем разбираются, когда что-то работает не так, — почему тормозит сайт,
 /// ровная ли связь, какая скорость, как отвечают DNS-серверы подключения и отчёт для разбора одним файлом.
@@ -25,7 +26,7 @@ class CheckPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     return Column(children: [
-      const PageHeader('Проверка', subtitle: 'Если что-то работает не так: где теряется время и что показать тому, кто поможет'),
+      PageHeader(tr('Проверка'), subtitle: tr('Если что-то работает не так: где теряется время и что показать тому, кто поможет')),
       Expanded(
         // Ход замера (несколько раз в секунду) перестраивает только этот раздел.
         child: ListenableBuilder(
@@ -66,7 +67,7 @@ Widget _cardTitle(IconData icon, String title, String subtitle) => Row(children:
       ),
     ]);
 
-String _ms(int? value) => value == null ? '—' : '$value мс';
+String _ms(int? value) => value == null ? '—' : tr('{0} мс', [value]);
 
 /// Значок и цвет вывода: зелёный «всё в порядке», оранжевый «причина» или «к сведению», красный «не вышло».
 (IconData, Color) _look(SiteNoteKind kind) => switch (kind) {
@@ -121,7 +122,7 @@ Widget _metric(String name, String value, String note, {bool mono = false, Color
 /// Когда и на каком сервере сделана проверка — одной строкой.
 String _stampText(CheckStamp? stamp) => stamp == null
     ? ''
-    : 'Замерено ${formatDateTime(stamp.at)}${stamp.server.isEmpty ? '' : ' · сервер ${stamp.server}'}';
+    : tr('Замерено {0}{1}', [formatDateTime(stamp.at), stamp.server.isEmpty ? '' : tr(' · сервер {0}', [stamp.server])]);
 
 /// Под результатом: когда и на каком сервере он получен, кнопка «Скопировать результат» — текст
 /// проверки с той же подписью уходит в буфер, чтобы отправить тому, кто помогает, — и «Очистить»:
@@ -130,17 +131,17 @@ Widget _copy(AppState state, CheckStamp? stamp, String Function() text, {require
       padding: const EdgeInsets.only(top: 10),
       child: Row(children: [
         GhostButton(
-          label: 'Скопировать результат',
+          label: tr('Скопировать результат'),
           icon: Icons.copy_rounded,
           onPressed: () async {
             final head = _stampText(stamp);
             await Clipboard.setData(ClipboardData(text: [if (head.isNotEmpty) head, text()].join('\n')));
-            state.toast('Результат скопирован', kind: ToastKind.success);
+            state.toast(tr('Результат скопирован'), kind: ToastKind.success);
           },
         ),
         const SizedBox(width: 8),
         GhostButton(
-          label: 'Очистить',
+          label: tr('Очистить'),
           icon: Icons.close_rounded,
           onPressed: state.checking ? null : () => state.clearCheck(clear),
         ),
@@ -154,8 +155,8 @@ Widget _copy(AppState state, CheckStamp? stamp, String Function() text, {require
 
 /// Подпись под кнопкой проверки, когда нажать её нельзя; null — можно.
 String? _blocked(AppState state, bool own, String what) => !state.isConnected
-    ? 'Чтобы $what, сначала подключитесь к VPN'
-    : (state.checking && !own ? 'Идёт другая проверка — эта станет доступна, когда она закончится' : null);
+    ? tr('Чтобы {0}, сначала подключитесь к VPN', [what])
+    : (state.checking && !own ? tr('Идёт другая проверка — эта станет доступна, когда она закончится') : null);
 
 Color? _pathColor(ConnRoute? route) => switch (route) {
       ConnRoute.proxy => C.orange,
@@ -209,7 +210,7 @@ class _SiteCardState extends State<_SiteCard> {
         else ...[
           const Spinner(size: 14),
           const SizedBox(width: 8),
-          Text('проверяется…', style: TextStyle(color: C.muted, fontSize: 12)),
+          Text(tr('проверяется…'), style: TextStyle(color: C.muted, fontSize: 12)),
         ],
       ]);
 
@@ -224,20 +225,20 @@ class _SiteCardState extends State<_SiteCard> {
   List<Widget> _details(SiteReport r) => [
           Wrap(spacing: 8, runSpacing: 8, children: [
             if (r.firstMs == null)
-              _metric('Соединение', 'не открылось', 'этим путём', color: C.red)
+              _metric(tr('Соединение'), tr('не открылось'), tr('этим путём'), color: C.red)
             else ...[
-              _metric('Первое соединение', _ms(r.firstMs), 'вместе с поиском адреса'),
-              _metric('Повторное', _ms(r.warmMs), 'лучшее из трёх'),
-              _metric('Ответ сайта', _ms(r.replyMs), 'после соединения'),
+              _metric(tr('Первое соединение'), _ms(r.firstMs), tr('вместе с поиском адреса')),
+              _metric(tr('Повторное'), _ms(r.warmMs), tr('лучшее из трёх')),
+              _metric(tr('Ответ сайта'), _ms(r.replyMs), tr('после соединения')),
             ],
-            if (r.vpnBaseMs != null) _metric('Проверочный адрес', _ms(r.vpnBaseMs), 'тем же путём через VPN'),
+            if (r.vpnBaseMs != null) _metric(tr('Проверочный адрес'), _ms(r.vpnBaseMs), tr('тем же путём через VPN')),
             // DNS подключения и Google назвали один и тот же адрес — показывать его дважды незачем.
             if (r.address != null && (r.otherAddress == null || r.otherAddress == r.address))
-              _metric('Адрес сайта, напрямую', _ms(r.addressMs), r.address!, mono: true)
+              _metric(tr('Адрес сайта, напрямую'), _ms(r.addressMs), r.address!, mono: true)
             else ...[
               if (r.address != null)
-                _metric('Адрес от DNS подключения', _ms(r.addressMs), r.address!, mono: true),
-              if (r.otherAddress != null) _metric('Адрес от Google DNS', _ms(r.otherMs), r.otherAddress!, mono: true),
+                _metric(tr('Адрес от DNS подключения'), _ms(r.addressMs), r.address!, mono: true),
+              if (r.otherAddress != null) _metric(tr('Адрес от Google DNS'), _ms(r.otherMs), r.otherAddress!, mono: true),
             ],
           ]),
           for (final note in r.notes) _note(note),
@@ -282,8 +283,8 @@ class _SiteCardState extends State<_SiteCard> {
                       if (r.firstMs != null) ...[
                         const SizedBox(height: 2),
                         Text(
-                            'первое соединение ${_ms(r.firstMs)} · повторное ${_ms(r.warmMs)} · '
-                            'ответ сайта ${_ms(r.replyMs)}',
+                            tr('первое соединение {0} · повторное {1} · '
+                            'ответ сайта {2}', [_ms(r.firstMs), _ms(r.warmMs), _ms(r.replyMs)]),
                             style: TextStyle(color: C.muted, fontSize: 12)),
                       ],
                       if (note != null && (note.kind != SiteNoteKind.ok || r.firstMs == null))
@@ -295,7 +296,7 @@ class _SiteCardState extends State<_SiteCard> {
               ),
               if (r.done)
                 Tooltip(
-                  message: open ? 'Свернуть' : 'Развернуть: все замеры и выводы',
+                  message: open ? tr('Свернуть') : tr('Развернуть: все замеры и выводы'),
                   child: AnimatedRotation(
                     turns: open ? 0.5 : 0,
                     duration: const Duration(milliseconds: 220),
@@ -328,32 +329,32 @@ class _SiteCardState extends State<_SiteCard> {
     final reports = state.siteReports;
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _cardTitle(Icons.troubleshoot_rounded, 'Почему тормозит сайт?',
-            'Проверим сайт так, как к нему ходит браузер: каким путём он идёт и на что уходит время'),
+        _cardTitle(Icons.troubleshoot_rounded, tr('Почему тормозит сайт?'),
+            tr('Проверим сайт так, как к нему ходит браузер: каким путём он идёт и на что уходит время')),
         const SizedBox(height: 14),
         Row(children: [
           Expanded(
             child: TextField(
               controller: _site,
               onSubmitted: (_) => _check(),
-              decoration: const InputDecoration(
-                  labelText: 'Адрес сайта', hintText: 'example.com — или несколько через запятую'),
+              decoration: InputDecoration(
+                  labelText: tr('Адрес сайта'), hintText: tr('example.com — или несколько через запятую')),
             ),
           ),
           const SizedBox(width: 12),
           GhostButton(
-            label: 'Проверить',
+            label: tr('Проверить'),
             icon: Icons.speed_rounded,
             busy: state.checkingSite,
             onPressed: state.isConnected && !state.checking ? _check : null,
           ),
         ]),
-        if (_wrong || _blocked(state, state.checkingSite, 'проверить сайт') != null) ...[
+        if (_wrong || _blocked(state, state.checkingSite, tr('проверить сайт')) != null) ...[
           const SizedBox(height: 8),
           Text(
               _wrong
-                  ? 'Впишите адрес сайта, например example.com; несколько — через запятую, не больше ${SiteCheck.maxHosts}'
-                  : _blocked(state, state.checkingSite, 'проверить сайт')!,
+                  ? tr('Впишите адрес сайта, например example.com; несколько — через запятую, не больше {0}', [SiteCheck.maxHosts])
+                  : _blocked(state, state.checkingSite, tr('проверить сайт'))!,
               style: TextStyle(color: _wrong ? C.orange : C.muted, fontSize: 12)),
         ],
         if (reports.length == 1) ..._full(reports.single),
@@ -366,10 +367,10 @@ class _SiteCardState extends State<_SiteCard> {
         const SizedBox(height: 10),
         Text(
           state.killSwitchOn
-              ? 'Правила по приложениям на проверку не действуют. Включён Kill Switch: адреса сайта не сравниваются — '
-                  'в обход VPN программа ничего не отправляет.'
-              : 'Правила по приложениям на проверку не действуют. В обход VPN программа обращается только к сайту, '
-                  'который и так идёт напрямую: открывает соединение с его адресом и спрашивает адрес у Google.',
+              ? tr('Правила по приложениям на проверку не действуют. Включён Kill Switch: адреса сайта не сравниваются — '
+                  'в обход VPN программа ничего не отправляет.')
+              : tr('Правила по приложениям на проверку не действуют. В обход VPN программа обращается только к сайту, '
+                  'который и так идёт напрямую: открывает соединение с его адресом и спрашивает адрес у Google.'),
           style: TextStyle(color: C.muted, fontSize: 12),
         ),
       ]),
@@ -393,18 +394,18 @@ class _LineCard extends StatelessWidget {
       latest = rtt[i];
     }
     final value = off
-        ? 'не измерялось'
+        ? tr('не измерялось')
         : p.silent && r.done
-            ? 'ответов нет'
+            ? tr('ответов нет')
             : _ms(active ? latest : p.usual);
-    final caption = off || (p.silent && r.done) ? null : (active ? 'сейчас' : 'обычный ответ');
+    final caption = off || (p.silent && r.done) ? null : (active ? tr('сейчас') : tr('обычный ответ'));
     final detail = off
         ? (skipped ?? '—')
         : !p.measured
-            ? 'идёт замер…'
+            ? tr('идёт замер…')
             : p.silent
-                ? 'из ${p.sent} пакетов'
-                : 'потери ${p.lossText()} · худший ${_ms(p.worst)} · всплесков ${p.spikes}';
+                ? tr('из {0} пакетов', [p.sent])
+                : tr('потери {0} · худший {1} · всплесков {2}', [p.lossText(), _ms(p.worst), p.spikes]);
     return Container(
       width: 266,
       padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
@@ -456,12 +457,12 @@ class _LineCard extends StatelessWidget {
     final r = state.lineReport;
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _cardTitle(Icons.show_chart_rounded, 'Стабильность связи',
-            '${LineCheck.seconds} секунд шлём маленькие пробные пакеты через VPN и напрямую: видно, ровная ли связь и где она портится'),
+        _cardTitle(Icons.show_chart_rounded, tr('Стабильность связи'),
+            tr('{0} секунд шлём маленькие пробные пакеты через VPN и напрямую: видно, ровная ли связь и где она портится', [LineCheck.seconds])),
         const SizedBox(height: 14),
         Row(children: [
           GhostButton(
-            label: 'Замерить',
+            label: tr('Замерить'),
             icon: Icons.speed_rounded,
             busy: state.checkingLine,
             onPressed: state.isConnected && !state.checking ? state.checkLine : null,
@@ -469,13 +470,13 @@ class _LineCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              _blocked(state, state.checkingLine, 'замерить связь') != null
-                  ? _blocked(state, state.checkingLine, 'замерить связь')!
+              _blocked(state, state.checkingLine, tr('замерить связь')) != null
+                  ? _blocked(state, state.checkingLine, tr('замерить связь'))!
                   : state.checkingLine
-                      ? 'Идёт замер, осталось ${r?.left ?? LineCheck.seconds} с'
+                      ? tr('Идёт замер, осталось {0} с', [r?.left ?? LineCheck.seconds])
                       : state.killSwitchOn
-                          ? 'Включён Kill Switch: замер пойдёт только через VPN — напрямую программа ничего не отправляет'
-                          : 'Пакеты идут к ${LineCheck.host} — через VPN и напрямую',
+                          ? tr('Включён Kill Switch: замер пойдёт только через VPN — напрямую программа ничего не отправляет')
+                          : tr('Пакеты идут к {0} — через VPN и напрямую', [LineCheck.host]),
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ),
@@ -483,16 +484,16 @@ class _LineCard extends StatelessWidget {
         if (r != null && r.error == null) ...[
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            _gauge('Через VPN', r, r.vpn, r.vpnRtt, r.vpnSkipped),
-            _gauge('Напрямую', r, r.direct, r.directRtt, r.directSkipped),
+            _gauge(tr('Через VPN'), r, r.vpn, r.vpnRtt, r.vpnSkipped),
+            _gauge(tr('Напрямую'), r, r.direct, r.directRtt, r.directSkipped),
           ]),
           if (r.done)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                  'Столбик — худший ответ за отрезок времени: яркий — всплеск (дольше обычного на '
-                  '${LineCheck.spikeOver} мс), с разрывом — выше шкалы, красный — пакет потерян, серый — запнулась '
-                  'сама программа (в счёт не идёт)',
+                  tr('Столбик — худший ответ за отрезок времени: яркий — всплеск (дольше обычного на '
+                  '{0} мс), с разрывом — выше шкалы, красный — пакет потерян, серый — запнулась '
+                  'сама программа (в счёт не идёт)', [LineCheck.spikeOver]),
                   style: TextStyle(color: C.muted, fontSize: 11.5)),
             ),
         ],
@@ -591,7 +592,7 @@ class _SpeedCard extends StatelessWidget {
         ? SpeedReport.show(samples.lastOrNull)
         : waiting
             ? '—'
-            : (result != null ? SpeedReport.show(result) : (index == 0 ? 'не удалось' : 'не измерялось'));
+            : (result != null ? SpeedReport.show(result) : (index == 0 ? tr('не удалось') : tr('не измерялось')));
     return Container(
       width: 266,
       padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
@@ -632,10 +633,10 @@ class _SpeedCard extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
             active
-                ? 'идёт замер…'
+                ? tr('идёт замер…')
                 : waiting
-                    ? 'ждёт очереди'
-                    : (result != null ? 'скачивание' : (error ?? '—')),
+                    ? tr('ждёт очереди')
+                    : (result != null ? tr('скачивание') : (error ?? '—')),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: C.muted, fontSize: 11)),
@@ -648,12 +649,12 @@ class _SpeedCard extends StatelessWidget {
     final r = state.speedReport;
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _cardTitle(Icons.downloading_rounded, 'Скорость',
-            'Несколько секунд качаем проверочный файл через VPN и напрямую — видно, режет ли VPN скорость'),
+        _cardTitle(Icons.downloading_rounded, tr('Скорость'),
+            tr('Несколько секунд качаем проверочный файл через VPN и напрямую — видно, режет ли VPN скорость')),
         const SizedBox(height: 14),
         Row(children: [
           GhostButton(
-            label: 'Замерить',
+            label: tr('Замерить'),
             icon: Icons.speed_rounded,
             busy: state.checkingSpeed,
             onPressed: state.isConnected && !state.checking ? state.checkSpeed : null,
@@ -661,12 +662,12 @@ class _SpeedCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              _blocked(state, state.checkingSpeed, 'замерить скорость') != null
-                  ? _blocked(state, state.checkingSpeed, 'замерить скорость')!
+              _blocked(state, state.checkingSpeed, tr('замерить скорость')) != null
+                  ? _blocked(state, state.checkingSpeed, tr('замерить скорость'))!
                   : state.checkingSpeed
-                      ? (r?.status ?? 'Идёт замер')
-                      : 'Замер идёт в четыре соединения и тратит трафик подписки: до 400 МБ за раз. Файл берётся с ${r?.vpnHost ?? r?.directHost ?? SpeedTest.servers.first.host} и не сохраняется'
-                          '${state.killSwitchOn ? '. Включён Kill Switch: замер пойдёт только через VPN' : ''}',
+                      ? (r?.status ?? tr('Идёт замер'))
+                      : tr('Замер идёт в четыре соединения и тратит трафик подписки: до 400 МБ за раз. Файл берётся с {0} и не сохраняется'
+                          '{1}', [r?.vpnHost ?? r?.directHost ?? SpeedTest.servers.first.host, state.killSwitchOn ? tr('. Включён Kill Switch: замер пойдёт только через VPN') : '']),
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ),
@@ -674,8 +675,8 @@ class _SpeedCard extends StatelessWidget {
         if (r != null) ...[
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            _gauge('Через VPN', r, 0, r.vpnMbit, r.vpnSamples, r.vpnError),
-            _gauge('Напрямую', r, 1, r.directMbit, r.directSamples, r.directError),
+            _gauge(tr('Через VPN'), r, 0, r.vpnMbit, r.vpnSamples, r.vpnError),
+            _gauge(tr('Напрямую'), r, 1, r.directMbit, r.directSamples, r.directError),
           ]),
           if (r.done) ...[
             for (final note in r.notes) _note(note),
@@ -725,14 +726,14 @@ class _DnsCheckCard extends StatelessWidget {
   final AppState state;
 
   static String _kind(DnsProbe p) => p.service
-      ? 'служебный: узнаёт адреса VPN- и DNS-серверов'
-      : (p.domains == 0 ? 'общий' : 'для сайтов из списка (${p.domains})');
+      ? tr('служебный: узнаёт адреса VPN- и DNS-серверов')
+      : (p.domains == 0 ? tr('общий') : tr('для сайтов из списка ({0})', [p.domains]));
 
   static String _text(DnsProbe p) => [
         '${p.label} — ${_kind(p)}, ${p.path}, ${p.result}'
-            '${p.reachMs == null ? '' : ', до названных адресов напрямую ${p.reachMs} мс'}',
-        if (p.far) '  • адреса заметно дальше, чем у ${p.nearerLabel} (${p.nearerMs} мс)',
-        if (p.slow) '  • дольше, чем ядро ждёт этот сервер (${p.limitMs} мс)',
+            '${p.reachMs == null ? '' : tr(', до названных адресов напрямую {0} мс', [p.reachMs])}',
+        if (p.far) tr('  • адреса заметно дальше, чем у {0} ({1} мс)', [p.nearerLabel, p.nearerMs]),
+        if (p.slow) tr('  • дольше, чем ядро ждёт этот сервер ({0} мс)', [p.limitMs]),
       ].join('\n');
 
   Widget _probe(DnsProbe p) => Padding(
@@ -752,20 +753,20 @@ class _DnsCheckCard extends StatelessWidget {
               Text(
                 [
                   _kind(p),
-                  if (p.done) ...[p.path, p.result] else 'проверяется…',
+                  if (p.done) ...[p.path, p.result] else tr('проверяется…'),
                 ].join(' · '),
                 style: TextStyle(color: C.muted, fontSize: 12),
               ),
               if (p.done && p.reachMs != null)
-                Text('До адресов, которые он называет, напрямую — ${p.reachMs} мс',
+                Text(tr('До адресов, которые он называет, напрямую — {0} мс', [p.reachMs]),
                     style: TextStyle(color: C.muted, fontSize: 12)),
               if (p.done && p.far)
                 Text(
-                    'Это заметно дальше, чем у ${p.nearerLabel} (${p.nearerMs} мс): сайтам и программам, '
-                    'которые идут напрямую, с такими адресами дольше ждать ответа',
+                    tr('Это заметно дальше, чем у {0} ({1} мс): сайтам и программам, '
+                    'которые идут напрямую, с такими адресами дольше ждать ответа', [p.nearerLabel, p.nearerMs]),
                     style: TextStyle(color: C.warn, fontSize: 12)),
               if (p.done && p.slow)
-                Text('Дольше, чем ядро ждёт этот сервер (${p.limitMs} мс): оно успевает уйти к следующему DNS',
+                Text(tr('Дольше, чем ядро ждёт этот сервер ({0} мс): оно успевает уйти к следующему DNS', [p.limitMs]),
                     style: TextStyle(color: C.warn, fontSize: 12)),
             ]),
           ),
@@ -775,12 +776,12 @@ class _DnsCheckCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Panel(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _cardTitle(Icons.dns_rounded, 'Как отвечают DNS-серверы',
-              'Спросим каждый DNS-сервер подключения: за сколько он отвечает, каким путём идёт запрос и далеко ли адреса, которые он называет'),
+          _cardTitle(Icons.dns_rounded, tr('Как отвечают DNS-серверы'),
+              tr('Спросим каждый DNS-сервер подключения: за сколько он отвечает, каким путём идёт запрос и далеко ли адреса, которые он называет')),
           const SizedBox(height: 14),
           Row(children: [
             GhostButton(
-              label: 'Проверить DNS',
+              label: tr('Проверить DNS'),
               icon: Icons.speed_rounded,
               busy: state.checkingDns,
               onPressed: state.isConnected && !state.checking ? state.checkDns : null,
@@ -788,11 +789,11 @@ class _DnsCheckCard extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                _blocked(state, state.checkingDns, 'проверить DNS') == null
+                _blocked(state, state.checkingDns, tr('проверить DNS')) == null
                     ? (state.killSwitchOn
-                        ? 'Включён Kill Switch: далеко ли адреса от серверов, не меряем — напрямую программа ничего не отправляет'
-                        : 'Какие серверы спрашивать, выбирается в разделе «Маршрутизация», блок «DNS»')
-                    : _blocked(state, state.checkingDns, 'проверить DNS')!,
+                        ? tr('Включён Kill Switch: далеко ли адреса от серверов, не меряем — напрямую программа ничего не отправляет')
+                        : tr('Какие серверы спрашивать, выбирается в разделе «Маршрутизация», блок «DNS»'))
+                    : _blocked(state, state.checkingDns, tr('проверить DNS'))!,
                 style: TextStyle(color: C.muted, fontSize: 12),
               ),
             ),
@@ -820,7 +821,7 @@ class _UdpCard extends StatelessWidget {
     return [
       for (final e in groups.entries)
         (
-          state.subscriptions.where((sub) => sub.id == e.key).firstOrNull?.displayName ?? 'Свои серверы',
+          state.subscriptions.where((sub) => sub.id == e.key).firstOrNull?.displayName ?? tr('Свои серверы'),
           e.value,
         ),
     ];
@@ -831,15 +832,15 @@ class _UdpCard extends StatelessWidget {
     final done = group.where((s) => s.udpMs != null).toList();
     final ok = done.where((s) => s.udpMs! >= 0).length;
     return done.length < group.length
-        ? 'проверено ${done.length} из ${group.length}'
-        : 'UDP проходит у $ok из ${group.length}';
+        ? tr('проверено {0} из {1}', [done.length, group.length])
+        : tr('UDP проходит у {0} из {1}', [ok, group.length]);
   }
 
   static String _result(ServerProfile s) => switch (s.udpMs) {
-        null => 'проверяется…',
-        Pinger.udpFailed => 'проверить не удалось',
-        final ms when ms < 0 => 'UDP не проходит',
-        final ms => 'UDP проходит, ответ $ms мс',
+        null => tr('проверяется…'),
+        Pinger.udpFailed => tr('проверить не удалось'),
+        final ms when ms < 0 => tr('UDP не проходит'),
+        final ms => tr('UDP проходит, ответ {0} мс', [ms]),
       };
 
   Widget _row(ServerProfile s) => Padding(
@@ -866,12 +867,12 @@ class _UdpCard extends StatelessWidget {
     final servers = state.serversInListOrder;
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _cardTitle(Icons.sports_esports_rounded, 'Проходит ли UDP (игры, звонки)',
-            'Проверим каждый сервер с главной: пропускает ли он UDP. Без него в играх, голосовых чатах и звонках нет звука или связи'),
+        _cardTitle(Icons.sports_esports_rounded, tr('Проходит ли UDP (игры, звонки)'),
+            tr('Проверим каждый сервер с главной: пропускает ли он UDP. Без него в играх, голосовых чатах и звонках нет звука или связи')),
         const SizedBox(height: 14),
         Row(children: [
           GhostButton(
-            label: 'Проверить UDP',
+            label: tr('Проверить UDP'),
             icon: Icons.speed_rounded,
             busy: own,
             onPressed: !state.checking && servers.isNotEmpty ? state.checkUdpAll : null,
@@ -880,10 +881,10 @@ class _UdpCard extends StatelessWidget {
           Expanded(
             child: Text(
               servers.isEmpty
-                  ? 'Сначала добавьте подписку или сервер'
+                  ? tr('Сначала добавьте подписку или сервер')
                   : state.checking && !own
-                      ? 'Идёт другая проверка — эта станет доступна, когда она закончится'
-                      : 'Подключаться к VPN не нужно. Один сервер можно проверить и из его меню в списке серверов',
+                      ? tr('Идёт другая проверка — эта станет доступна, когда она закончится')
+                      : tr('Подключаться к VPN не нужно. Один сервер можно проверить и из его меню в списке серверов'),
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ),
@@ -924,21 +925,21 @@ class _UdpCard extends StatelessWidget {
 Future<void> makeReportWithDialog(BuildContext context, AppState state) async {
   final ok = await confirm(
       context,
-      'Собрать отчёт?',
-      'В журнале есть адреса сайтов, которые открывались при этом подключении '
+      tr('Собрать отчёт?'),
+      tr('В журнале есть адреса сайтов, которые открывались при этом подключении '
           '(на уровнях логов info и debug — все). Ключи, ссылки подписок и адреса VPN-серверов '
           'в отчёт не попадают. Пока VPN подключён, записываются адреса DNS-серверов, к которым '
           'ходит программа: по ним можно примерно понять, из какой вы страны. '
-          'Отправляйте файл только тому, кому доверяете.',
-      ok: 'Собрать');
+          'Отправляйте файл только тому, кому доверяете.'),
+      ok: tr('Собрать'));
   if (!ok) return;
   final dir = await WinSys.pickFolder();
   if (dir == null) return;
   try {
     final path = await state.makeReport(dir);
-    state.toast('Отчёт сохранён', kind: ToastKind.success, detail: path.split(r'\').last);
+    state.toast(tr('Отчёт сохранён'), kind: ToastKind.success, detail: path.split(r'\').last);
   } catch (e) {
-    state.toast('Не удалось сохранить отчёт: ${describeNetError(e)}');
+    state.toast(tr('Не удалось сохранить отчёт: {0}', [describeNetError(e)]));
   }
 }
 
@@ -953,13 +954,13 @@ class _ReportCard extends StatelessWidget {
           Expanded(
             child: _cardTitle(
                 Icons.summarize_rounded,
-                'Отчёт для разбора',
-                'Версия, настройки и журнал последнего подключения одним файлом — без ключей, ссылок подписок '
-                    'и адресов VPN-серверов. Его можно отправить тому, кто помогает разобраться'),
+                tr('Отчёт для разбора'),
+                tr('Версия, настройки и журнал последнего подключения одним файлом — без ключей, ссылок подписок '
+                    'и адресов VPN-серверов. Его можно отправить тому, кто помогает разобраться')),
           ),
           const SizedBox(width: 12),
           GhostButton(
-              label: 'Собрать', icon: Icons.summarize_rounded, onPressed: () => makeReportWithDialog(context, state)),
+              label: tr('Собрать'), icon: Icons.summarize_rounded, onPressed: () => makeReportWithDialog(context, state)),
         ]),
       );
 }

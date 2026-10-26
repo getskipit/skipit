@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/l10n.dart';
 
 /// Цвет акцента (Настройки → Внешний вид): кнопки, переключатели, подсветка меню, знак SkipIt.
 enum Accent {
@@ -8,8 +9,9 @@ enum Accent {
   pink('Розовый', Color(0xFFEC4899), Color(0xFFF472B6)),
   green('Зелёный', Color(0xFF16B356), Color(0xFF4ADE80));
 
-  const Accent(this.label, this.main, this.light);
-  final String label;
+  const Accent(this._label, this.main, this.light);
+  final String _label;
+  String get label => tr(_label);
   final Color main, light;
 }
 
@@ -43,7 +45,7 @@ class Palette {
   final double corners;
 
   /// Скругление углов на выбор: острее, как было, круглее.
-  static final cornerSteps = <double, String>{0.5: 'Острее', 1.0: 'Обычные', 1.6: 'Круглее'};
+  static final cornerSteps = <double, String>{0.5: tr('Острее'), 1.0: tr('Обычные'), 1.6: tr('Круглее')};
 
   final Brightness brightness;
   final Color bg;

@@ -4,6 +4,7 @@ import 'dart:io';
 import '../models/routing.dart';
 import '../models/server.dart';
 import 'util.dart';
+import '../l10n/l10n.dart';
 
 /// Что удалось вытащить из вставленного текста / тела подписки.
 class ImportResult {
@@ -71,7 +72,7 @@ class LinkParser {
           _parseLine(l, result);
         }
       } else {
-        result.errors.add('Не распознано: ${_short(line)}');
+        result.errors.add(tr('Не распознано: {0}', [_short(line)]));
       }
       return;
     }
@@ -90,25 +91,25 @@ class LinkParser {
       if (server != null) {
         result.servers.add(server);
       } else {
-        result.errors.add('Неподдерживаемый протокол: $scheme');
+        result.errors.add(tr('Неподдерживаемый протокол: {0}', [scheme]));
       }
     } catch (e) {
-      result.errors.add('Ошибка в ссылке ${_short(line)}: $e');
+      result.errors.add(tr('Ошибка в ссылке {0}: {1}', [_short(line), e]));
     }
   }
 
   static void _parseAppDeeplink(String line, String scheme, ImportResult result) {
     if (RoutingProfile.isDeeplink(line) || line.toLowerCase().contains('://routing/')) {
       final r = RoutingProfile.parseDeeplink(line);
-      r == null ? result.errors.add('Некорректный профиль маршрутизации') : result.routing.add(r);
+      r == null ? result.errors.add(tr('Некорректный профиль маршрутизации')) : result.routing.add(r);
       return;
     }
     final rest = line.substring(scheme.length + 3);
     final lower = rest.toLowerCase();
     if (lower.startsWith('crypt')) {
       result.errors.add(
-          'Зашифрованные ссылки $scheme://crypt… привязаны к ключам самого Happ и не могут быть открыты '
-          'другими клиентами. Попросите у провайдера обычную ссылку на подписку.');
+          tr('Зашифрованные ссылки {0}://crypt… привязаны к ключам самого Happ и не могут быть открыты '
+          'другими клиентами. Попросите у провайдера обычную ссылку на подписку.', [scheme]));
       return;
     }
     for (final prefix in ['add/', 'import/', 'install-config?url=', 'install-sub?url=', 'sub/', 'subscription/']) {
@@ -125,7 +126,7 @@ class LinkParser {
         return;
       }
     }
-    result.errors.add('Неизвестный диплинк: ${_short(line)}');
+    result.errors.add(tr('Неизвестный диплинк: {0}', [_short(line)]));
   }
 
   /// Кусок строки для сообщения об ошибке. У ссылок показываем только вид (`vless://…`):
@@ -164,10 +165,10 @@ class LinkParser {
         ),
       );
       if (proxy.isEmpty) {
-        result.errors.add('В JSON-конфиге нет прокси-outbound');
+        result.errors.add(tr('В JSON-конфиге нет прокси-outbound'));
         continue;
       }
-      _addOutbound(proxy, c['remarks']?.toString() ?? 'JSON-конфиг', jsonEncode(c), result);
+      _addOutbound(proxy, c['remarks']?.toString() ?? tr('JSON-конфиг'), jsonEncode(c), result);
     }
   }
 
@@ -253,8 +254,8 @@ class LinkParser {
         host = s;
       }
     }
-    if (host.isEmpty) throw const FormatException('нет адреса сервера');
-    if (port <= 0 || port > 65535) throw const FormatException('некорректный порт');
+    if (host.isEmpty) throw FormatException(tr('нет адреса сервера'));
+    if (port <= 0 || port > 65535) throw FormatException(tr('некорректный порт'));
     return _Link(scheme, user, host, port, query, name);
   }
 
@@ -290,7 +291,7 @@ class LinkParser {
     if (net.isEmpty || net == 'tcp') net = 'raw';
     if (net == 'splithttp') net = 'xhttp';
     if (net == 'h2' || net == 'http') {
-      warnings?.add('Транспорт HTTP/2 удалён из Xray, используется XHTTP');
+      warnings?.add(tr('Транспорт HTTP/2 удалён из Xray, используется XHTTP'));
       net = 'xhttp';
     }
     final stream = <String, dynamic>{'network': net};
@@ -324,7 +325,7 @@ class LinkParser {
           try {
             extraMap = jsonDecode(extra) as Map<String, dynamic>;
           } catch (_) {
-            warnings?.add('Не удалось разобрать параметр extra');
+            warnings?.add(tr('Не удалось разобрать параметр extra'));
           }
         }
         stream['xhttpSettings'] = {
@@ -340,7 +341,7 @@ class LinkParser {
           if (seed.isNotEmpty) 'seed': seed,
         };
       default:
-        warnings?.add('Неизвестный транспорт: $net');
+        warnings?.add(tr('Неизвестный транспорт: {0}', [net]));
     }
 
     // Finalmask — маскировка трафика поверх транспорта (параметр fm, JSON).
@@ -348,7 +349,7 @@ class LinkParser {
       try {
         stream['finalmask'] = jsonDecode(fm) as Map<String, dynamic>;
       } catch (_) {
-        warnings?.add('Не удалось разобрать параметр fm');
+        warnings?.add(tr('Не удалось разобрать параметр fm'));
       }
     }
 
@@ -383,8 +384,8 @@ class LinkParser {
   /// вместо отключения проверки сертификат закрепляют по отпечатку (pcs) или имени (vcn).
   static Map<String, dynamic> tlsTrust({required bool insecure, String pcs = '', String vcn = '', List<String>? warnings}) {
     if (insecure && pcs.isEmpty && vcn.isEmpty) {
-      warnings?.add('Ссылка просит не проверять сертификат (allowInsecure) — Xray это больше не поддерживает. '
-          'Если у сервера самоподписанный сертификат, подключиться не получится: попросите у провайдера новую ссылку');
+      warnings?.add(tr('Ссылка просит не проверять сертификат (allowInsecure) — Xray это больше не поддерживает. '
+          'Если у сервера самоподписанный сертификат, подключиться не получится: попросите у провайдера новую ссылку'));
     }
     return {
       if (pcs.isNotEmpty) 'pinnedPeerCertSha256': pcs,
@@ -424,7 +425,7 @@ class LinkParser {
     final flow = l.q('flow');
     final stream = _streamFromQuery(l, 'none', warnings);
     if (stream['security'] == 'none' && l.q('encryption', 'none') == 'none' && !_isPrivateHost(l.host)) {
-      warnings.add('VLESS без шифрования (TLS/REALITY) — Xray запрещает такие подключения к серверам в интернете');
+      warnings.add(tr('VLESS без шифрования (TLS/REALITY) — Xray запрещает такие подключения к серверам в интернете'));
     }
     return ServerProfile(
       name: _nameOr(l),
@@ -569,7 +570,7 @@ class LinkParser {
     String? warning;
     final qi = body.indexOf('?');
     if (qi >= 0) {
-      if (body.substring(qi).contains('plugin=')) warning = 'Плагины Shadowsocks не поддерживаются';
+      if (body.substring(qi).contains('plugin=')) warning = tr('Плагины Shadowsocks не поддерживаются');
       body = body.substring(0, qi);
     }
     if (body.endsWith('/')) body = body.substring(0, body.length - 1);
@@ -577,7 +578,7 @@ class LinkParser {
     // Старый формат: base64(method:password@host:port)
     if (!body.contains('@')) {
       final d = tryBase64Decode(body);
-      if (d == null) throw const FormatException('некорректный ss://');
+      if (d == null) throw FormatException(tr('некорректный ss://'));
       body = d;
       final at = body.lastIndexOf('@');
       body = '${base64Url.encode(utf8.encode(body.substring(0, at)))}@${body.substring(at + 1)}';
@@ -586,7 +587,7 @@ class LinkParser {
     var userInfo = l.user;
     if (!userInfo.contains(':')) userInfo = tryBase64Decode(userInfo) ?? userInfo;
     final colon = userInfo.indexOf(':');
-    if (colon < 0) throw const FormatException('нет метода шифрования');
+    if (colon < 0) throw FormatException(tr('нет метода шифрования'));
     final method = userInfo.substring(0, colon);
     final password = userInfo.substring(colon + 1);
     return ServerProfile(
@@ -640,7 +641,7 @@ class LinkParser {
   static ServerProfile _hysteria2(String link) {
     final l = _split(link);
     final warnings = <String>[];
-    if (l.q('obfs').isNotEmpty) warnings.add('Обфускация ${l.q('obfs')} может не поддерживаться ядром');
+    if (l.q('obfs').isNotEmpty) warnings.add(tr('Обфускация {0} может не поддерживаться ядром', [l.q('obfs')]));
     final sni = l.q('sni', l.q('peer'));
     // В ссылках Hysteria отпечаток пишут как pinSHA256, часто с двоеточиями.
     final pin = l.q('pcs', l.q('pinSHA256')).replaceAll(':', '');

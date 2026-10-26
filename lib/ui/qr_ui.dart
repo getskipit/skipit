@@ -10,18 +10,19 @@ import '../core/tray.dart';
 import '../core/windows.dart';
 import '../state/app_scope.dart';
 import 'theme.dart';
+import '../l10n/l10n.dart';
 
 /// Ищет QR-коды на всех мониторах и добавляет найденные ссылки (серверы, подписки).
 Future<void> importQrFromScreen(BuildContext context) async {
   final state = AppScope.read(context);
   final image = await Tray.captureScreen();
   if (image == null) {
-    state.toast('Не удалось сделать снимок экрана');
+    state.toast(tr('Не удалось сделать снимок экрана'));
     return;
   }
   final texts = await _decode(image.gray, image.w, image.h);
   if (texts.isEmpty) {
-    state.toast('QR-код на экране не найден', detail: 'Откройте его на экране целиком и не слишком мелко');
+    state.toast(tr('QR-код на экране не найден'), detail: tr('Откройте его на экране целиком и не слишком мелко'));
     return;
   }
   await state.importText(texts.join('\n'));
@@ -30,18 +31,18 @@ Future<void> importQrFromScreen(BuildContext context) async {
 /// QR-код из файла-картинки (PNG, JPG, BMP, GIF).
 Future<void> importQrFromFile(BuildContext context) async {
   final state = AppScope.read(context);
-  final path = await WinSys.pickFile(filter: 'Картинки (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif');
+  final path = await WinSys.pickFile(filter: tr('Картинки (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif'));
   if (path == null) return;
   final ({Uint8List gray, int w, int h}) image;
   try {
     image = await _grayFromBytes(await File(path).readAsBytes());
   } catch (_) {
-    state.toast('Не удалось открыть картинку');
+    state.toast(tr('Не удалось открыть картинку'));
     return;
   }
   final texts = await _decode(image.gray, image.w, image.h);
   if (texts.isEmpty) {
-    state.toast('В картинке не найден QR-код');
+    state.toast(tr('В картинке не найден QR-код'));
     return;
   }
   await state.importText(texts.join('\n'));
@@ -54,7 +55,7 @@ Future<bool> importQrFromClipboardImage(BuildContext context) async {
   if (image == null) return false;
   final texts = await _decode(image.gray, image.w, image.h);
   if (texts.isEmpty) {
-    state.toast('В картинке из буфера не найден QR-код');
+    state.toast(tr('В картинке из буфера не найден QR-код'));
   } else {
     await state.importText(texts.join('\n'));
   }
@@ -95,7 +96,7 @@ Future<void> showQrDialog(BuildContext context, {required String title, required
   final state = AppScope.read(context);
   final qr = QrCode.encode(text);
   if (qr == null) {
-    state.toast('Ссылка слишком длинная для QR-кода');
+    state.toast(tr('Ссылка слишком длинная для QR-кода'));
     return;
   }
   await showDialog<void>(
@@ -118,8 +119,8 @@ Future<void> showQrDialog(BuildContext context, {required String title, required
             Expanded(
               child: Text(
                 subscription
-                    ? 'В коде — ссылка подписки: по ней открываются все её серверы. Не показывайте его посторонним.'
-                    : 'В коде — ключ доступа к серверу. Не показывайте его посторонним.',
+                    ? tr('В коде — ссылка подписки: по ней открываются все её серверы. Не показывайте его посторонним.')
+                    : tr('В коде — ключ доступа к серверу. Не показывайте его посторонним.'),
                 style: TextStyle(color: C.muted, fontSize: 12.5, height: 1.35),
               ),
             ),
@@ -130,11 +131,11 @@ Future<void> showQrDialog(BuildContext context, {required String title, required
         TextButton(
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: text));
-            state.toast('Ссылка скопирована');
+            state.toast(tr('Ссылка скопирована'));
           },
-          child: const Text('Скопировать ссылку'),
+          child: Text(tr('Скопировать ссылку')),
         ),
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Закрыть'))),
       ],
     ),
   );

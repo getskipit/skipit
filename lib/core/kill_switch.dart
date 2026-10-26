@@ -5,6 +5,7 @@ import 'paths.dart';
 import 'service_client.dart';
 import 'windows.dart';
 import 'xray_config.dart';
+import '../l10n/l10n.dart';
 
 /// Kill Switch: пока он включён, Windows не выпускает трафик мимо VPN. В сеть могут выходить только
 /// ядра, соединения через адаптер VPN и локальная сеть (без DNS). Если адаптер пропал — ядро упало —
@@ -32,13 +33,13 @@ class KillSwitch {
     if (!WinSys.isAdmin()) {
       final reply = await ServiceClient.hold('ks engage\n${XrayConfig.tunV4}\n${XrayConfig.tunV6}');
       if (reply != 'ok') {
-        throw CoreException('Не удалось включить Kill Switch (${reply == null ? 'служба SkipIt не отвечает' : reply.replaceFirst('error ', '')}). '
+        throw CoreException(tr('Не удалось включить Kill Switch ({0}). '
             'Подключение остановлено, чтобы не работать без обещанной защиты. '
-            'Выключить его можно в Настройки → Подключение.');
+            'Выключить его можно в Настройки → Подключение.', [reply == null ? tr('служба SkipIt не отвечает') : ServiceClient.reason(reply.replaceFirst('error ', ''))]));
       }
       active = true;
       _viaService = true;
-      onLog?.call('Kill Switch включён (службой SkipIt)');
+      onLog?.call(tr('Kill Switch включён (службой SkipIt)'));
       return;
     }
     _viaService = false;
@@ -49,13 +50,13 @@ class KillSwitch {
         'v6': XrayConfig.tunV6,
       });
       active = true;
-      onLog?.call('Kill Switch включён');
+      onLog?.call(tr('Kill Switch включён'));
     } on PlatformException catch (e) {
-      throw CoreException('Не удалось включить Kill Switch (${e.message}). '
+      throw CoreException(tr('Не удалось включить Kill Switch ({0}). '
           'Подключение остановлено, чтобы не работать без обещанной защиты. '
-          'Выключить его можно в Настройки → Подключение.');
+          'Выключить его можно в Настройки → Подключение.', [e.message]));
     } on MissingPluginException {
-      throw CoreException('Kill Switch недоступен в этой сборке.');
+      throw CoreException(tr('Kill Switch недоступен в этой сборке.'));
     }
   }
 
@@ -74,11 +75,11 @@ class KillSwitch {
         code = r?['code'] as int? ?? 0;
         left = r?['left'] as int? ?? -1;
       }
-      onLog?.call('Kill Switch снят');
+      onLog?.call(tr('Kill Switch снят'));
       // Windows должна убрать все фильтры разом. Если нет — интернет остался бы закрытым без причины на экране.
       if (code != 0 || left > 0) {
-        onLog?.call('Ошибка: Kill Switch снят не полностью — ответ Windows 0x${code.toRadixString(16)}, '
-            'фильтров осталось: $left');
+        onLog?.call(tr('Ошибка: Kill Switch снят не полностью — ответ Windows 0x{0}, '
+            'фильтров осталось: {1}', [code.toRadixString(16), left]));
       }
     } catch (_) {}
   }
@@ -100,8 +101,8 @@ class KillSwitch {
         left = r?['left'] as int? ?? -1;
       }
       if (engaged || left > 0) {
-        onLog?.call('Ошибка: Kill Switch считается снятым, но фильтры в Windows остались '
-            '(сеанс открыт: ${engaged ? 'да' : 'нет'}, фильтров: $left)');
+        onLog?.call(tr('Ошибка: Kill Switch считается снятым, но фильтры в Windows остались '
+            '(сеанс открыт: {0}, фильтров: {1})', [engaged ? tr('да') : tr('нет'), left]));
       }
     } catch (_) {}
   }

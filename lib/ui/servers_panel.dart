@@ -20,6 +20,7 @@ import 'shell.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n/l10n.dart';
 
 /// Список серверов на главной: поиск, группы подписок с информацией, строки серверов.
 class ServersPanel extends StatefulWidget {
@@ -104,10 +105,10 @@ class _ServersPanelState extends State<ServersPanel> {
   Future<void> _add(BuildContext context) async {
     final text = await promptText(
       context,
-      title: 'Добавить подписку',
-      hint: 'Ссылка на подписку или сервера: https://…, vless://, vmess://, trojan://, ss://, hy2://, happ://…',
+      title: tr('Добавить подписку'),
+      hint: tr('Ссылка на подписку или сервера: https://…, vless://, vmess://, trojan://, ss://, hy2://, happ://…'),
       maxLines: 5,
-      ok: 'Добавить',
+      ok: tr('Добавить'),
     );
     if (text != null && text.trim().isNotEmpty && context.mounted) {
       await AppScope.read(context).importText(text);
@@ -135,12 +136,12 @@ class _ServersPanelState extends State<ServersPanel> {
           controller: _search,
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search_rounded),
-            hintText: 'Поиск по названию сервера или подписки',
+            hintText: tr('Поиск по названию сервера или подписки'),
             // Крестик появляется, когда в поле что-то введено, и очищает поиск одним кликом.
             suffixIcon: _search.text.isEmpty
                 ? null
                 : Tooltip(
-                    message: 'Очистить',
+                    message: tr('Очистить'),
                     child: Hover(
                       builder: (context, hovered) => GestureDetector(
                         behavior: HitTestBehavior.opaque,
@@ -155,28 +156,28 @@ class _ServersPanelState extends State<ServersPanel> {
       ),
       const SizedBox(width: 6),
       _IconAction(
-        tooltip: 'Проверить задержку (пинг) всех серверов',
+        tooltip: tr('Проверить задержку (пинг) всех серверов'),
         icon: Icons.speed_rounded,
         busy: state.pinging,
         onCancel: state.cancelPing,
-        cancelTooltip: 'Остановить проверку задержки',
+        cancelTooltip: tr('Остановить проверку задержки'),
         onTap: () => state.ping(state.servers),
       ),
       _MenuAction(
-        tooltip: 'Ещё',
+        tooltip: tr('Ещё'),
         items: [
-          const AppMenuItem('add', 'Добавить подписку', icon: Icons.add_rounded),
-          const AppMenuItem('paste', 'Вставить из буфера', icon: Icons.content_paste_rounded, hint: 'Ctrl+V'),
-          const AppMenuItem('qr-screen', 'Сканировать QR-код с экрана', icon: Icons.qr_code_scanner_rounded),
-          const AppMenuItem('qr-file', 'QR-код из картинки…', icon: Icons.image_outlined),
+          AppMenuItem('add', tr('Добавить подписку'), icon: Icons.add_rounded),
+          AppMenuItem('paste', tr('Вставить из буфера'), icon: Icons.content_paste_rounded, hint: 'Ctrl+V'),
+          AppMenuItem('qr-screen', tr('Сканировать QR-код с экрана'), icon: Icons.qr_code_scanner_rounded),
+          AppMenuItem('qr-file', tr('QR-код из картинки…'), icon: Icons.image_outlined),
           const AppMenuItem.divider(),
-          const AppMenuItem('update', 'Обновить все подписки', icon: Icons.sync_rounded),
+          AppMenuItem('update', tr('Обновить все подписки'), icon: Icons.sync_rounded),
           const AppMenuItem.divider(),
           // Порядок серверов внутри подписки — один на главную и на раздел «Серверы».
-          for (final (value, label) in const [
-            ('provider', 'Порядок: как у провайдера'),
-            ('delay', 'Порядок: по задержке'),
-            ('name', 'Порядок: по названию'),
+          for (final (value, label) in [
+            ('provider', tr('Порядок: как у провайдера')),
+            ('delay', tr('Порядок: по задержке')),
+            ('name', tr('Порядок: по названию')),
           ])
             AppMenuItem('sort-$value', label, checked: state.settings.serverSort == value),
         ],
@@ -209,9 +210,9 @@ class _ServersPanelState extends State<ServersPanel> {
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
           child: Text(
-            'Подписок: ${state.subscriptions.length}${hiddenSubs > 0 ? ' (скрыто $hiddenSubs)' : ''}  ·  '
-            'серверов: ${state.servers.length}${hiddenServers > 0 ? ' (скрыто $hiddenServers)' : ''}. '
-            'Скрытое не показывается на главной и в меню значка в трее.',
+            tr('Подписок: {0}{1}  ·  '
+            'серверов: {2}{3}. '
+            'Скрытое не показывается на главной и в меню значка в трее.', [state.subscriptions.length, hiddenSubs > 0 ? tr(' (скрыто {0})', [hiddenSubs]) : '', state.servers.length, hiddenServers > 0 ? tr(' (скрыто {0})', [hiddenServers]) : '']),
             style: TextStyle(color: C.muted, fontSize: 12),
           ),
         ),
@@ -224,8 +225,8 @@ class _ServersPanelState extends State<ServersPanel> {
           child: Center(
             child: Text(
                 _query.isEmpty
-                    ? 'Все подписки и серверы скрыты. Вернуть их можно в разделе «Серверы»'
-                    : 'По запросу «$_query» ничего не найдено',
+                    ? tr('Все подписки и серверы скрыты. Вернуть их можно в разделе «Серверы»')
+                    : tr('По запросу «{0}» ничего не найдено', [_query]),
                 style: TextStyle(color: C.muted)),
           ),
         )
@@ -327,12 +328,12 @@ class _EmptyState extends StatelessWidget {
         child: Column(children: [
           const AppBadge(size: 56),
           const SizedBox(height: 16),
-          const Text('Пока нет серверов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(tr('Пока нет серверов'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          Text('Скопируйте ссылку на подписку и нажмите Ctrl+V',
+          Text(tr('Скопируйте ссылку на подписку и нажмите Ctrl+V'),
               textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
           const SizedBox(height: 18),
-          GradientButton(label: 'Добавить подписку', icon: Icons.add_rounded, onPressed: onAdd),
+          GradientButton(label: tr('Добавить подписку'), icon: Icons.add_rounded, onPressed: onAdd),
         ]),
       );
 }
@@ -497,23 +498,23 @@ class _GroupCardState extends State<_GroupCard> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Подписка'),
+        title: Text(tr('Подписка')),
         content: SizedBox(
           width: 520,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'Название')),
+            TextField(controller: name, decoration: InputDecoration(labelText: tr('Название'))),
             const SizedBox(height: 12),
             TextField(controller: url, decoration: const InputDecoration(labelText: 'URL')),
             const SizedBox(height: 12),
             TextField(
               controller: interval,
-              decoration: const InputDecoration(labelText: 'Автообновление, часов (0 — выключено)'),
+              decoration: InputDecoration(labelText: tr('Автообновление, часов (0 — выключено)')),
             ),
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          GradientButton(label: 'Сохранить', onPressed: () => Navigator.pop(ctx, true)),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+          GradientButton(label: tr('Сохранить'), onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );
@@ -541,10 +542,10 @@ class _GroupCardState extends State<_GroupCard> {
     }
 
     final subtitle = sub == null
-        ? '${widget.servers.length} серв.'
+        ? tr('{0} серв.', [widget.servers.length])
         : [
             if (sub.lastUpdated != null) formatDateTime(sub.lastUpdated!),
-            sub.updateIntervalHours > 0 ? 'Автообновление — ${sub.updateIntervalHours} ч.' : 'Без автообновления',
+            sub.updateIntervalHours > 0 ? tr('Автообновление — {0} ч.', [sub.updateIntervalHours]) : tr('Без автообновления'),
           ].join('  |  ');
 
     // Перетаскивание заголовка: за указателем едет маленькая плашка с названием, а не вся карточка —
@@ -624,7 +625,7 @@ class _GroupCardState extends State<_GroupCard> {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Row(children: [
                           Flexible(
-                            child: FlagText(sub?.displayName ?? 'Мои серверы',
+                            child: FlagText(sub?.displayName ?? tr('Мои серверы'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
@@ -634,13 +635,13 @@ class _GroupCardState extends State<_GroupCard> {
                             const SizedBox(width: 6),
                             Tooltip(
                               message: widget.draggable
-                                  ? 'Закреплена вверху списка. Перетащите заголовок на другую закреплённую подписку, '
-                                      'чтобы поменять их местами'
-                                  : 'Закреплена вверху списка',
+                                  ? tr('Закреплена вверху списка. Перетащите заголовок на другую закреплённую подписку, '
+                                      'чтобы поменять их местами')
+                                  : tr('Закреплена вверху списка'),
                               child: Icon(Icons.push_pin_rounded, size: 14, color: C.orange),
                             ),
                           ],
-                          if (sub?.hidden ?? false) ...[const SizedBox(width: 8), const Tag('скрыта')],
+                          if (sub?.hidden ?? false) ...[const SizedBox(width: 8), Tag(tr('скрыта'))],
                         ]),
                         const SizedBox(height: 2),
                         Text(subtitle, maxLines: 1, style: TextStyle(color: C.muted, fontSize: 11.5)),
@@ -650,36 +651,36 @@ class _GroupCardState extends State<_GroupCard> {
                 ),
                 if (sub != null)
                   _IconAction(
-                    tooltip: 'Обновить подписку',
+                    tooltip: tr('Обновить подписку'),
                     icon: Icons.sync_rounded,
                     busy: updating,
                     onTap: () => state.updateSubscription(sub),
                   ),
                 _IconAction(
                   tooltip: sub != null
-                      ? 'Проверить задержку (пинг) серверов этой подписки'
-                      : 'Проверить задержку (пинг) серверов этого списка',
+                      ? tr('Проверить задержку (пинг) серверов этой подписки')
+                      : tr('Проверить задержку (пинг) серверов этого списка'),
                   icon: Icons.speed_rounded,
                   busy: state.pinging,
                   onCancel: state.cancelPing,
-                  cancelTooltip: 'Остановить проверку задержки',
+                  cancelTooltip: tr('Остановить проверку задержки'),
                   onTap: () => state.ping(widget.servers),
                 ),
                 // У серверов, добавленных вручную, действий над группой нет — меню только у подписок.
                 if (sub != null)
                   _MenuAction(
-                    tooltip: 'Ещё',
+                    tooltip: tr('Ещё'),
                     items: [
-                      const AppMenuItem('udp', 'Проверить UDP серверов (игры, звонки)', icon: Icons.sports_esports_rounded),
-                      AppMenuItem('pin', sub.pinned ? 'Открепить' : 'Закрепить вверху',
+                      AppMenuItem('udp', tr('Проверить UDP серверов (игры, звонки)'), icon: Icons.sports_esports_rounded),
+                      AppMenuItem('pin', sub.pinned ? tr('Открепить') : tr('Закрепить вверху'),
                           icon: sub.pinned ? Icons.push_pin_outlined : Icons.push_pin_rounded),
-                      AppMenuItem('hide', sub.hidden ? 'Показывать на главной' : 'Скрыть с главной',
+                      AppMenuItem('hide', sub.hidden ? tr('Показывать на главной') : tr('Скрыть с главной'),
                           icon: sub.hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded),
-                      const AppMenuItem('edit', 'Изменить', icon: Icons.edit_rounded),
-                      const AppMenuItem('copy', 'Скопировать ссылку', icon: Icons.link_rounded),
-                      const AppMenuItem('qr', 'Показать QR-код', icon: Icons.qr_code_rounded),
+                      AppMenuItem('edit', tr('Изменить'), icon: Icons.edit_rounded),
+                      AppMenuItem('copy', tr('Скопировать ссылку'), icon: Icons.link_rounded),
+                      AppMenuItem('qr', tr('Показать QR-код'), icon: Icons.qr_code_rounded),
                       const AppMenuItem.divider(),
-                      const AppMenuItem('delete', 'Удалить подписку', icon: Icons.delete_outline_rounded, danger: true),
+                      AppMenuItem('delete', tr('Удалить подписку'), icon: Icons.delete_outline_rounded, danger: true),
                     ],
                     onSelected: (v) async {
                       switch (v) {
@@ -691,20 +692,20 @@ class _GroupCardState extends State<_GroupCard> {
                         case 'hide':
                           state.setSubscriptionHidden(sub, !sub.hidden);
                           if (sub.hidden) {
-                            state.toast('Подписка скрыта с главной', detail: 'Вернуть её можно в разделе «Серверы»');
+                            state.toast(tr('Подписка скрыта с главной'), detail: tr('Вернуть её можно в разделе «Серверы»'));
                           }
                         case 'edit':
                           await _edit(state, sub);
                         case 'copy':
                           await Clipboard.setData(ClipboardData(text: sub.url));
-                          state.toast('Ссылка скопирована');
+                          state.toast(tr('Ссылка скопирована'));
                         case 'qr':
                           if (context.mounted) {
                             await showQrDialog(context, title: sub.displayName, text: sub.url, subscription: true);
                           }
                         case 'delete':
                           if (context.mounted &&
-                              await confirm(context, 'Удалить подписку?', 'Все её серверы тоже будут удалены.')) {
+                              await confirm(context, tr('Удалить подписку?'), tr('Все её серверы тоже будут удалены.'))) {
                             state.deleteSubscription(sub);
                           }
                       }
@@ -759,9 +760,9 @@ class _SubscriptionBar extends StatelessWidget {
                 Icon(Icons.data_usage_rounded, size: 15, color: C.muted),
                 const SizedBox(width: 6),
                 Text.rich(TextSpan(children: [
-                  TextSpan(text: 'Трафик: ', style: small),
+                  TextSpan(text: tr('Трафик: '), style: small),
                   TextSpan(
-                    text: total > 0 ? '${formatBytes(sub.used)} из ${formatBytes(total)}' : '${formatBytes(sub.used)}, без лимита',
+                    text: total > 0 ? tr('{0} из {1}', [formatBytes(sub.used), formatBytes(total)]) : tr('{0}, без лимита', [formatBytes(sub.used)]),
                     style: small.copyWith(color: C.text, fontWeight: FontWeight.w600),
                   ),
                 ])),
@@ -784,13 +785,13 @@ class _SubscriptionBar extends StatelessWidget {
                 Icon(Icons.event_rounded, size: 15, color: (daysLeft ?? 99) < 3 ? C.red : C.muted),
                 const SizedBox(width: 6),
                 Text(
-                  'До ${formatDate(expire)}${daysLeft == null || daysLeft < 0 ? '' : ' · ${daysLeft == 0 ? 'последний день' : '$daysLeft дн.'}'}',
+                  tr('До {0}{1}', [formatDate(expire), daysLeft == null || daysLeft < 0 ? '' : ' · ${daysLeft == 0 ? tr('последний день') : tr('{0} дн.', [daysLeft])}']),
                   style: small.copyWith(color: (daysLeft ?? 99) < 3 ? C.red : C.muted),
                 ),
               ],
               if (sub.supportUrl != null)
                 _IconAction(
-                  tooltip: 'Поддержка',
+                  tooltip: tr('Поддержка'),
                   icon: Icons.support_agent_rounded,
                   onTap: () => WinSys.openUrl(sub.supportUrl!),
                 ),
@@ -837,8 +838,8 @@ class _SubscriptionDetails extends StatelessWidget {
     final announce = sub.announce;
     final hasAnnounce = announce != null && announce.isNotEmpty;
     final links = [
-      if (sub.webPageUrl != null) ('Кабинет', Icons.open_in_new_rounded, sub.webPageUrl!),
-      if (sub.supportUrl != null) ('Поддержка', Icons.support_agent_rounded, sub.supportUrl!),
+      if (sub.webPageUrl != null) (tr('Кабинет'), Icons.open_in_new_rounded, sub.webPageUrl!),
+      if (sub.supportUrl != null) (tr('Поддержка'), Icons.support_agent_rounded, sub.supportUrl!),
     ];
     if (!hasTraffic && expire == null && links.isEmpty && !hasAnnounce) return const SizedBox.shrink();
     final small = TextStyle(fontSize: 12, color: C.muted);
@@ -868,10 +869,10 @@ class _SubscriptionDetails extends StatelessWidget {
           IntrinsicHeight(
             child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if (hasTraffic)
-                tile('ТРАФИК', [
+                tile(tr('ТРАФИК'), [
                   Text.rich(TextSpan(children: [
                     TextSpan(text: formatBytes(sub.used), style: big),
-                    TextSpan(text: total > 0 ? '  из ${formatBytes(total)}' : '  без лимита', style: small),
+                    TextSpan(text: total > 0 ? tr('  из {0}', [formatBytes(total)]) : tr('  без лимита'), style: small),
                   ])),
                   const SizedBox(height: 10),
                   ClipRRect(
@@ -888,27 +889,27 @@ class _SubscriptionDetails extends StatelessWidget {
                     [
                       if (sub.download != null) '↓ ${formatBytes(sub.download!)}',
                       if (sub.upload != null) '↑ ${formatBytes(sub.upload!)}',
-                      if (total > 0) 'осталось ${formatBytes((total - sub.used).clamp(0, total))}',
+                      if (total > 0) tr('осталось {0}', [formatBytes((total - sub.used).clamp(0, total))]),
                     ].join('   '),
                     style: small,
                   ),
                 ]),
               if (hasTraffic && expire != null) const SizedBox(width: 10),
               if (expire != null)
-                tile('СРОК', [
+                tile(tr('СРОК'), [
                   Text(
                     daysLeft == null || daysLeft < 0
-                        ? 'истёк'
+                        ? tr('истёк')
                         : daysLeft == 0
-                            ? 'последний день'
-                            : '$daysLeft дн.',
+                            ? tr('последний день')
+                            : tr('{0} дн.', [daysLeft]),
                     style: big.copyWith(color: soon ? C.red : C.text),
                   ),
                   const SizedBox(height: 10),
                   Row(children: [
                     Icon(Icons.event_rounded, size: 14, color: soon ? C.red : C.muted),
                     const SizedBox(width: 6),
-                    Text('до ${formatDate(expire)}', style: small.copyWith(color: soon ? C.red : C.muted)),
+                    Text(tr('до {0}', [formatDate(expire)]), style: small.copyWith(color: soon ? C.red : C.muted)),
                   ]),
                 ]),
             ]),
@@ -962,16 +963,16 @@ class _ServerRow extends StatelessWidget {
 
   Future<void> _menu(BuildContext context, AppState state, Offset? at) async {
     final v = await showAppMenu<String>(context, at: at, items: [
-      const AppMenuItem('ping', 'Проверить задержку (пинг)', icon: Icons.speed_rounded),
-      const AppMenuItem('udp', 'Проверить UDP (игры, звонки)', icon: Icons.sports_esports_rounded),
-      const AppMenuItem('json', 'Показать JSON', icon: Icons.data_object_rounded),
+      AppMenuItem('ping', tr('Проверить задержку (пинг)'), icon: Icons.speed_rounded),
+      AppMenuItem('udp', tr('Проверить UDP (игры, звонки)'), icon: Icons.sports_esports_rounded),
+      AppMenuItem('json', tr('Показать JSON'), icon: Icons.data_object_rounded),
       // У сервера из JSON-конфига ссылки нет — переносить на телефон нечего.
-      if (!server.isJson) const AppMenuItem('qr', 'Показать QR-код', icon: Icons.qr_code_rounded),
-      AppMenuItem('hide', server.hidden ? 'Показывать на главной' : 'Скрыть с главной',
+      if (!server.isJson) AppMenuItem('qr', tr('Показать QR-код'), icon: Icons.qr_code_rounded),
+      AppMenuItem('hide', server.hidden ? tr('Показывать на главной') : tr('Скрыть с главной'),
           icon: server.hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded),
-      if (server.subscriptionId == null) ...const [
+      if (server.subscriptionId == null) ...[
         AppMenuItem.divider(),
-        AppMenuItem('delete', 'Удалить', icon: Icons.delete_outline_rounded, danger: true),
+        AppMenuItem('delete', tr('Удалить'), icon: Icons.delete_outline_rounded, danger: true),
       ],
     ]);
     if (!context.mounted) return;
@@ -986,7 +987,7 @@ class _ServerRow extends StatelessWidget {
         await showQrDialog(context, title: server.name, text: server.link);
       case 'hide':
         state.setServerHidden(server, !server.hidden);
-        if (server.hidden) state.toast('Сервер скрыт с главной', detail: 'Вернуть его можно в разделе «Серверы»');
+        if (server.hidden) state.toast(tr('Сервер скрыт с главной'), detail: tr('Вернуть его можно в разделе «Серверы»'));
       case 'delete':
         state.deleteServer(server);
     }
@@ -999,7 +1000,7 @@ class _ServerRow extends StatelessWidget {
       json = const JsonEncoder.withIndent('  ')
           .convert(XrayConfig.build(server: server, routing: state.routingForConfig, settings: state.settings));
     } catch (e) {
-      state.toast('Не удалось собрать конфиг: $e');
+      state.toast(tr('Не удалось собрать конфиг: {0}', [e]));
       return;
     }
     // Тот же контроллер плавной прокрутки колесом, что и на страницах программы.
@@ -1041,13 +1042,13 @@ class _ServerRow extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Закрыть'))),
           GradientButton(
-            label: 'Скопировать',
+            label: tr('Скопировать'),
             icon: Icons.copy_rounded,
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: json));
-              state.toast('JSON скопирован');
+              state.toast(tr('JSON скопирован'));
             },
           ),
         ],
@@ -1098,7 +1099,7 @@ class _ServerRow extends StatelessWidget {
                     Tag(server.protocolLabel, color: C.isDark ? C.orangeLight : C.orange),
                     if (server.transportLabel.isNotEmpty) Tag(server.transportLabel),
                     if (server.isJson) Tag('JSON', color: C.cyan),
-                    if (server.hidden) const Tag('скрыт'),
+                    if (server.hidden) Tag(tr('скрыт')),
                   ]),
                 ]),
               ),
@@ -1114,18 +1115,18 @@ class _ServerRow extends StatelessWidget {
             if (server.udpMs != null || udpTesting) ...[
               Tooltip(
                 message: server.udpMs == null
-                    ? 'Идёт проверка UDP'
+                    ? tr('Идёт проверка UDP')
                     : server.udpMs == Pinger.udpFailed
-                        ? 'Проверить UDP не удалось — подробности в «Логах»'
+                        ? tr('Проверить UDP не удалось — подробности в «Логах»')
                         : server.udpMs! < 0
-                            ? 'UDP через сервер не проходит: игры и звонки могут не работать'
-                            : 'UDP через сервер проходит',
+                            ? tr('UDP через сервер не проходит: игры и звонки могут не работать')
+                            : tr('UDP через сервер проходит'),
                 child: Tag(
                   udpTesting
                       ? 'UDP …'
                       : server.udpMs == Pinger.udpFailed
                           ? 'UDP ?'
-                          : (server.udpMs! < 0 ? 'UDP нет' : 'UDP ${server.udpMs} мс'),
+                          : (server.udpMs! < 0 ? tr('UDP нет') : tr('UDP {0} мс', [server.udpMs])),
                   color: udpTesting || server.udpMs == Pinger.udpFailed
                       ? null
                       : (server.udpMs! < 0 ? C.red : C.green),
@@ -1139,7 +1140,7 @@ class _ServerRow extends StatelessWidget {
                 opacity: hovered ? 1 : 0.35,
                 duration: const Duration(milliseconds: 140),
                 child: IconButton(
-                  tooltip: 'Действия',
+                  tooltip: tr('Действия'),
                   icon: Icon(Icons.more_vert_rounded, size: 18, color: C.muted),
                   onPressed: () => _menu(btn, state, null),
                 ),

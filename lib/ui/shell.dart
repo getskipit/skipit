@@ -22,6 +22,7 @@ import 'smooth_scroll.dart';
 import 'flag_text.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n/l10n.dart';
 
 /// Что делать с другим VPN, найденным перед подключением.
 enum _ConflictChoice { cancel, close, proceed }
@@ -35,7 +36,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
       title: Row(children: [
         Icon(Icons.warning_amber_rounded, color: C.warnText),
         const SizedBox(width: 10),
-        const Expanded(child: Text('Сейчас работает другой VPN')),
+        Expanded(child: Text(tr('Сейчас работает другой VPN'))),
       ]),
       content: SizedBox(
         width: 460,
@@ -55,10 +56,10 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
           const SizedBox(height: 8),
           Text(
             canClose
-                ? 'Два VPN одновременно мешают друг другу: закрывается ядро SkipIt или пропадает интернет. '
-                    'SkipIt может сам закрыть другой VPN и подключиться.'
-                : 'Два VPN одновременно мешают друг другу: закрывается ядро SkipIt или пропадает интернет. '
-                    'Этот VPN SkipIt закрыть сам не может — отключите его вручную и подключитесь снова.',
+                ? tr('Два VPN одновременно мешают друг другу: закрывается ядро SkipIt или пропадает интернет. '
+                    'SkipIt может сам закрыть другой VPN и подключиться.')
+                : tr('Два VPN одновременно мешают друг другу: закрывается ядро SkipIt или пропадает интернет. '
+                    'Этот VPN SkipIt закрыть сам не может — отключите его вручную и подключитесь снова.'),
             style: TextStyle(color: C.muted, height: 1.4),
           ),
           // Второй путь — не закрывать другой VPN — отдельной плашкой со своей кнопкой: внизу окна
@@ -73,7 +74,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
             child: Row(children: [
               Expanded(
                 child: Text(
-                  'Другой VPN только для рабочей сети или удалённого рабочего стола? Тогда его можно оставить.',
+                  tr('Другой VPN только для рабочей сети или удалённого рабочего стола? Тогда его можно оставить.'),
                   style: TextStyle(color: C.muted, fontSize: 13, height: 1.35),
                 ),
               ),
@@ -83,17 +84,17 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
                 onPressed: () => Navigator.pop(ctx, _ConflictChoice.proceed),
                 style: TextButton.styleFrom(backgroundColor: C.orange.withValues(alpha: 0.12)),
                 icon: const Icon(Icons.call_split_rounded, size: 18),
-                label: const Text('Подключиться рядом'),
+                label: Text(tr('Подключиться рядом')),
               ),
             ]),
           ),
         ]),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, _ConflictChoice.cancel), child: const Text('Отмена')),
+        TextButton(onPressed: () => Navigator.pop(ctx, _ConflictChoice.cancel), child: Text(tr('Отмена'))),
         if (canClose)
           GradientButton(
-            label: 'Закрыть и подключиться',
+            label: tr('Закрыть и подключиться'),
             icon: Icons.power_settings_new_rounded,
             onPressed: () => Navigator.pop(ctx, _ConflictChoice.close),
           ),
@@ -114,15 +115,15 @@ Future<bool> _askAboutZapret(BuildContext context, AppState state, String zapret
         title: Row(children: [
           Icon(Icons.warning_amber_rounded, color: C.warnText),
           const SizedBox(width: 10),
-          Expanded(child: Text('Запущен $zapret')),
+          Expanded(child: Text(tr('Запущен {0}', [zapret]))),
         ]),
         content: SizedBox(
           width: 460,
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
-              '$zapret меняет соединения компьютера, и с VPN это может мешать: соединение с VPN-сервером '
+              tr('{0} меняет соединения компьютера, и с VPN это может мешать: соединение с VPN-сервером '
               'не установится, или часть сайтов перестанет открываться. Если так случится — добавьте адрес '
-              'VPN-сервера в исключения $zapret или закройте его.',
+              'VPN-сервера в исключения {1} или закройте его.', [zapret, zapret]),
               style: TextStyle(color: C.muted, height: 1.4),
             ),
             const SizedBox(height: 10),
@@ -136,15 +137,15 @@ Future<bool> _askAboutZapret(BuildContext context, AppState state, String zapret
                   activeColor: C.orange,
                   onChanged: (v) => setLocal(() => dontAsk = v ?? false),
                 ),
-                const Text('Больше не спрашивать'),
+                Text(tr('Больше не спрашивать')),
               ]),
             ),
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
           GradientButton(
-            label: 'Подключиться всё равно',
+            label: tr('Подключиться всё равно'),
             icon: Icons.power_settings_new_rounded,
             onPressed: () => Navigator.pop(ctx, true),
           ),
@@ -191,10 +192,10 @@ Future<void> connectOrToggle(BuildContext context) async {
     if (!context.mounted) return;
     final ok = await confirm(
       context,
-      'Нужны права администратора',
-      'Режим TUN создаёт виртуальный сетевой адаптер — для этого Windows требует права администратора.\n\n'
-          'Перезапустить приложение от имени администратора? Либо переключитесь на режим «Прокси».',
-      ok: 'Перезапустить',
+      tr('Нужны права администратора'),
+      tr('Режим TUN создаёт виртуальный сетевой адаптер — для этого Windows требует права администратора.\n\n'
+          'Перезапустить приложение от имени администратора? Либо переключитесь на режим «Прокси».'),
+      ok: tr('Перезапустить'),
     );
     if (!ok) return;
     if (await WinSys.relaunchAsAdmin(['--connect'])) {
@@ -213,7 +214,7 @@ Future<void> importFromClipboard(BuildContext context) async {
     // В буфере может быть картинка с QR-кодом (скриншот).
     if (await importQrFromClipboardImage(context)) return;
     if (!context.mounted) return;
-    AppScope.read(context).toast('Буфер обмена пуст');
+    AppScope.read(context).toast(tr('Буфер обмена пуст'));
     return;
   }
   await AppScope.read(context).importText(text);
@@ -229,13 +230,13 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   StreamSubscription<ToastMessage>? _sub;
 
-  static const _items = [
-    (Icons.bolt_rounded, 'Главная'),
-    (Icons.storage_rounded, 'Серверы'),
-    (Icons.alt_route_rounded, 'Маршрутизация'),
-    (Icons.troubleshoot_rounded, 'Проверка'),
-    (Icons.receipt_long_rounded, 'Логи'),
-    (Icons.tune_rounded, 'Настройки'),
+  static List<(IconData, String)> get _items => [
+    (Icons.bolt_rounded, tr('Главная')),
+    (Icons.storage_rounded, tr('Серверы')),
+    (Icons.alt_route_rounded, tr('Маршрутизация')),
+    (Icons.troubleshoot_rounded, tr('Проверка')),
+    (Icons.receipt_long_rounded, tr('Логи')),
+    (Icons.tune_rounded, tr('Настройки')),
   ];
 
   @override
@@ -295,18 +296,18 @@ class _ShellState extends State<Shell> {
     final link = state.pendingLinks.first;
     final parsed = LinkParser.parseText(link);
     final what = [
-      for (final u in parsed.subscriptionUrls) 'подписка: ${Uri.tryParse(u)?.host ?? u}',
-      if (parsed.servers.isNotEmpty) 'серверов: ${parsed.servers.length}',
-      for (final r in parsed.routing) r.off ? 'отключение маршрутизации' : 'профиль маршрутизации «${r.profile?.name}»',
+      for (final u in parsed.subscriptionUrls) tr('подписка: {0}', [Uri.tryParse(u)?.host ?? u]),
+      if (parsed.servers.isNotEmpty) tr('серверов: {0}', [parsed.servers.length]),
+      for (final r in parsed.routing) r.off ? tr('отключение маршрутизации') : tr('профиль маршрутизации «{0}»', [r.profile?.name]),
     ];
     await Tray.show();
     if (!mounted) return;
     final ok = await confirm(
       context,
-      'Добавить из ссылки?',
-      '${what.isEmpty ? 'Ссылка не распознана.' : what.join('\n')}\n\n'
-          'Добавляйте только то, что вы открыли сами — например, ссылку от своего VPN-провайдера.',
-      ok: 'Добавить',
+      tr('Добавить из ссылки?'),
+      tr('{0}\n\n'
+          'Добавляйте только то, что вы открыли сами — например, ссылку от своего VPN-провайдера.', [what.isEmpty ? tr('Ссылка не распознана.') : what.join('\n')]),
+      ok: tr('Добавить'),
     );
     await state.resolvePendingLink(link, accept: ok);
     _asking = false;
@@ -587,7 +588,7 @@ class _TopBar extends StatelessWidget {
           Tooltip(
             richMessage: TextSpan(children: [
               TextSpan(text: '$statusText\n'),
-              Flags.span(state.selectedServer?.name ?? 'Сервер не выбран', size: 12),
+              Flags.span(state.selectedServer?.name ?? tr('Сервер не выбран'), size: 12),
             ]),
             child: Container(
               height: 42,
@@ -844,10 +845,10 @@ class _MenuSlot extends StatelessWidget {
 
 /// Цвет точки и слово статуса подключения — для бокового и верхнего меню.
 (Color, String) _statusOf(AppState state) => switch (state.status) {
-      ConnStatus.connected => (C.green, 'Подключено'),
-      ConnStatus.connecting => (C.orangeLight, 'Подключение…'),
-      ConnStatus.disconnecting => (C.orangeLight, 'Отключение…'),
-      ConnStatus.disconnected => (C.muted, 'Не подключено'),
+      ConnStatus.connected => (C.green, tr('Подключено')),
+      ConnStatus.connecting => (C.orangeLight, tr('Подключение…')),
+      ConnStatus.disconnecting => (C.orangeLight, tr('Отключение…')),
+      ConnStatus.disconnected => (C.muted, tr('Не подключено')),
     };
 
 /// Светящаяся точка статуса подключения.
@@ -970,7 +971,7 @@ class _Sidebar extends StatelessWidget {
               richMessage: collapsed
                   ? TextSpan(children: [
                       TextSpan(text: '$statusText\n'),
-                      Flags.span(state.selectedServer?.name ?? 'Сервер не выбран', size: 12),
+                      Flags.span(state.selectedServer?.name ?? tr('Сервер не выбран'), size: 12),
                     ])
                   : null,
               child: Container(
@@ -998,7 +999,7 @@ class _Sidebar extends StatelessWidget {
                             SizedBox(
                               width: 150,
                               child: FlagText(
-                                state.selectedServer?.name ?? 'Сервер не выбран',
+                                state.selectedServer?.name ?? tr('Сервер не выбран'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(color: C.muted, fontSize: 11),
@@ -1033,7 +1034,7 @@ class _MenuBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final arrows = collapsed ? Icons.keyboard_double_arrow_right_rounded : Icons.keyboard_double_arrow_left_rounded;
     return Tooltip(
-      message: collapsed ? 'Развернуть меню' : 'Свернуть меню',
+      message: collapsed ? tr('Развернуть меню') : tr('Свернуть меню'),
       waitDuration: const Duration(milliseconds: 300),
       child: Hover(
         builder: (context, hovered) => GestureDetector(
@@ -1327,15 +1328,15 @@ class _VersionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final hasUpdate = state.appUpdate != null;
-    final title = 'Версия $appVersion${AppPaths.isDev ? ' dev' : ''}';
+    final title = tr('Версия {0}{1}', [appVersion, AppPaths.isDev ? ' dev' : '']);
     final downloading = state.downloadingAppUpdate;
     final action = downloading
         ? state.updateProgressShort
         : state.checkingUpdates
-        ? 'Проверяю обновления…'
+        ? tr('Проверяю обновления…')
         : hasUpdate
-            ? 'Установить ${state.appUpdate!.version}'
-            : 'Проверить обновления';
+            ? tr('Установить {0}', [state.appUpdate!.version])
+            : tr('Проверить обновления');
 
     return Tooltip(
       // В свёрнутом меню подписи не видно — она переезжает в подсказку.

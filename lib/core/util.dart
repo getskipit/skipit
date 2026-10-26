@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import '../l10n/l10n.dart';
 
 final _random = Random();
 
@@ -13,25 +14,27 @@ class ServerRefused implements Exception {
 
   /// Что это значит для подписки — простыми словами.
   String get reason => switch (status) {
-        402 => 'сервер сообщает, что подписка не оплачена или закончилась (код 402)',
-        401 || 403 => 'сервер отказал в доступе (код $status): ссылка больше не действует '
-            'или превышено число устройств',
-        404 || 410 => 'подписка не найдена (код $status): ссылка больше не действует',
-        429 => 'сервер просит подождать: слишком много запросов (код 429)',
-        >= 500 => 'сервер подписки сейчас не работает (код $status)',
-        _ => 'сервер ответил отказом (код $status)',
+        402 => tr('сервер сообщает, что подписка не оплачена или закончилась (код 402)'),
+        401 || 403 => tr('сервер отказал в доступе (код {0}): ссылка больше не действует '
+            'или превышено число устройств', [status]),
+        404 || 410 => tr('подписка не найдена (код {0}): ссылка больше не действует', [status]),
+        429 => tr('сервер просит подождать: слишком много запросов (код 429)'),
+        >= 500 => tr('сервер подписки сейчас не работает (код {0})', [status]),
+        _ => tr('сервер ответил отказом (код {0})', [status]),
       };
 
   /// Отказ окончательный: сервер работает и ответил по существу (в отличие от сбоя 5xx).
   bool get isFinal => status < 500 && status != 429;
 
   @override
-  String toString() => 'Сервер ответил $status';
+  String toString() => tr('Сервер ответил {0}', [status]);
 }
 
 /// Слово в нужной форме после числа: `plural(3, 'раз', 'раза', 'раз')` → «раза».
-/// [one] — для 1, 21, 31…; [few] — для 2–4, 22–24…; [many] — для остальных.
+/// [one] — для 1, 21, 31…; [few] — для 2–4, 22–24…; [many] — для остальных. По-английски форм две:
+/// [one] — только для 1, иначе [many].
 String plural(int n, String one, String few, String many) {
+  if (lang == Lang.en) return n.abs() == 1 ? one : many;
   final d = n.abs() % 100;
   if (d >= 11 && d <= 14) return many;
   return switch (d % 10) { 1 => one, 2 || 3 || 4 => few, _ => many };
@@ -40,17 +43,17 @@ String plural(int n, String one, String few, String many) {
 /// Понятное описание сетевой ошибки для пользователя (подробности остаются в журнале).
 String describeNetError(Object e) {
   if (e is ServerRefused) return '${e.reason[0].toUpperCase()}${e.reason.substring(1)}';
-  if (e is TimeoutException) return 'Сервер не ответил вовремя';
+  if (e is TimeoutException) return tr('Сервер не ответил вовремя');
   if (e is SocketException) {
     // 10013 / 10057 — Windows не дала открыть соединение: так выглядит блокировка файрволом
     // (например, simplewall ещё не разрешил новый файл программы).
     final code = e.osError?.errorCode;
     if (code == 10013 || code == 10057) {
-      return 'Соединение заблокировано. Если установлен файрвол или антивирус — разрешите в нём SkipIt';
+      return tr('Соединение заблокировано. Если установлен файрвол или антивирус — разрешите в нём SkipIt');
     }
-    return 'Нет соединения с сервером — проверьте интернет';
+    return tr('Нет соединения с сервером — проверьте интернет');
   }
-  if (e is HandshakeException) return 'Не удалось установить защищённое соединение с сервером';
+  if (e is HandshakeException) return tr('Не удалось установить защищённое соединение с сервером');
   return scrubUrls(e.toString().replaceFirst(RegExp(r'^(Http)?Exception: '), ''));
 }
 
@@ -154,7 +157,7 @@ Map<String, dynamic> deepCopyMap(Map<String, dynamic> map) =>
     jsonDecode(jsonEncode(map)) as Map<String, dynamic>;
 
 String formatBytes(num bytes) {
-  const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+  final units = [tr('Б'), tr('КБ'), tr('МБ'), tr('ГБ'), tr('ТБ')];
   var value = bytes.toDouble();
   var unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
@@ -165,7 +168,7 @@ String formatBytes(num bytes) {
   return '${value.toStringAsFixed(digits)} ${units[unit]}';
 }
 
-String formatSpeed(num bytesPerSecond) => '${formatBytes(bytesPerSecond)}/с';
+String formatSpeed(num bytesPerSecond) => tr('{0}/с', [formatBytes(bytesPerSecond)]);
 
 String _two(int n) => n.toString().padLeft(2, '0');
 

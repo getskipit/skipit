@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../core/util.dart';
+import '../l10n/l10n.dart';
 
 class RoutingDeeplink {
   RoutingDeeplink({this.profile, this.activate = false, this.off = false});
@@ -123,28 +124,28 @@ class RoutingProfile {
       directSites.length + directIp.length + proxySites.length + proxyIp.length + blockSites.length + blockIp.length;
 
   String get summary {
-    final base = globalProxy ? 'По умолчанию через VPN' : 'По умолчанию напрямую';
-    return ruleCount == 0 ? base : '$base · правил: $ruleCount';
+    final base = globalProxy ? tr('По умолчанию через VPN') : tr('По умолчанию напрямую');
+    return ruleCount == 0 ? base : tr('{0} · правил: {1}', [base, ruleCount]);
   }
 
   /// Единственный встроенный профиль: без правил, весь трафик через VPN (как по умолчанию в Happ).
   static RoutingProfile global() => RoutingProfile(
         id: globalPresetId,
-        name: 'Весь трафик через VPN',
+        name: tr('Весь трафик через VPN'),
         directIp: ['geoip:private'],
       );
 
   /// Шаблоны для кнопки «Создать» — в список попадают, только если пользователь их выбрал.
   static List<RoutingProfile> templates() => [
         RoutingProfile(
-          name: 'Россия напрямую',
+          name: tr('Россия напрямую'),
           proxySites: ['geosite:ru-blocked'],
           proxyIp: ['geoip:ru-blocked'],
           directSites: ['geosite:category-ru', 'domain:ru', 'domain:su', 'domain:xn--p1ai'],
           directIp: ['geoip:ru', 'geoip:private'],
         ),
         RoutingProfile(
-          name: 'Только заблокированное',
+          name: tr('Только заблокированное'),
           globalProxy: false,
           proxySites: ['geosite:ru-blocked'],
           proxyIp: ['geoip:ru-blocked'],
@@ -180,7 +181,7 @@ class RoutingProfile {
 
     return RoutingProfile(
       id: id,
-      name: str('Name', 'Импортированный профиль'),
+      name: str('Name', tr('Импортированный профиль')),
       globalProxy: parseBool(j['GlobalProxy'], true),
       domainStrategy: str('DomainStrategy', 'IPIfNonMatch'),
       remoteDnsType: str('RemoteDNSType', 'DoH'),

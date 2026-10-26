@@ -1,6 +1,7 @@
 import '../core/util.dart';
 import '../core/windows.dart';
 import '../version.dart';
+import '../l10n/l10n.dart';
 
 enum ConnectionMode {
   /// Виртуальный адаптер (TUN, см. [TunCore]): весь трафик системы, нужны права администратора.
@@ -20,10 +21,10 @@ enum ConnectionMode {
 extension ConnectionModeLabel on ConnectionMode {
   /// Название режима, как на главной.
   String get label => switch (this) {
-        ConnectionMode.mixed => 'Смешанный',
+        ConnectionMode.mixed => tr('Смешанный'),
         ConnectionMode.tun => 'TUN',
-        ConnectionMode.systemProxy => 'Прокси',
-        ConnectionMode.proxyOnly => 'Только порты',
+        ConnectionMode.systemProxy => tr('Прокси'),
+        ConnectionMode.proxyOnly => tr('Только порты'),
       };
 }
 
@@ -138,11 +139,11 @@ class AppSettings {
 
   /// Части главной, которые человек спрятал (Настройки → Внешний вид → «На главной»): ключи из [homeParts].
   Set<String> homeHidden = {};
-  static const homeParts = {
-    'timer': 'Время и страна',
-    'mode': 'Режим',
-    'speed': 'Скорость',
-    'routing': 'Маршрутизация',
+  static Map<String, String> get homeParts => {
+    'timer': tr('Время и страна'),
+    'mode': tr('Режим'),
+    'speed': tr('Скорость'),
+    'routing': tr('Маршрутизация'),
   };
   bool homeShows(String part) => !homeHidden.contains(part);
 
@@ -155,7 +156,7 @@ class AppSettings {
 
   /// Предупреждение вверху «Для опытных» закрыто кнопкой «Понятно».
   bool advancedHintSeen = false;
-  static const menuPages = {'1': 'Серверы', '2': 'Маршрутизация', '3': 'Проверка', '4': 'Логи'};
+  static Map<String, String> get menuPages => {'1': tr('Серверы'), '2': tr('Маршрутизация'), '3': tr('Проверка'), '4': tr('Логи')};
 
   /// Меню разделов вдоль верхнего края окна, а не слева.
   bool navTop = false;
@@ -181,6 +182,9 @@ class AppSettings {
   /// Версия, о которой фоновая проверка обновлений уже сообщила: второй раз о ней не напоминает.
   String? updateNotified;
   AppTheme theme = AppTheme.dark;
+
+  /// Язык интерфейса: 'auto' (как в Windows), 'ru' или 'en' (см. lib/l10n/l10n.dart).
+  String language = 'auto';
 
   /// Цвет акцента — имя из Accent (lib/ui/theme.dart): orange, blue, purple, pink, green.
   String accent = 'orange';
@@ -273,6 +277,7 @@ class AppSettings {
         'updateChannel': updateChannel.name,
         'updateNotified': updateNotified,
         'theme': theme.name,
+        'language': language,
         'accent': accent,
         'corners': corners,
         'iconStyle': iconStyle,
@@ -363,6 +368,8 @@ class AppSettings {
     s.updateChannel = UpdateChannel.values.asNameMap()[j['updateChannel']] ?? s.updateChannel;
     s.updateNotified = j['updateNotified'] as String?;
     s.theme = AppTheme.values.asNameMap()[j['theme']] ?? s.theme;
+    final language = j['language'];
+    if (language is String && const ['auto', 'ru', 'en'].contains(language)) s.language = language;
     s.accent = j['accent'] as String? ?? s.accent;
     s.iconStyle = j['iconStyle'] as String? ?? s.iconStyle;
     final corners = j['corners'];

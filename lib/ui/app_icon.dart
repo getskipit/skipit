@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import 'theme.dart';
+import '../l10n/l10n.dart';
 
 /// Вид значка SkipIt (Настройки → Внешний вид → «Значок»): окно, трей и значок в меню. Кнопку на панели задач Windows 11 рисует по exe — её не поменять.
 /// Классический — картинка из ресурсов exe; остальные программа рисует сама той же формы.
@@ -14,8 +15,9 @@ enum IconStyle {
   bright('Яркий'),
   mono('Монохромный');
 
-  const IconStyle(this.label);
-  final String label;
+  const IconStyle(this._label);
+  final String _label;
+  String get label => tr(_label);
 }
 
 /// Значок SkipIt той же формы, что рисует tools/make_icon.ps1: скруглённый квадрат и знак ▶▶,

@@ -8,6 +8,7 @@ import '../models/settings.dart';
 import 'paths.dart';
 import 'speed_test.dart';
 import 'util.dart';
+import '../l10n/l10n.dart';
 
 class XrayConfig {
   static const _prefixes = ['geosite:', 'domain:', 'full:', 'regexp:', 'keyword:', 'ext:', 'dotless:'];
@@ -184,7 +185,7 @@ class XrayConfig {
         }
       } else if (target == 'block') {
         block += count;
-        if (r['protocol'] != null) notes.add('торренты');
+        if (r['protocol'] != null) notes.add(tr('торренты'));
         if (ips.contains('::/0')) notes.add('IPv6');
         if (r['network'] == 'udp' && '${r['port']}' == '443') notes.add('QUIC');
       } else if (target != null && r['network'] == null && r['port'] == null) {

@@ -13,6 +13,7 @@ import 'shell.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n/l10n.dart';
 
 /// Главная: слева кнопка подключения и режимы, справа список серверов.
 class HomePage extends StatefulWidget {
@@ -46,13 +47,13 @@ class _HomePageState extends State<HomePage> {
 
     final statusText = switch (state.status) {
       // Ядро работает, но сервер не отвечает — писать «Защищено» было бы неправдой.
-      ConnStatus.connected when state.linkDown => 'Нет связи',
-      ConnStatus.connected => 'Защищено',
-      ConnStatus.connecting => 'Подключаемся…',
-      ConnStatus.disconnecting => 'Отключаемся…',
+      ConnStatus.connected when state.linkDown => tr('Нет связи'),
+      ConnStatus.connected => tr('Защищено'),
+      ConnStatus.connecting => tr('Подключаемся…'),
+      ConnStatus.disconnecting => tr('Отключаемся…'),
       // Перед подключением закрывается другой VPN — это уже часть подключения, а не простой.
-      ConnStatus.disconnected when state.closingOtherVpn => 'Подключаемся…',
-      ConnStatus.disconnected => 'Не подключено',
+      ConnStatus.disconnected when state.closingOtherVpn => tr('Подключаемся…'),
+      ConnStatus.disconnected => tr('Не подключено'),
     };
 
     final blockedCore = state.firewallBlockedCore;
@@ -62,9 +63,9 @@ class _HomePageState extends State<HomePage> {
             ? _NoticeBox(
                 icon: Icons.gpp_bad_rounded,
                 color: C.red,
-                title: 'Файрвол не пускает SkipIt в сеть',
-                text: 'Разрешите в файрволе файл $blockedCore и подключитесь снова',
-                actionLabel: 'Показать файл',
+                title: tr('Файрвол не пускает SkipIt в сеть'),
+                text: tr('Разрешите в файрволе файл {0} и подключитесь снова', [blockedCore]),
+                actionLabel: tr('Показать файл'),
                 actionIcon: Icons.folder_open_rounded,
                 onAction: () => state.showCoreFile(blockedCore),
               )
@@ -72,9 +73,9 @@ class _HomePageState extends State<HomePage> {
                 ? _NoticeBox(
                     icon: Icons.cloud_off_rounded,
                     color: C.red,
-                    title: 'VPN подключён, но связи нет',
-                    text: 'Сервер не отвечает. Попробуйте переподключиться или выбрать другой сервер',
-                    actionLabel: 'Переподключиться',
+                    title: tr('VPN подключён, но связи нет'),
+                    text: tr('Сервер не отвечает. Попробуйте переподключиться или выбрать другой сервер'),
+                    actionLabel: tr('Переподключиться'),
                     actionIcon: Icons.refresh_rounded,
                     onAction: state.isBusy ? null : state.reconnect,
                   )
@@ -82,10 +83,10 @@ class _HomePageState extends State<HomePage> {
                     ? _NoticeBox(
                         icon: Icons.info_rounded,
                         color: C.orange,
-                        title: 'Список программ изменён',
-                        text: 'Правила по приложениям (Маршрутизация → Приложения) начнут действовать '
-                            'после переподключения',
-                        actionLabel: 'Применить',
+                        title: tr('Список программ изменён'),
+                        text: tr('Правила по приложениям (Маршрутизация → Приложения) начнут действовать '
+                            'после переподключения'),
+                        actionLabel: tr('Применить'),
                         actionIcon: Icons.refresh_rounded,
                         onAction: state.isBusy ? null : state.reconnect,
                       )
@@ -117,8 +118,8 @@ class _HomePageState extends State<HomePage> {
         connected && state.connectedAt != null
             ? formatDuration(DateTime.now().difference(state.connectedAt!))
             : state.closingOtherVpn
-                ? 'Закрываю другой VPN…'
-                : (state.status == ConnStatus.connecting ? 'Нажмите, чтобы отменить' : 'Нажмите, чтобы подключиться'),
+                ? tr('Закрываю другой VPN…')
+                : (state.status == ConnStatus.connecting ? tr('Нажмите, чтобы отменить') : tr('Нажмите, чтобы подключиться')),
         style: TextStyle(
           color: connected ? (C.isDark ? C.orangeLight : C.orange) : C.muted,
           fontSize: connected ? 18 : 13,
@@ -159,13 +160,13 @@ class _HomePageState extends State<HomePage> {
         height: 34,
         child: Text(
           switch (state.settings.mode) {
-            ConnectionMode.tun => 'Весь трафик компьютера через VPN',
-            ConnectionMode.mixed => 'Браузеры — через прокси, остальное — через TUN',
-            ConnectionMode.systemProxy => 'Только браузеры и программы с поддержкой прокси',
+            ConnectionMode.tun => tr('Весь трафик компьютера через VPN'),
+            ConnectionMode.mixed => tr('Браузеры — через прокси, остальное — через TUN'),
+            ConnectionMode.systemProxy => tr('Только браузеры и программы с поддержкой прокси'),
             ConnectionMode.proxyOnly =>
-              'Система не меняется · SOCKS :${state.settings.socksPort} · HTTP :${state.settings.httpPort}'
+              tr('Система не меняется · SOCKS :{0} · HTTP :{1}', [state.settings.socksPort, state.settings.httpPort]) +
                   // Порты под паролем: без подсказки непонятно, почему программа с одним адресом не подключается.
-                  '${state.settings.portAuth ? '\nс логином и паролем — Настройки → Для опытных' : ''}',
+                  (state.settings.portAuth ? tr('\nс логином и паролем — Настройки → Для опытных') : ''),
           },
           textAlign: TextAlign.center,
           maxLines: 2,
@@ -190,9 +191,9 @@ class _HomePageState extends State<HomePage> {
         child: ListenableBuilder(
           listenable: state.stats,
           builder: (context, _) => Row(children: [
-            Expanded(child: _Speed(icon: Icons.arrow_upward_rounded, label: 'Отдача', speed: state.stats.upSpeed, vpn: state.stats.vpnUp, direct: state.stats.directUp, active: connected)),
+            Expanded(child: _Speed(icon: Icons.arrow_upward_rounded, label: tr('Отдача'), speed: state.stats.upSpeed, vpn: state.stats.vpnUp, direct: state.stats.directUp, active: connected)),
             const SizedBox(width: 10),
-            Expanded(child: _Speed(icon: Icons.arrow_downward_rounded, label: 'Загрузка', speed: state.stats.downSpeed, vpn: state.stats.vpnDown, direct: state.stats.directDown, active: connected)),
+            Expanded(child: _Speed(icon: Icons.arrow_downward_rounded, label: tr('Загрузка'), speed: state.stats.downSpeed, vpn: state.stats.vpnDown, direct: state.stats.directDown, active: connected)),
           ]),
         ),
       ),
@@ -224,7 +225,7 @@ class _HomePageState extends State<HomePage> {
             key: ValueKey(state.lastError),
             onClose: state.clearError,
             // Адаптер TUN не поднялся — предлагаем сразу подключиться в режиме, которому он не нужен.
-            actionLabel: state.tunFailed ? 'Подключиться в режиме «Прокси»' : null,
+            actionLabel: state.tunFailed ? tr('Подключиться в режиме «Прокси»') : null,
             onAction: () async {
               await state.setMode(ConnectionMode.systemProxy);
               if (context.mounted) await connectOrToggle(context);
@@ -312,7 +313,7 @@ class _TunCorePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-        message: 'Как работает TUN: Xray или sing-box — пояснение внизу списка',
+        message: tr('Как работает TUN: Xray или sing-box — пояснение внизу списка'),
         waitDuration: const Duration(milliseconds: 500),
         child: Hover(
           builder: (context, hovered) => GestureDetector(
@@ -321,12 +322,12 @@ class _TunCorePicker extends StatelessWidget {
               final picked = await showAppMenu<TunCore>(context, centered: true, items: [
                 AppMenuItem(TunCore.xray, 'Xray',
                     checked: value == TunCore.xray,
-                    description: 'Всё делает ядро Xray: перехватывает трафик компьютера и решает, что отправить через '
-                        'VPN-сервер, а что напрямую — мимо него'),
+                    description: tr('Всё делает ядро Xray: перехватывает трафик компьютера и решает, что отправить через '
+                        'VPN-сервер, а что напрямую — мимо него')),
                 AppMenuItem(TunCore.singbox, 'sing-box',
                     checked: value == TunCore.singbox,
-                    description: 'Трафик перехватывает ядро sing-box и передаёт его Xray, а тот решает, что отправить '
-                        'через VPN-сервер, а что напрямую'),
+                    description: tr('Трафик перехватывает ядро sing-box и передаёт его Xray, а тот решает, что отправить '
+                        'через VPN-сервер, а что напрямую')),
               ]);
               if (picked != null) onChanged(picked);
             },
@@ -339,7 +340,7 @@ class _TunCorePicker extends StatelessWidget {
                 border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.5) : C.border),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('Режим TUN', style: TextStyle(color: C.muted, fontSize: 12)),
+                Text(tr('Режим TUN'), style: TextStyle(color: C.muted, fontSize: 12)),
                 const SizedBox(width: 8),
                 _CoreName(value == TunCore.xray ? 'Xray' : 'sing-box'),
                 const SizedBox(width: 4),
@@ -375,7 +376,7 @@ class _RoutingInfoState extends State<_RoutingInfo> {
   }
 
   Widget _tile(BuildContext context) => Tooltip(
-        message: 'Открыть маршрутизацию',
+        message: tr('Открыть маршрутизацию'),
         waitDuration: const Duration(milliseconds: 500),
         child: Hover(
           builder: (context, hovered) => GestureDetector(
@@ -394,7 +395,7 @@ class _RoutingInfoState extends State<_RoutingInfo> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Маршрутизация', style: TextStyle(color: C.muted, fontSize: 11)),
+                    Text(tr('Маршрутизация'), style: TextStyle(color: C.muted, fontSize: 11)),
                     FlagText(summary.sites,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -440,16 +441,16 @@ class _KillSwitchBox extends StatelessWidget {
             Icon(Icons.shield_rounded, size: 18, color: C.orange),
             const SizedBox(width: 8),
             Expanded(
-              child: Text('Интернет закрыт: Kill Switch',
+              child: Text(tr('Интернет закрыт: Kill Switch'),
                   style: TextStyle(color: C.text, fontSize: 13, fontWeight: FontWeight.w700)),
             ),
           ]),
           const SizedBox(height: 6),
-          Text('VPN не подключён, поэтому программы не выпускаются в сеть напрямую. '
-              'Подключитесь снова или откройте интернет без VPN.',
+          Text(tr('VPN не подключён, поэтому программы не выпускаются в сеть напрямую. '
+              'Подключитесь снова или откройте интернет без VPN.'),
               style: TextStyle(color: C.muted, fontSize: 12.5)),
           const SizedBox(height: 10),
-          GhostButton(label: 'Открыть интернет без VPN', icon: Icons.lock_open_rounded, onPressed: onRelease),
+          GhostButton(label: tr('Открыть интернет без VPN'), icon: Icons.lock_open_rounded, onPressed: onRelease),
         ]),
       );
 }
@@ -510,7 +511,7 @@ class _ExitInfo extends StatelessWidget {
     return Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
       if (country != null) ...[
         Tooltip(
-          message: 'Из этой страны сайты видят ваш компьютер',
+          message: tr('Из этой страны сайты видят ваш компьютер'),
           waitDuration: const Duration(milliseconds: 500),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             FlagIcon(country!, height: 11),
@@ -590,7 +591,7 @@ class _ErrorBoxState extends State<_ErrorBox> {
               ]),
             ),
             Tooltip(
-              message: 'Закрыть',
+              message: tr('Закрыть'),
               child: Hover(
                 builder: (context, hovered) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -644,7 +645,7 @@ class _Speed extends StatelessWidget {
               if (active) ...[
                 const SizedBox(height: 2),
                 _total('VPN', vpn),
-                _total('Напрямую', direct),
+                _total(tr('Напрямую'), direct),
               ],
             ]),
           ),

@@ -10,6 +10,7 @@ import 'core_manager.dart';
 import 'paths.dart';
 import 'site_check.dart';
 import 'xray_config.dart';
+import '../l10n/l10n.dart';
 
 /// Отмена идущей проверки задержки: проверка перестаёт брать новые серверы и останавливает тестовое ядро.
 class PingCancel {
@@ -204,7 +205,7 @@ class Pinger {
     }
 
     final base = await _freeRange(servers.length);
-    if (base == null) return failAll('Нет свободных портов для проверки задержки');
+    if (base == null) return failAll(tr('Нет свободных портов для проверки задержки'));
     // Конфиг проверки (в нём адреса и ключи серверов) ядро получает напрямую, без файла на диске.
     final config = jsonEncode(XrayConfig.buildTest(servers, base, settings));
     try {
@@ -218,7 +219,7 @@ class Pinger {
       await proc.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'], input: config);
       final ok = await waitForPort(base, alive: () => proc.running && !(cancel?.cancelled ?? false));
       if (cancel?.cancelled ?? false) return;
-      if (!ok || !proc.running) return failAll('Xray не запустился для проверки задержки');
+      if (!ok || !proc.running) return failAll(tr('Xray не запустился для проверки задержки'));
       // Результат каждого сервера показывается сразу, как пришёл, — не ждём самый медленный.
       var died = false;
       final indexed = List.generate(servers.length, (i) => i);
@@ -229,7 +230,7 @@ class Pinger {
         if (!proc.running) died = true;
         onResult(servers[i], died ? -1 : ms);
       }, cancel);
-      if (died && !(cancel?.cancelled ?? false)) log.add('test', 'Тестовый Xray завершился во время проверки');
+      if (died && !(cancel?.cancelled ?? false)) log.add('test', tr('Тестовый Xray завершился во время проверки'));
     } finally {
       await proc.stop();
     }
@@ -286,7 +287,7 @@ class Pinger {
     }
 
     final base = await _freeRange(servers.length);
-    if (base == null) return failAll('Нет свободных портов для проверки UDP');
+    if (base == null) return failAll(tr('Нет свободных портов для проверки UDP'));
     final config = jsonEncode(XrayConfig.buildUdpTest(servers, base, settings, host: host, port: port));
     final proc = CoreProcess('test', log);
     cancel?._onCancel.add(proc.stop);
@@ -294,14 +295,14 @@ class Pinger {
       await proc.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'], input: config);
       final ok = await waitForPort(base, alive: () => proc.running && !(cancel?.cancelled ?? false));
       if (cancel?.cancelled ?? false) return;
-      if (!ok || !proc.running) return failAll('Xray не запустился для проверки UDP');
+      if (!ok || !proc.running) return failAll(tr('Xray не запустился для проверки UDP'));
       // Результат каждого сервера — сразу, как он готов. Если ядро проверки завершилось посреди проверки,
       // ответа и не могло быть — такие серверы отмечаются как непроверенные.
       await _pool(List.generate(servers.length, (i) => i), 12, (i) async {
         final ms = await _udpDelay(base + i);
         if (!(cancel?.cancelled ?? false)) onResult(servers[i], proc.running ? ms : udpFailed);
       }, cancel);
-      if (!proc.running) log.add('test', 'Тестовый Xray завершился во время проверки UDP');
+      if (!proc.running) log.add('test', tr('Тестовый Xray завершился во время проверки UDP'));
     } finally {
       await proc.stop();
     }
@@ -317,25 +318,25 @@ class Pinger {
     if (done.contains(udpFailed)) {
       return (
         kind: SiteNoteKind.warn,
-        text: 'Проверить UDP${done.every((ms) => ms == udpFailed) ? '' : ' у части серверов'} не удалось: '
-            'проверочное ядро не запустилось или завершилось. Подробности — в «Логах»'
+        text: tr('Проверить UDP{0} не удалось: '
+            'проверочное ядро не запустилось или завершилось. Подробности — в «Логах»', [done.every((ms) => ms == udpFailed) ? '' : tr(' у части серверов')])
       );
     }
     final ok = done.where((ms) => ms >= 0).length;
     final n = done.length;
     if (ok == n) {
-      return (kind: SiteNoteKind.ok, text: n == 1 ? 'UDP через сервер проходит' : 'UDP проходит через все серверы ($n)');
+      return (kind: SiteNoteKind.ok, text: n == 1 ? tr('UDP через сервер проходит') : tr('UDP проходит через все серверы ({0})', [n]));
     }
     if (ok == 0) {
       return (
         kind: SiteNoteKind.bad,
-        text: '${n == 1 ? 'UDP через сервер не проходит' : 'UDP не проходит ни через один сервер'}: в играх, голосовых '
-            'чатах и звонках может не быть звука или связи. Если UDP нужен, спросите провайдера, на каких серверах он есть'
+        text: tr('{0}: в играх, голосовых '
+            'чатах и звонках может не быть звука или связи. Если UDP нужен, спросите провайдера, на каких серверах он есть', [n == 1 ? tr('UDP через сервер не проходит') : tr('UDP не проходит ни через один сервер')])
       );
     }
     return (
       kind: SiteNoteKind.warn,
-      text: 'UDP проходит у $ok из $n серверов. Для игр и звонков выбирайте серверы с зелёной отметкой UDP в списке серверов'
+      text: tr('UDP проходит у {0} из {1} серверов. Для игр и звонков выбирайте серверы с зелёной отметкой UDP в списке серверов', [ok, n])
     );
   }
 

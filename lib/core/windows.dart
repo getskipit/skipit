@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'pac.dart';
 import 'paths.dart';
 import 'service_client.dart';
+import '../l10n/l10n.dart';
 
 const _internetSettingsKey =
     r'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings';
@@ -204,7 +205,7 @@ class WinSys {
   static Future<String?> pickFile({String filter = 'Все файлы (*.*)|*.*'}) => _powershell(
         'Add-Type -AssemblyName System.Windows.Forms; '
         '\$d = New-Object System.Windows.Forms.OpenFileDialog; '
-        "\$d.Filter = '$filter'; "
+        "\$d.Filter = '${tr(filter)}'; "
         "if (\$d.ShowDialog() -eq 'OK') { \$d.FileName }",
       );
 
@@ -544,11 +545,11 @@ class WinSys {
   };
 
   /// Известные VPN-клиенты: имя exe без расширения → название для пользователя.
-  static const _knownClients = {
+  static Map<String, String> get _knownClients => {
     'happ': 'Happ', 'incy': 'Incy', 'v2rayn': 'v2rayN', 'hiddify': 'Hiddify', 'nekoray': 'NekoRay',
     'nekobox': 'NekoBox', 'throne': 'Throne', 'v2raytun': 'v2RayTun', 'karing': 'Karing',
     'clash-verge': 'Clash Verge', 'clash for windows': 'Clash for Windows', 'amneziavpn': 'AmneziaVPN',
-    'skipit': 'SkipIt (другая копия)',
+    'skipit': tr('SkipIt (другая копия)'),
   };
 
   /// Другие VPN, которые сейчас подключены и будут мешать. Определяются по работающим ядрам
@@ -576,7 +577,7 @@ class WinSys {
           ? _knownClients[base(owners.first.path)]!
           : base(core.path).startsWith('skipit-')
               ? _knownClients['skipit']!
-              : 'другой VPN (${core.path.split('\\').last})';
+              : tr('другой VPN ({0})', [core.path.split('\\').last]);
       final c = byName.putIfAbsent(name, () => VpnConflict(name));
       c.pids.add(core.pid);
       for (final o in owners) {

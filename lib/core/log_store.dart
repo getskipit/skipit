@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
+import '../l10n/l10n.dart';
 
 class LogLine {
   LogLine(this.source, this.text, [DateTime? time]) : time = time ?? DateTime.now();
@@ -69,13 +70,13 @@ class LogLine {
       };
     }
     if (t.contains('error') || t.contains('fatal') || t.contains('panic') || t.contains('ошибк') ||
-        t.contains('сбой') || t.contains('не удалось')) {
+        t.contains('сбой') || t.contains('не удалось') || t.contains('failed')) {
       return 2;
     }
     // Xray пишет «[Warning] core: Xray … started» при обычном запуске — это не предупреждение.
     if (t.contains('warn') && !t.contains('started')) return 1;
     // Предупреждения самой SkipIt.
-    if (t.startsWith('предупреждение:')) return 1;
+    if (t.startsWith('предупреждение:') || t.startsWith('warning:')) return 1;
     return 0;
   }
 }
@@ -461,7 +462,7 @@ class LogBuffer extends ChangeNotifier {
   void add(String source, String text) {
     for (final t in const LineSplitter().convert(text)) {
       if (t.trim().isEmpty) continue;
-      if (_current == null) _begin(connection: false, title: 'Без подключения');
+      if (_current == null) _begin(connection: false, title: tr('Без подключения'));
       final s = _current!;
       // Ядро может писать одну и ту же строку сотни раз (программа раз за разом стучится на адрес,
       // которого нет). Повторы не добавляются — у первой строки растёт счётчик. Через [_repeatSpan]

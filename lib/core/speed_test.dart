@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'site_check.dart';
+import '../l10n/l10n.dart';
 
 /// Итог замера: скорость или ошибка; [unreachable] — сервер замера не ответил (тогда берётся
 /// следующий из [SpeedTest.servers]); [host] — с какого сервера качался файл.
@@ -21,7 +22,7 @@ class SpeedReport {
   String step = '';
 
   /// Подпись у кнопки во время замера.
-  String get status => step.isEmpty ? 'Идёт замер $stage' : 'Идёт замер ${stage.replaceAll('…', '')}: $step';
+  String get status => step.isEmpty ? tr('Идёт замер {0}', [stage]) : tr('Идёт замер {0}: {1}', [stage.replaceAll('…', ''), step]);
 
   /// Какой путь меряется сейчас: 0 — через VPN, 1 — напрямую; null — замер не идёт.
   int? running;
@@ -38,7 +39,7 @@ class SpeedReport {
   String? vpnHost, directHost;
 
   static String show(double? mbit) =>
-      mbit == null ? '—' : '${mbit >= 10 ? mbit.round() : mbit.toStringAsFixed(1)} Мбит/с';
+      mbit == null ? '—' : tr('{0} Мбит/с', [mbit >= 10 ? mbit.round() : mbit.toStringAsFixed(1)]);
 
   List<SiteNote> get notes {
     final found = <SiteNote>[];
@@ -48,32 +49,32 @@ class SpeedReport {
     // это разные серверы и пути до них, а не VPN.
     if (vpn != null && direct != null && vpnHost != null && directHost != null && vpnHost != directHost) {
       add(SiteNoteKind.info,
-          'Через VPN — ${show(vpn)} (файл с $vpnHost), напрямую — ${show(direct)} (с $directHost): серверы замера '
-          'разные, поэтому, режет ли VPN скорость, по этому замеру не сказать');
+          tr('Через VPN — {0} (файл с {1}), напрямую — {2} (с {3}): серверы замера '
+          'разные, поэтому, режет ли VPN скорость, по этому замеру не сказать', [show(vpn), vpnHost, show(direct), directHost]));
       return found;
     }
     if (vpn == null) {
-      add(SiteNoteKind.bad, 'Через VPN замер не удался${vpnError == null ? '' : ': $vpnError'}');
+      add(SiteNoteKind.bad, tr('Через VPN замер не удался{0}', [vpnError == null ? '' : ': $vpnError']));
     } else if (direct == null) {
-      add(SiteNoteKind.info, 'Через VPN — ${show(vpn)}. Напрямую не измерялось${directError == null ? '' : ': $directError'}');
+      add(SiteNoteKind.info, tr('Через VPN — {0}. Напрямую не измерялось{1}', [show(vpn), directError == null ? '' : ': $directError']));
     } else if (vpn * 2 < direct) {
       add(SiteNoteKind.warn,
-          'Через VPN скорость меньше половины той, что напрямую (${show(vpn)} против ${show(direct)}): '
-          'её ограничивает VPN-сервер или путь до него');
+          tr('Через VPN скорость меньше половины той, что напрямую ({0} против {1}): '
+          'её ограничивает VPN-сервер или путь до него', [show(vpn), show(direct)]));
     } else if (vpn > direct * 1.3) {
       // Так бывает: замер идёт до одного сервера, и напрямую до него может быть медленнее, чем через VPN.
       add(SiteNoteKind.ok,
-          'VPN скорость не режет: через него вышло даже быстрее (${show(vpn)} против ${show(direct)} напрямую)');
+          tr('VPN скорость не режет: через него вышло даже быстрее ({0} против {1} напрямую)', [show(vpn), show(direct)]));
     } else {
-      add(SiteNoteKind.ok, 'VPN скорость заметно не режет: ${show(vpn)} против ${show(direct)} напрямую');
+      add(SiteNoteKind.ok, tr('VPN скорость заметно не режет: {0} против {1} напрямую', [show(vpn), show(direct)]));
     }
     return found;
   }
 
   String get copyText => [
-        'Скорость скачивания — через VPN: ${vpnMbit == null ? (vpnError ?? '—') : show(vpnMbit)}; '
-            'напрямую: ${directMbit == null ? (directError ?? '—') : show(directMbit)}'
-            '${_hosts.isEmpty ? '' : ' (сервер замера: ${_hosts.join(', ')})'}',
+        tr('Скорость скачивания — через VPN: {0}; '
+            'напрямую: {1}'
+            '{2}', [vpnMbit == null ? (vpnError ?? '—') : show(vpnMbit), directMbit == null ? (directError ?? '—') : show(directMbit), _hosts.isEmpty ? '' : tr(' (сервер замера: {0})', [_hosts.join(', ')])]),
         for (final n in notes) '  • ${n.text}',
       ].join('\n');
 
@@ -145,13 +146,13 @@ class SpeedTest {
           try {
             links.add(await open());
           } on TimeoutException {
-            openError = 'нет ответа за ${_timeout.inSeconds} с';
+            openError = tr('нет ответа за {0} с', [_timeout.inSeconds]);
           } catch (_) {
-            openError = 'соединение с сервером замера не установилось';
+            openError = tr('соединение с сервером замера не установилось');
           }
         }(),
     ]);
-    if (links.isEmpty) return fail(openError ?? 'соединение с сервером замера не установилось', unreachable: true);
+    if (links.isEmpty) return fail(openError ?? tr('соединение с сервером замера не установилось'), unreachable: true);
     try {
       final done = Completer<void>();
       final watch = Stopwatch()..start();
@@ -228,11 +229,11 @@ class SpeedTest {
       });
       await done.future.timeout(duration + _timeout, onTimeout: () {});
       ticker.cancel();
-      if (stopped) return fail('замер прерван: VPN отключился или переподключился');
+      if (stopped) return fail(tr('замер прерван: VPN отключился или переподключился'));
       final elapsed = lastDataAt ?? watch.elapsed;
-      if (status == null) return fail('сервер замера не ответил', unreachable: true);
-      if (!status!.contains(' 200')) return fail('сервер замера ответил «$status»');
-      if (total < 200 * 1024) return fail('сервер замера не отдал файл');
+      if (status == null) return fail(tr('сервер замера не ответил'), unreachable: true);
+      if (!status!.contains(' 200')) return fail(tr('сервер замера ответил «{0}»', [status]));
+      if (total < 200 * 1024) return fail(tr('сервер замера не отдал файл'));
       return (mbit: mbit(total: total, atWarmup: atWarmup, elapsed: elapsed), error: null, unreachable: false, host: host);
     } finally {
       for (final link in links) {
@@ -265,7 +266,7 @@ class SpeedTest {
           });
           socket.write(ascii.encode('CONNECT $host:443 HTTP/1.1\r\nHost: $host:443\r\n\r\n'));
           final status = (await answer.future.timeout(_timeout, onTimeout: () => '')).split('\r\n').first;
-          if (!status.contains(' 200')) throw const SocketException('ядро не открыло соединение');
+          if (!status.contains(' 200')) throw SocketException(tr('ядро не открыло соединение'));
           final tls =
               await RawSecureSocket.secure(socket, subscription: listening, host: host).timeout(_timeout);
           return (raw: socket, tls: tls);

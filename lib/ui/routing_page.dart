@@ -11,6 +11,7 @@ import 'shell.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n/l10n.dart';
 
 class RoutingPage extends StatelessWidget {
   const RoutingPage({super.key, this.tabs});
@@ -21,7 +22,7 @@ class RoutingPage extends StatelessWidget {
   Future<void> _edit(BuildContext context, AppState state, RoutingProfile? profile) async {
     final result = await showDialog<RoutingProfile>(
       context: context,
-      builder: (_) => _RoutingEditor(profile: profile ?? RoutingProfile(name: 'Новый профиль')),
+      builder: (_) => _RoutingEditor(profile: profile ?? RoutingProfile(name: tr('Новый профиль'))),
     );
     if (result == null) return;
     final idx = state.routingProfiles.indexWhere((r) => r.id == result.id);
@@ -40,10 +41,10 @@ class RoutingPage extends StatelessWidget {
   Future<void> _createMenu(BuildContext btnContext, AppState state) async {
     final templates = RoutingProfile.templates();
     final choice = await showAppMenu<int>(btnContext, items: [
-      const AppMenuItem(-1, 'Пустой профиль', icon: Icons.note_add_outlined),
+      AppMenuItem(-1, tr('Пустой профиль'), icon: Icons.note_add_outlined),
       const AppMenuItem.divider(),
       for (var i = 0; i < templates.length; i++)
-        AppMenuItem(i, 'Шаблон: ${templates[i].name}', icon: Icons.auto_awesome_outlined),
+        AppMenuItem(i, tr('Шаблон: {0}', [templates[i].name]), icon: Icons.auto_awesome_outlined),
     ]);
     if (choice == null || !btnContext.mounted) return;
     if (choice == -1) {
@@ -53,7 +54,7 @@ class RoutingPage extends StatelessWidget {
     final p = templates[choice];
     state.routingProfiles.add(p);
     state.setRouting(p.id);
-    state.toast('Добавлен профиль «${p.name}»');
+    state.toast(tr('Добавлен профиль «{0}»', [p.name]));
   }
 
   @override
@@ -63,24 +64,24 @@ class RoutingPage extends StatelessWidget {
     final provider = server == null ? null : XrayConfig.providerConfig(server);
     final own = state.routingProfiles.where((r) => r.id != RoutingProfile.globalPresetId).toList();
     return Column(children: [
-      PageHeader('Маршрутизация', below: tabs, actions: [
+      PageHeader(tr('Маршрутизация'), below: tabs, actions: [
         GhostButton(
-          label: 'Обновить geo-базы',
+          label: tr('Обновить geo-базы'),
           icon: Icons.public_rounded,
           busy: state.updatingGeo,
           onPressed: () async {
             try {
               await state.updateGeoFiles();
-              state.toast('geoip.dat и geosite.dat обновлены');
+              state.toast(tr('geoip.dat и geosite.dat обновлены'));
             } catch (e) {
-              state.toast('Ошибка загрузки: $e');
+              state.toast(tr('Ошибка загрузки: {0}', [e]));
             }
           },
         ),
-        GhostButton(label: 'Из буфера', icon: Icons.content_paste_rounded, onPressed: () => importFromClipboard(context)),
+        GhostButton(label: tr('Из буфера'), icon: Icons.content_paste_rounded, onPressed: () => importFromClipboard(context)),
         Builder(
           builder: (btnContext) => GradientButton(
-            label: 'Создать',
+            label: tr('Создать'),
             icon: Icons.add_rounded,
             onPressed: () => _createMenu(btnContext, state),
           ),
@@ -100,8 +101,8 @@ class RoutingPage extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Особых правил нет — весь трафик идёт через VPN. '
-                      'Чтобы пустить часть сайтов напрямую, создайте профиль или добавьте его от провайдера.',
+                      tr('Особых правил нет — весь трафик идёт через VPN. '
+                      'Чтобы пустить часть сайтов напрямую, создайте профиль или добавьте его от провайдера.'),
                       style: TextStyle(color: C.muted, fontSize: 13),
                     ),
                   ),
@@ -114,7 +115,7 @@ class RoutingPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 8),
                 child: Text(
-                  provider != null ? 'СВОИ ПРОФИЛИ — РАБОТАЮТ ВМЕСТЕ С ПРАВИЛАМИ ПРОВАЙДЕРА' : 'СВОИ ПРОФИЛИ',
+                  provider != null ? tr('СВОИ ПРОФИЛИ — РАБОТАЮТ ВМЕСТЕ С ПРАВИЛАМИ ПРОВАЙДЕРА') : tr('СВОИ ПРОФИЛИ'),
                   style: TextStyle(color: C.orange, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4),
                 ),
               ),
@@ -126,11 +127,11 @@ class RoutingPage extends StatelessWidget {
             ],
             const SizedBox(height: 8),
             Text(
-              'Профиль — это набор правил: какие сайты и IP идут через VPN, какие напрямую, какие блокируются. '
+              tr('Профиль — это набор правил: какие сайты и IP идут через VPN, какие напрямую, какие блокируются. '
               'Клик по профилю включает его, повторный клик — выключает. С правилами провайдера профиль работает '
               'вместе: из него берутся три списка сайтов и IP, и они решают за то, о чём у провайдера правила нет. '
               'Если сайт есть и там, и там — действует правило провайдера. Профиль от провайдера добавляется '
-              'кнопкой «Из буфера» или приходит вместе с подпиской.',
+              'кнопкой «Из буфера» или приходит вместе с подпиской.'),
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ],
@@ -172,23 +173,23 @@ class _ProviderRulesCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Правила провайдера', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              Text(tr('Правила провайдера'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
               const SizedBox(height: 2),
               Row(children: [
-                Text('Из JSON-конфига сервера ', style: TextStyle(color: C.muted, fontSize: 12)),
+                Text(tr('Из JSON-конфига сервера '), style: TextStyle(color: C.muted, fontSize: 12)),
                 Flexible(child: FlagText(serverName, maxLines: 1, style: TextStyle(color: C.muted, fontSize: 12))),
               ]),
             ]),
           ),
           Tag('JSON', color: C.cyan),
         ]),
-        line(Icons.alt_route_rounded, C.green, 'Напрямую',
-            s.direct == 0 ? '—' : '${s.directExamples.join(', ')}${s.direct > s.directExamples.length ? ' и ещё ${s.direct - s.directExamples.length}' : ''}'),
-        line(Icons.shield_rounded, C.orange, 'Через VPN',
-            'всё остальное${s.proxy > 0 ? ' + отдельные правила: ${s.proxy}' : ''}'
-                '${proxies > 1 ? ' · серверов в конфиге: $proxies' : ''}${balancers > 0 ? ', автовыбор' : ''}'),
+        line(Icons.alt_route_rounded, C.green, tr('Напрямую'),
+            s.direct == 0 ? '—' : '${s.directExamples.join(', ')}${s.direct > s.directExamples.length ? tr(' и ещё {0}', [s.direct - s.directExamples.length]) : ''}'),
+        line(Icons.shield_rounded, C.orange, tr('Через VPN'),
+            tr('всё остальное{0}'
+                '{1}{2}', [s.proxy > 0 ? tr(' + отдельные правила: {0}', [s.proxy]) : '', proxies > 1 ? tr(' · серверов в конфиге: {0}', [proxies]) : '', balancers > 0 ? tr(', автовыбор') : ''])),
         if (s.block > 0 || s.blockNotes.isNotEmpty)
-          line(Icons.block_rounded, C.red, 'Блокируется', s.blockNotes.isEmpty ? 'правил: ${s.block}' : s.blockNotes.join(', ')),
+          line(Icons.block_rounded, C.red, tr('Блокируется'), s.blockNotes.isEmpty ? tr('правил: {0}', [s.block]) : s.blockNotes.join(', ')),
       ]),
     );
   }
@@ -221,7 +222,7 @@ class _DnsCardState extends State<_DnsCard> {
   Widget build(BuildContext context) {
     final state = widget.state;
     final own = state.settings.ownDns;
-    final other = widget.fromProvider ? 'из конфига провайдера' : 'из выбранного профиля';
+    final other = widget.fromProvider ? tr('из конфига провайдера') : tr('из выбранного профиля');
     void apply() => state.setOwnDnsServers(_remote.text, _domestic.text);
     final all = [
       RoutingProfile.splitDns(state.settings.ownDnsRemote),
@@ -229,7 +230,7 @@ class _DnsCardState extends State<_DnsCard> {
     ];
     // Чего ядро, которое сейчас отвечает за DNS, из введённого не возьмёт.
     final skipped = all.any((list) => list.any((a) => a.startsWith('tls://')))
-        ? 'DoT (tls://) ядро Xray не умеет и такие адреса пропускает — работать будут остальные из списка.'
+        ? tr('DoT (tls://) ядро Xray не умеет и такие адреса пропускает — работать будут остальные из списка.')
         : null;
 
     // Адрес применяется, когда его закончили вводить: по Enter или уходу из поля, а не на каждую букву —
@@ -247,11 +248,11 @@ class _DnsCardState extends State<_DnsCard> {
                 hintText: hint,
                 // Значок «i»: подсказка показывается и по наведению, и по клику.
                 suffixIcon: Tooltip(
-                  message: 'Какие адреса можно вводить:\n'
+                  message: tr('Какие адреса можно вводить:\n'
                       '1.1.1.1 или udp://1.1.1.1 — обычный DNS\n'
                       'tcp://1.1.1.1 — DNS по TCP\n'
                       'https://dns.google/dns-query — DoH\n'
-                      'tls://1.1.1.1 — DoT',
+                      'tls://1.1.1.1 — DoT'),
                   triggerMode: TooltipTriggerMode.tap,
                   child: Icon(Icons.info_rounded, size: 18, color: C.orange),
                 ),
@@ -269,30 +270,30 @@ class _DnsCardState extends State<_DnsCard> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('DNS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
               const SizedBox(height: 2),
-              Text(own ? 'Работают свои серверы — вместо DNS $other' : 'Работает DNS $other',
+              Text(own ? tr('Работают свои серверы — вместо DNS {0}', [other]) : tr('Работает DNS {0}', [other]),
                   style: TextStyle(color: C.muted, fontSize: 12)),
             ]),
           ),
           const SizedBox(width: 12),
           Segmented<bool>(
             value: own,
-            items: {false: widget.fromProvider ? 'Провайдера' : 'Из профиля', true: 'Мой DNS'},
+            items: {false: widget.fromProvider ? tr('Провайдера') : tr('Из профиля'), true: tr('Мой DNS')},
             onChanged: state.setOwnDns,
           ),
         ]),
         if (own) ...[
           const SizedBox(height: 14),
           Row(children: [
-            field(_remote, 'Удалённые DNS (через VPN)', 'https://1.1.1.1/dns-query, 8.8.8.8'),
+            field(_remote, tr('Удалённые DNS (через VPN)'), 'https://1.1.1.1/dns-query, 8.8.8.8'),
             const SizedBox(width: 12),
-            field(_domestic, 'Локальные DNS (напрямую)', '77.88.8.8, 77.88.8.1'),
+            field(_domestic, tr('Локальные DNS (напрямую)'), '77.88.8.8, 77.88.8.1'),
           ]),
           const SizedBox(height: 8),
           Text(
-            'Можно указать несколько адресов через запятую: если первый не ответил, спросим следующий. '
+            tr('Можно указать несколько адресов через запятую: если первый не ответил, спросим следующий. '
             'Например: https://dns.google/dns-query, 8.8.8.8\n'
             'Удалённые — для сайтов через VPN, локальные — для сайтов напрямую. Сохраняется по Enter или когда '
-            'вы уходите из поля.',
+            'вы уходите из поля.'),
             style: TextStyle(color: C.muted, fontSize: 12),
           ),
           if (skipped != null) ...[
@@ -303,7 +304,7 @@ class _DnsCardState extends State<_DnsCard> {
         const SizedBox(height: 14),
         Row(children: [
           GhostButton(
-            label: 'Проверить DNS',
+            label: tr('Проверить DNS'),
             icon: Icons.speed_rounded,
             onPressed: () {
               state.openPage(AppState.checkPage);
@@ -312,7 +313,7 @@ class _DnsCardState extends State<_DnsCard> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text('Откроется раздел «Проверка»: за сколько отвечает каждый сервер и далеко ли адреса, которые он называет',
+            child: Text(tr('Откроется раздел «Проверка»: за сколько отвечает каждый сервер и далеко ли адреса, которые он называет'),
                 style: TextStyle(color: C.muted, fontSize: 12)),
           ),
         ]),
@@ -345,29 +346,29 @@ class _ProfileTile extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Text(profile.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                if (preset) ...[const SizedBox(width: 8), const Tag('по умолчанию')],
-                if (profile.subscriptionId != null) ...[const SizedBox(width: 8), Tag('от провайдера', color: C.cyan)],
+                if (preset) ...[const SizedBox(width: 8), Tag(tr('по умолчанию'))],
+                if (profile.subscriptionId != null) ...[const SizedBox(width: 8), Tag(tr('от провайдера'), color: C.cyan)],
               ]),
               const SizedBox(height: 3),
               Text(profile.summary, style: TextStyle(color: C.muted, fontSize: 12)),
             ]),
           ),
           IconButton(
-            tooltip: 'Поделиться профилем (скопировать ссылку)',
+            tooltip: tr('Поделиться профилем (скопировать ссылку)'),
             icon: const Icon(Icons.link_rounded, size: 20),
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: profile.toDeeplink()));
-              state.toast('Ссылка на профиль скопирована');
+              state.toast(tr('Ссылка на профиль скопирована'));
             },
           ),
           if (!preset)
-            IconButton(tooltip: 'Изменить', icon: const Icon(Icons.edit_rounded, size: 20), onPressed: onEdit),
+            IconButton(tooltip: tr('Изменить'), icon: const Icon(Icons.edit_rounded, size: 20), onPressed: onEdit),
           if (!preset)
             IconButton(
-              tooltip: 'Удалить',
+              tooltip: tr('Удалить'),
               icon: Icon(Icons.delete_outline_rounded, size: 20, color: C.red),
               onPressed: () async {
-                if (!await confirm(context, 'Удалить профиль?', profile.name)) return;
+                if (!await confirm(context, tr('Удалить профиль?'), profile.name)) return;
                 state.routingProfiles.remove(profile);
                 if (state.settings.selectedRoutingId == profile.id) {
                   state.setRouting(RoutingProfile.globalPresetId);
@@ -417,7 +418,7 @@ class _RoutingEditorState extends State<_RoutingEditor> {
       _lists[key]!.text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
 
   void _save() {
-    p.name = _name.text.trim().isEmpty ? 'Профиль' : _name.text.trim();
+    p.name = _name.text.trim().isEmpty ? tr('Профиль') : _name.text.trim();
     p.setDns(remote: _remoteDns.text, domestic: _domesticDns.text);
     p.proxySites = _lines('proxySites');
     p.proxyIp = _lines('proxyIp');
@@ -450,7 +451,7 @@ class _RoutingEditorState extends State<_RoutingEditor> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Профиль маршрутизации'),
+        title: Text(tr('Профиль маршрутизации')),
         content: SizedBox(
           width: 760,
           child: SingleChildScrollView(
@@ -459,14 +460,14 @@ class _RoutingEditorState extends State<_RoutingEditor> {
             // прокрутки), справа — для полосы прокрутки, чтобы она не ложилась на поля.
             padding: const EdgeInsets.only(top: 8, right: 16),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(controller: _name, decoration: const InputDecoration(labelText: 'Название')),
+              TextField(controller: _name, decoration: InputDecoration(labelText: tr('Название'))),
               const SizedBox(height: 12),
               Row(children: [
-                const Text('Всё остальное:'),
+                Text(tr('Всё остальное:')),
                 const SizedBox(width: 12),
                 Segmented<bool>(
                   value: p.globalProxy,
-                  items: const {true: 'через VPN', false: 'напрямую'},
+                  items: {true: tr('через VPN'), false: tr('напрямую')},
                   onChanged: (v) => setState(() => p.globalProxy = v),
                 ),
                 const Spacer(),
@@ -481,14 +482,14 @@ class _RoutingEditorState extends State<_RoutingEditor> {
                 Expanded(
                   child: TextField(
                     controller: _remoteDns,
-                    decoration: const InputDecoration(labelText: 'Удалённый DNS (через VPN)', hintText: 'https://1.1.1.1/dns-query'),
+                    decoration: InputDecoration(labelText: tr('Удалённый DNS (через VPN)'), hintText: 'https://1.1.1.1/dns-query'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
                     controller: _domesticDns,
-                    decoration: const InputDecoration(labelText: 'Локальный DNS (напрямую)', hintText: '77.88.8.8'),
+                    decoration: InputDecoration(labelText: tr('Локальный DNS (напрямую)'), hintText: '77.88.8.8'),
                   ),
                 ),
               ]),
@@ -496,38 +497,38 @@ class _RoutingEditorState extends State<_RoutingEditor> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'В списках — по одной записи в строке.\n'
+                  tr('В списках — по одной записи в строке.\n'
                   'Сайты: example.com — сайт со всеми поддоменами; full:example.com — только этот адрес; '
                   'geosite:youtube — готовый список сайтов.\n'
-                  'IP: 1.2.3.4 — один адрес; 10.0.0.0/8 — диапазон адресов; geoip:ru — готовый список адресов.',
+                  'IP: 1.2.3.4 — один адрес; 10.0.0.0/8 — диапазон адресов; geoip:ru — готовый список адресов.'),
                   style: TextStyle(color: C.muted, fontSize: 12, height: 1.4),
                 ),
               ),
               const SizedBox(height: 12),
               Row(children: [
-                _area('proxySites', 'Через VPN — сайты', 'instagram.com\nfull:api.example.com\ngeosite:youtube'),
+                _area('proxySites', tr('Через VPN — сайты'), 'instagram.com\nfull:api.example.com\ngeosite:youtube'),
                 const SizedBox(width: 12),
-                _area('proxyIp', 'Через VPN — IP', '149.154.167.99\n149.154.160.0/20\ngeoip:ru-blocked'),
+                _area('proxyIp', tr('Через VPN — IP'), '149.154.167.99\n149.154.160.0/20\ngeoip:ru-blocked'),
               ]),
               const SizedBox(height: 12),
               Row(children: [
-                _area('directSites', 'Напрямую — сайты', 'gosuslugi.ru\nfull:lk.example.ru\ngeosite:category-ru'),
+                _area('directSites', tr('Напрямую — сайты'), 'gosuslugi.ru\nfull:lk.example.ru\ngeosite:category-ru'),
                 const SizedBox(width: 12),
-                _area('directIp', 'Напрямую — IP', '77.88.8.8\n192.168.0.0/16\ngeoip:ru'),
+                _area('directIp', tr('Напрямую — IP'), '77.88.8.8\n192.168.0.0/16\ngeoip:ru'),
               ]),
               const SizedBox(height: 12),
               Row(children: [
-                _area('blockSites', 'Блокировать — сайты', 'ads.example.com\nfull:track.example.com\ngeosite:category-ads-all'),
+                _area('blockSites', tr('Блокировать — сайты'), 'ads.example.com\nfull:track.example.com\ngeosite:category-ads-all'),
                 const SizedBox(width: 12),
-                _area('blockIp', 'Блокировать — IP', '203.0.113.5\n198.51.100.0/24'),
+                _area('blockIp', tr('Блокировать — IP'), '203.0.113.5\n198.51.100.0/24'),
               ]),
               const SizedBox(height: 12),
               TextField(
                 controller: _hosts,
                 maxLines: 3,
                 style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-                decoration: const InputDecoration(
-                  labelText: 'DNS hosts (домен = IP)',
+                decoration: InputDecoration(
+                  labelText: tr('DNS hosts (домен = IP)'),
                   hintText: 'router.home = 192.168.1.1',
                   alignLabelWithHint: true,
                   floatingLabelBehavior: FloatingLabelBehavior.always,
@@ -537,8 +538,8 @@ class _RoutingEditorState extends State<_RoutingEditor> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-          GradientButton(label: 'Сохранить', onPressed: _save),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Отмена'))),
+          GradientButton(label: tr('Сохранить'), onPressed: _save),
         ],
       );
 }

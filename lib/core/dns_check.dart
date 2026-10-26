@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import '../models/settings.dart';
 import 'log_store.dart';
 import 'paths.dart';
+import '../l10n/l10n.dart';
 
 /// Один DNS-сервер из конфига подключения и результат его проверки.
 class DnsProbe {
@@ -56,17 +57,17 @@ class DnsProbe {
   bool get slow => limitMs != null && [firstMs, nextMs].any((ms) => ms != null && ms > limitMs!);
 
   String get path => local
-      ? 'напрямую, мимо правил'
+      ? tr('напрямую, мимо правил')
       : switch (route) {
-          ConnRoute.proxy => 'через VPN',
-          ConnRoute.direct => 'напрямую',
-          ConnRoute.block => 'заблокирован правилом',
-          _ => 'путь не определён',
+          ConnRoute.proxy => tr('через VPN'),
+          ConnRoute.direct => tr('напрямую'),
+          ConnRoute.block => tr('заблокирован правилом'),
+          _ => tr('путь не определён'),
         };
 
   String get result {
-    String ms(int? value) => value == null ? 'без ответа' : '$value мс';
-    return error ?? (ok ? 'первый запрос ${ms(firstMs)}, следующий ${ms(nextMs)}' : 'не ответил за ${DnsCheck.timeout.inSeconds} с');
+    String ms(int? value) => value == null ? tr('без ответа') : tr('{0} мс', [value]);
+    return error ?? (ok ? tr('первый запрос {0}, следующий {1}', [ms(firstMs), ms(nextMs)]) : tr('не ответил за {0} с', [DnsCheck.timeout.inSeconds]));
   }
 }
 
@@ -304,7 +305,7 @@ class DnsCheck {
           .encode(jsonEncode(helperConfig(probe, port: port, checkPort: checkPort, password: password, nic: nic))));
       await process.stdin.close();
       if (!await started.future.timeout(timeout, onTimeout: () => false)) {
-        probe.error = 'не удалось запустить проверку';
+        probe.error = tr('не удалось запустить проверку');
         return;
       }
       probe.firstMs = await ask(port, 'www.google.com', 0x5101);
@@ -320,7 +321,7 @@ class DnsCheck {
         }
       }
     } catch (e) {
-      probe.error = 'не удалось запустить проверку: $e';
+      probe.error = tr('не удалось запустить проверку: {0}', [e]);
     } finally {
       core?.kill();
       probe.done = true;
