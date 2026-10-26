@@ -268,7 +268,8 @@ class _LogsPageState extends State<LogsPage> {
                 _historyId = null;
               }),
               // Плитки, страница группы и журнал из истории сменяют друг друга плавно, как в «Настройках»:
-              // старое гаснет, новое проявляется и чуть подъезжает.
+              // старое гаснет, новое проявляется. Вбок ничего не сдвигается: вверх и вниз страницу двигает
+              // сам переключатель групп, который появляется и прячется в заголовке.
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 320),
                 switchInCurve: Curves.easeOutCubic,
@@ -277,13 +278,7 @@ class _LogsPageState extends State<LogsPage> {
                     Stack(fit: StackFit.expand, children: [...previous, if (current != null) current]),
                 transitionBuilder: (child, anim) => FadeTransition(
                   opacity: CurvedAnimation(parent: anim, curve: const Interval(0.5, 1)),
-                  child: SlideTransition(
-                    position: Tween(
-                      begin: Offset(child.key == const ValueKey('grid') ? -0.03 : 0.03, 0),
-                      end: Offset.zero,
-                    ).animate(anim),
-                    child: child,
-                  ),
+                  child: child,
                 ),
                 child: KeyedSubtree(
                   key: ValueKey(shown == null ? 'grid' : 'group$shown${shown == 2 ? '-${picked?.id}' : ''}'),
