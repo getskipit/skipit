@@ -1145,10 +1145,14 @@ class _LineTextState extends State<_LineText> {
   static final _levelTag =
       RegExp(r'^(\[(?:Debug|Info|Warning|Error)\]|(?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL|PANIC)\b) ?(\[\d+\] )?');
 
-  static Color _levelColor(String tag) {
+  /// Цвет пометки уровня — по оценке SkipIt ([LogLine.level]), а не по слову ядра: «[Error]» у строки, которую
+  /// программа считает предупреждением (несуществующий сайт, отказ одного из DNS), — оранжевый, как её текст
+  /// и как счётчики «Ошибки» / «Предупреждения». У обычных строк — по слову ядра; ошибка ядра, которую
+  /// программа сбоем не считает, — серая.
+  static Color _levelColor(String tag, int level) {
+    if (level == 2) return C.red;
+    if (level == 1) return C.warnText;
     final t = tag.toLowerCase();
-    if (t.contains('err') || t.contains('fatal') || t.contains('panic')) return C.red;
-    if (t.contains('warn')) return C.warnText;
     if (t.contains('info')) return C.green;
     return C.muted;
   }
@@ -1189,7 +1193,7 @@ class _LineTextState extends State<_LineText> {
         TextSpan(text: '${_clock(t)} ', style: TextStyle(color: C.muted)),
         TextSpan(text: '[${line.source}] ', style: TextStyle(color: C.cyan)),
         if (level != null)
-          TextSpan(text: '$level ', style: TextStyle(color: _levelColor(level), fontWeight: FontWeight.w700)),
+          TextSpan(text: '$level ', style: TextStyle(color: _levelColor(level, line.level), fontWeight: FontWeight.w700)),
         if (conn != null) TextSpan(text: conn, style: TextStyle(color: C.muted)),
         TextSpan(text: tag == null ? line.text : line.text.substring(tag.end), style: TextStyle(color: color)),
         // Одинаковые строки ядра не повторяются в журнале — у первой растёт счётчик.
