@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/l10n/en.dart';
+import 'package:skipit/core/paths.dart';
 import 'package:skipit/l10n/l10n.dart';
+import 'package:skipit/state/app_state.dart';
 
 import 'l10n/dart_strings.dart';
 
@@ -63,6 +65,33 @@ void main() {
   test('в словаре нет лишних строк', () {
     final keys = _keysInLib().keys.toSet();
     expect([for (final k in en.keys) if (!keys.contains(k)) k], isEmpty);
+  });
+
+  test('язык по Windows: русский для ru, uk, be, kk, иначе английский', () {
+    for (final code in ['ru', 'uk', 'be', 'kk', 'RU']) {
+      expect(langForLocale(code), Lang.ru, reason: code);
+    }
+    for (final code in ['en', 'de', 'fr', 'zh', 'tr', 'pl']) {
+      expect(langForLocale(code), Lang.en, reason: code);
+    }
+  });
+
+  test('при запуске язык из настроек включается до первых строк журнала', () async {
+    await AppPaths.init();
+    final tmp = await Directory.systemTemp.createTemp('skipit-test');
+    addTearDown(() async {
+      lang = Lang.ru;
+      await tmp.delete(recursive: true);
+    });
+    AppPaths.dataDir = tmp;
+    await File(AppPaths.stateFile).writeAsString('{"settings":{"language":"en"}}');
+    final state = AppState();
+    await state.loadForTest();
+    expect(lang, Lang.en);
+    // Строка журнала, которую программа пишет сразу после загрузки, — уже по-английски.
+    state.log.add('app', tr('Служба SkipIt на месте: {0}', ['skipit-service 4']));
+    expect(state.log.lines.last.text, 'SkipIt service is in place: skipit-service 4');
+    expect(state.log.current?.title, 'No connection');
   });
 
   test('tr: подстановки и язык', () {

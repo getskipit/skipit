@@ -18,10 +18,10 @@ Lang resolveLang(String setting) => switch (setting) {
       _ => Platform.environment['FLUTTER_TEST'] == 'true' ? Lang.ru : _systemLang(),
     };
 
-Lang _systemLang() {
-  final code = ui.PlatformDispatcher.instance.locale.languageCode.toLowerCase();
-  return const {'ru', 'uk', 'be', 'kk'}.contains(code) ? Lang.ru : Lang.en;
-}
+Lang _systemLang() => langForLocale(ui.PlatformDispatcher.instance.locale.languageCode);
+
+/// Язык интерфейса для языка Windows [code] (ru, en, de…).
+Lang langForLocale(String code) => const {'ru', 'uk', 'be', 'kk'}.contains(code.toLowerCase()) ? Lang.ru : Lang.en;
 
 /// Перевод строки [ru] на текущий язык; {0}, {1}… заменяются на [args]. Нет перевода — русская строка.
 /// Можно звать и для уже переведённой строки — она вернётся как есть.
