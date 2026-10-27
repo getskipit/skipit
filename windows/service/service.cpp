@@ -39,9 +39,9 @@
 //   «cleanup own» / «cleanup stale»  → «ok»: убрать свои зависшие адаптеры или неработающие чужие
 //       (Wintun). Скрипт зашит в службу, программа присылает только команду.
 //   «update stage\n<путь к скачанному установщику>\n<SHA-256>» → «ok <путь к копии>» или «error <текст>»:
-//       копия установщика в папке update рядом со службой (в Program Files без прав не записать) и сверка
-//       её контрольной суммы. Программа запускает уже эту копию — сам файл установщика между сверкой и
-//       запуском не подменить (рабочую часть Inno Setup распаковывает во временную папку пользователя — от
+//       копия установщика в папке update\<SID пользователя> рядом со службой (в Program Files без прав не
+//       записать, у каждого пользователя Windows своя папка) и сверка её контрольной суммы. Программа
+//       запускает уже эту копию — сам файл установщика между сверкой и запуском не подменить (рабочую часть Inno Setup распаковывает во временную папку пользователя — от
 //       программы, уже работающей от имени пользователя, это не защищает; см. SECURITY.md). Скачанный файл
 //       служба открывает от имени программы (с её правами, не с правами системы).
 
@@ -933,6 +933,49 @@ std::string CopyWithSha256(HANDLE src, HANDLE dst) {
   return result;
 }
 
+// SID пользователя, от имени которого служба сейчас действует (после ImpersonateNamedPipeClient); пусто — сбой.
+std::wstring ClientSid() {
+  HANDLE token = nullptr;
+  if (!::OpenThreadToken(::GetCurrentThread(), TOKEN_QUERY, TRUE, &token)) return L"";
+  std::wstring result;
+  DWORD size = 0;
+  ::GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+  std::vector<unsigned char> buf(size);
+  if (size > 0 && ::GetTokenInformation(token, TokenUser, buf.data(), size, &size)) {
+    LPWSTR text = nullptr;
+    if (::ConvertSidToStringSidW(reinterpret_cast<TOKEN_USER*>(buf.data())->User.Sid, &text)) {
+      result = text;
+      ::LocalFree(text);
+    }
+  }
+  ::CloseHandle(token);
+  // Только вид S-1-5-21-…: из него строится имя папки и правило доступа.
+  const bool ok = result.size() > 4 && result.compare(0, 2, L"S-") == 0 &&
+                  std::all_of(result.begin() + 2, result.end(), [](wchar_t c) { return (c >= L'0' && c <= L'9') || c == L'-'; });
+  return ok ? result : L"";
+}
+
+// Папка update\<SID> рядом со службой. Права заданы явно, без наследования от Program Files: писать могут только
+// система и администраторы, сам пользователь — читать и запускать, другие пользователи туда не заглядывают.
+std::wstring UserUpdateDir(const std::wstring& sid) {
+  if (sid.empty()) return L"";
+  const std::wstring root = g_dir + L"\\update", dir = root + L"\\" + sid;
+  ::CreateDirectoryW(root.c_str(), nullptr);
+  PSECURITY_DESCRIPTOR sd = nullptr;
+  const std::wstring sddl = L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200A9;;;" + sid + L")";
+  if (!::ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &sd, nullptr)) return L"";
+  SECURITY_ATTRIBUTES sa{sizeof(sa), sd, FALSE};
+  bool ok = ::CreateDirectoryW(dir.c_str(), &sa) != 0;
+  if (!ok && ::GetLastError() == ERROR_ALREADY_EXISTS) {
+    // Папка осталась с прошлого раза — права ставим заново, а не верим тем, что на ней.
+    const DWORD attrs = ::GetFileAttributesW(dir.c_str());
+    ok = attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) && !(attrs & FILE_ATTRIBUTE_REPARSE_POINT) &&
+         ::SetFileSecurityW(dir.c_str(), DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, sd) != 0;
+  }
+  ::LocalFree(sd);
+  return ok ? dir : L"";
+}
+
 void StageUpdate(HANDLE pipe, const std::string& request) {
   // «update stage\n<путь>\n<sha256>»
   const size_t a = request.find('\n');
@@ -959,13 +1002,20 @@ void StageUpdate(HANDLE pipe, const std::string& request) {
   }
   HANDLE in = ::CreateFileW(src.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                             FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+  const std::wstring sid = ClientSid();
   ::RevertToSelf();
   if (in == INVALID_HANDLE_VALUE) {
     PipeWrite(pipe, "error не удалось открыть файл");
     return;
   }
-  const std::wstring dir = g_dir + L"\\update";
-  ::CreateDirectoryW(dir.c_str(), nullptr);
+  // У каждого пользователя Windows своя папка: иначе другой пользователь, вошедший на этот же компьютер,
+  // мог бы положить под тем же именем свой файл, и программа запустила бы его вместо установщика.
+  const std::wstring dir = UserUpdateDir(sid);
+  if (dir.empty()) {
+    ::CloseHandle(in);
+    PipeWrite(pipe, "error не удалось записать копию");
+    return;
+  }
   // Копия пишется во временный файл: прежняя сверенная копия удаляется, только когда новая сошлась.
   const std::wstring dst = dir + L"\\" + name, part_name = name + L".part", part = dir + L"\\" + part_name;
   HANDLE out = ::CreateFileW(part.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
