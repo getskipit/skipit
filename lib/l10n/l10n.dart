@@ -26,9 +26,13 @@ Lang langForLocale(String code) => const {'ru', 'uk', 'be', 'kk'}.contains(code.
 /// Перевод строки [ru] на текущий язык; {0}, {1}… заменяются на [args]. Нет перевода — русская строка.
 /// Можно звать и для уже переведённой строки — она вернётся как есть.
 String tr(String ru, [List<Object?> args = const []]) {
-  var s = lang == Lang.en ? (en[ru] ?? ru) : ru;
-  for (var i = 0; i < args.length; i++) {
-    s = s.replaceAll('{$i}', '${args[i]}');
-  }
-  return s;
+  final s = lang == Lang.en ? (en[ru] ?? ru) : ru;
+  if (args.isEmpty) return s;
+  // За один проход: «{1}» внутри подставленного текста (имя сервера, адрес) остаётся как есть.
+  return s.replaceAllMapped(_placeholder, (m) {
+    final i = int.parse(m.group(1)!);
+    return i < args.length ? '${args[i]}' : m.group(0)!;
+  });
 }
+
+final _placeholder = RegExp(r'\{(\d+)\}');

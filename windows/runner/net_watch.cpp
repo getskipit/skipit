@@ -14,13 +14,20 @@ UINT g_message = 0;
 HANDLE g_interfaces = nullptr;
 HANDLE g_routes = nullptr;
 
-// Вызываются в потоке Windows — только пересылаем в окно.
-void NETIOAPI_API_ OnInterfaceChange(PVOID, PMIB_IPINTERFACE_ROW, MIB_NOTIFICATION_TYPE) {
-  PostMessage(g_hwnd, g_message, 0, 0);
+bool AddedOrRemoved(MIB_NOTIFICATION_TYPE type) { return type == MibAddInstance || type == MibDeleteInstance; }
+
+// Вызываются в потоке Windows — только пересылаем в окно. Считается лишь то, что бывает при настоящей
+// смене сети: сетевая карта появилась или пропала, маршрут по умолчанию добавлен или убран (другой шлюз,
+// выдернули кабель, сменили Wi-Fi). Изменения параметров Windows рассылает и сама, по расписанию
+// (срок жизни маршрутов IPv6, виртуальные адаптеры WSL и Hyper-V) — их пропускаем.
+void NETIOAPI_API_ OnInterfaceChange(PVOID, PMIB_IPINTERFACE_ROW, MIB_NOTIFICATION_TYPE type) {
+  if (AddedOrRemoved(type)) PostMessage(g_hwnd, g_message, 0, 0);
 }
 
-void NETIOAPI_API_ OnRouteChange(PVOID, PMIB_IPFORWARD_ROW2, MIB_NOTIFICATION_TYPE) {
-  PostMessage(g_hwnd, g_message, 0, 0);
+void NETIOAPI_API_ OnRouteChange(PVOID, PMIB_IPFORWARD_ROW2 row, MIB_NOTIFICATION_TYPE type) {
+  if (row != nullptr && AddedOrRemoved(type) && row->DestinationPrefix.PrefixLength == 0) {
+    PostMessage(g_hwnd, g_message, 0, 0);
+  }
 }
 
 }  // namespace

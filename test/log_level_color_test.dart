@@ -31,8 +31,8 @@ void main() {
     state.routingProfiles.add(RoutingProfile.global());
     state.log
       ..startSession('Germany', detail: 'Смешанный')
-      ..add('xray', '[Error] [1242315419] transport/internet: failed to resolve ip > app/dns: returning nil for '
-          'domain disabled.invalid > rcode: 3')
+      ..add('xray', '[Error] [555] transport/internet: failed to resolve ip > app/dns: returning nil for '
+          'domain missing.invalid > rcode: 3')
       ..add('xray', '[Error] [42] proxy/vless/outbound: failed to find an available destination > dial tcp: i/o timeout')
       ..add('xray', '[Info] [7] app/dispatcher: taking detour [proxy] for [tcp:example.com:443]');
     await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: buildTheme(), home: const Shell())));
@@ -58,7 +58,7 @@ void main() {
       return null;
     }
 
-    expect(tagColor('disabled.invalid'), C.warnText);
+    expect(tagColor('missing.invalid'), C.warnText);
     expect(tagColor('i/o timeout'), C.red);
     expect(tagColor('taking detour'), C.green);
 

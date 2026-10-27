@@ -1333,7 +1333,15 @@ String _target(ConnEntry c) => c.port > 0 ? '${c.host}:${c.port}' : c.host;
 /// Соединение одной строкой — для копирования.
 String _connLine(ConnEntry c) => tr('{0} {1} {2} → {3}'
     '{4} · вход: {5}'
-    '{6}', [c.time.toIso8601String(), c.network, _target(c), _routeLabel(c.route), c.outbound.isEmpty ? '' : ' (${c.outbound})', _inboundLabel(c.inbound), c.unknownProcess ? tr(' · программа не определена') : '']);
+    '{6}', [
+  c.time.toIso8601String(),
+  c.network,
+  _target(c),
+  _routeLabel(c.route),
+  c.outbound.isEmpty ? '' : ' (${c.outbound})',
+  _inboundLabel(c.inbound),
+  c.unknownProcess ? tr(' · программа не определена') : '',
+]);
 
 /// Строка списка соединений: куда шли → каким путём отправлено. Несколько одинаковых соединений —
 /// одна строка со счётчиком и временем последнего; клик по счётчику разворачивает их все.

@@ -32,9 +32,10 @@ class ServerRefused implements Exception {
 
 /// Слово в нужной форме после числа: `plural(3, 'раз', 'раза', 'раз')` → «раза».
 /// [one] — для 1, 21, 31…; [few] — для 2–4, 22–24…; [many] — для остальных. По-английски форм две:
-/// [one] — только для 1, иначе [many].
+/// [one] — только для 1, иначе [few]: у «раз / раза / раз» форма [many] совпадает с [one], а [few] всегда
+/// во множественном числе.
 String plural(int n, String one, String few, String many) {
-  if (lang == Lang.en) return n.abs() == 1 ? one : many;
+  if (lang == Lang.en) return n.abs() == 1 ? one : few;
   final d = n.abs() % 100;
   if (d >= 11 && d <= 14) return many;
   return switch (d % 10) { 1 => one, 2 || 3 || 4 => few, _ => many };

@@ -74,7 +74,11 @@ class SpeedReport {
   String get copyText => [
         tr('Скорость скачивания — через VPN: {0}; '
             'напрямую: {1}'
-            '{2}', [vpnMbit == null ? (vpnError ?? '—') : show(vpnMbit), directMbit == null ? (directError ?? '—') : show(directMbit), _hosts.isEmpty ? '' : tr(' (сервер замера: {0})', [_hosts.join(', ')])]),
+            '{2}', [
+          vpnMbit == null ? (vpnError ?? '—') : show(vpnMbit),
+          directMbit == null ? (directError ?? '—') : show(directMbit),
+          _hosts.isEmpty ? '' : tr(' (сервер замера: {0})', [_hosts.join(', ')]),
+        ]),
         for (final n in notes) '  • ${n.text}',
       ].join('\n');
 

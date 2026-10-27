@@ -458,7 +458,8 @@ class _LineCard extends StatelessWidget {
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _cardTitle(Icons.show_chart_rounded, tr('Стабильность связи'),
-            tr('{0} секунд шлём маленькие пробные пакеты через VPN и напрямую: видно, ровная ли связь и где она портится', [LineCheck.seconds])),
+            tr('{0} секунд шлём маленькие пробные пакеты через VPN и напрямую: '
+                'видно, ровная ли связь и где она портится', [LineCheck.seconds])),
         const SizedBox(height: 14),
         Row(children: [
           GhostButton(
@@ -667,7 +668,10 @@ class _SpeedCard extends StatelessWidget {
                   : state.checkingSpeed
                       ? (r?.status ?? tr('Идёт замер'))
                       : tr('Замер идёт в четыре соединения и тратит трафик подписки: до 400 МБ за раз. Файл берётся с {0} и не сохраняется'
-                          '{1}', [r?.vpnHost ?? r?.directHost ?? SpeedTest.servers.first.host, state.killSwitchOn ? tr('. Включён Kill Switch: замер пойдёт только через VPN') : '']),
+                          '{1}', [
+                        r?.vpnHost ?? r?.directHost ?? SpeedTest.servers.first.host,
+                        state.killSwitchOn ? tr('. Включён Kill Switch: замер пойдёт только через VPN') : '',
+                      ]),
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ),

@@ -884,12 +884,15 @@ bool InstallerNameOk(const std::wstring& name) {
   return name.find(L"..") == std::wstring::npos;
 }
 
-void ClearDir(const std::wstring& dir) {
+// Удаляет файлы папки, кроме [keep].
+void ClearDir(const std::wstring& dir, const std::wstring& keep) {
   WIN32_FIND_DATAW fd;
   HANDLE find = ::FindFirstFileW((dir + L"\\*").c_str(), &fd);
   if (find == INVALID_HANDLE_VALUE) return;
   do {
-    if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) ::DeleteFileW((dir + L"\\" + fd.cFileName).c_str());
+    if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && _wcsicmp(fd.cFileName, keep.c_str()) != 0) {
+      ::DeleteFileW((dir + L"\\" + fd.cFileName).c_str());
+    }
   } while (::FindNextFileW(find, &fd));
   ::FindClose(find);
 }
@@ -961,9 +964,9 @@ void StageUpdate(HANDLE pipe, const std::string& request) {
   }
   const std::wstring dir = g_dir + L"\\update";
   ::CreateDirectoryW(dir.c_str(), nullptr);
-  ClearDir(dir);
-  const std::wstring dst = dir + L"\\" + name;
-  HANDLE out = ::CreateFileW(dst.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+  // Копия пишется во временный файл: прежняя сверенная копия удаляется, только когда новая сошлась.
+  const std::wstring dst = dir + L"\\" + name, part_name = name + L".part", part = dir + L"\\" + part_name;
+  HANDLE out = ::CreateFileW(part.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (out == INVALID_HANDLE_VALUE) {
     ::CloseHandle(in);
     PipeWrite(pipe, "error не удалось записать копию");
@@ -973,8 +976,14 @@ void StageUpdate(HANDLE pipe, const std::string& request) {
   ::CloseHandle(in);
   ::CloseHandle(out);
   if (actual != expected) {
-    ::DeleteFileW(dst.c_str());
+    ::DeleteFileW(part.c_str());
     PipeWrite(pipe, actual.empty() ? "error не удалось скопировать файл" : "error контрольная сумма не совпала");
+    return;
+  }
+  ClearDir(dir, part_name);
+  if (!::MoveFileExW(part.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+    ::DeleteFileW(part.c_str());
+    PipeWrite(pipe, "error не удалось записать копию");
     return;
   }
   PipeWrite(pipe, "ok " + Utf8(dst));

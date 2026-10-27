@@ -306,7 +306,8 @@ class _ShellState extends State<Shell> {
       context,
       tr('Добавить из ссылки?'),
       tr('{0}\n\n'
-          'Добавляйте только то, что вы открыли сами — например, ссылку от своего VPN-провайдера.', [what.isEmpty ? tr('Ссылка не распознана.') : what.join('\n')]),
+          'Добавляйте только то, что вы открыли сами — например, ссылку от своего VPN-провайдера.',
+          [what.isEmpty ? tr('Ссылка не распознана.') : what.join('\n')]),
       ok: tr('Добавить'),
     );
     await state.resolvePendingLink(link, accept: ok);

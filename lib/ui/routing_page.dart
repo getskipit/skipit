@@ -186,8 +186,11 @@ class _ProviderRulesCard extends StatelessWidget {
         line(Icons.alt_route_rounded, C.green, tr('Напрямую'),
             s.direct == 0 ? '—' : '${s.directExamples.join(', ')}${s.direct > s.directExamples.length ? tr(' и ещё {0}', [s.direct - s.directExamples.length]) : ''}'),
         line(Icons.shield_rounded, C.orange, tr('Через VPN'),
-            tr('всё остальное{0}'
-                '{1}{2}', [s.proxy > 0 ? tr(' + отдельные правила: {0}', [s.proxy]) : '', proxies > 1 ? tr(' · серверов в конфиге: {0}', [proxies]) : '', balancers > 0 ? tr(', автовыбор') : ''])),
+            tr('всё остальное{0}{1}{2}', [
+              s.proxy > 0 ? tr(' + отдельные правила: {0}', [s.proxy]) : '',
+              proxies > 1 ? tr(' · серверов в конфиге: {0}', [proxies]) : '',
+              balancers > 0 ? tr(', автовыбор') : '',
+            ])),
         if (s.block > 0 || s.blockNotes.isNotEmpty)
           line(Icons.block_rounded, C.red, tr('Блокируется'), s.blockNotes.isEmpty ? tr('правил: {0}', [s.block]) : s.blockNotes.join(', ')),
       ]),

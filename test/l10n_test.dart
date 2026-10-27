@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/l10n/en.dart';
 import 'package:skipit/core/paths.dart';
+import 'package:skipit/core/util.dart';
 import 'package:skipit/l10n/l10n.dart';
 import 'package:skipit/state/app_state.dart';
 
@@ -92,6 +93,21 @@ void main() {
     state.log.add('app', tr('Служба SkipIt на месте: {0}', ['skipit-service 4']));
     expect(state.log.lines.last.text, 'SkipIt service is in place: skipit-service 4');
     expect(state.log.current?.title, 'No connection');
+  });
+
+  test('tr: «{1}» внутри подставленного текста не заменяется второй раз', () {
+    expect(tr('Не удалось обновить «{0}»: {1}', ['VPN {1}', 'ошибка']), 'Не удалось обновить «VPN {1}»: ошибка');
+  });
+
+  test('множественное число по-английски: «times», а не «time»', () {
+    lang = Lang.en;
+    addTearDown(() => lang = Lang.ru);
+    expect(plural(1, tr('раз'), tr('раза'), tr('раз')), 'time');
+    expect(plural(10, tr('раз'), tr('раза'), tr('раз')), 'times');
+    expect(plural(21, tr('журнал'), tr('журнала'), tr('журналов')), 'logs');
+    lang = Lang.ru;
+    expect(plural(21, 'журнал', 'журнала', 'журналов'), 'журнал');
+    expect(plural(10, 'раз', 'раза', 'раз'), 'раз');
   });
 
   test('tr: подстановки и язык', () {

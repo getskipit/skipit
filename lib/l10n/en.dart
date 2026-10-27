@@ -1217,4 +1217,5 @@ const en = <String, String>{
   'не удалось записать копию': 'failed to write the copy',
   'контрольная сумма не совпала': 'the checksum didn\'t match',
   'неизвестная команда': 'unknown command',
+  'не удалось скопировать файл': 'failed to copy the file',
 };

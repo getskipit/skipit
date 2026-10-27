@@ -35,7 +35,9 @@ class KillSwitch {
       if (reply != 'ok') {
         throw CoreException(tr('Не удалось включить Kill Switch ({0}). '
             'Подключение остановлено, чтобы не работать без обещанной защиты. '
-            'Выключить его можно в Настройки → Подключение.', [reply == null ? tr('служба SkipIt не отвечает') : ServiceClient.reason(reply.replaceFirst('error ', ''))]));
+            'Выключить его можно в Настройки → Подключение.', [
+          reply == null ? tr('служба SkipIt не отвечает') : ServiceClient.reason(reply.replaceFirst('error ', '')),
+        ]));
       }
       active = true;
       _viaService = true;

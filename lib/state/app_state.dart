@@ -568,6 +568,9 @@ class AppState extends ChangeNotifier {
     _linkTimer = Timer(const Duration(seconds: 1), _checkLink);
     _linkDownSince = null;
     _healSkipNoted = false;
+    // Смена сети до этого подключения к нему уже не относится.
+    _netChangedAt = null;
+    _linkRecheck = false;
   }
 
   void _stopLinkCheck() {
@@ -579,9 +582,36 @@ class AppState extends ChangeNotifier {
     exitCountry = null;
     _firewallCore = null;
     _firewallHits = 0;
+    _netChangedAt = null;
+    _linkRecheck = false;
   }
 
+  /// Идёт проверка связи; [_linkRecheck] — пока она шла, попросили ещё одну (сменилась сеть).
+  var _linkChecking = false;
+  var _linkRecheck = false;
+
+  /// Проверки связи идут по одной: две одновременные засчитали бы одну пропажу связи за две неудачи.
+  /// Если проверку просят, пока идёт прежняя (сменилась сеть), новая начнётся сразу после неё: прежняя
+  /// могла начаться ещё до смены сети.
   Future<void> _checkLink() async {
+    if (_linkChecking) {
+      _linkRecheck = true;
+      return;
+    }
+    _linkChecking = true;
+    try {
+      await _checkLinkOnce();
+    } finally {
+      _linkChecking = false;
+    }
+    if (_linkRecheck) {
+      _linkRecheck = false;
+      _linkTimer?.cancel();
+      unawaited(_checkLink());
+    }
+  }
+
+  Future<void> _checkLinkOnce() async {
     final port = _checkPort;
     if (port == null || status != ConnStatus.connected) return;
     String? country;
@@ -942,6 +972,9 @@ class AppState extends ChangeNotifier {
         } catch (_) {}
       }
     }
+    // Язык — до первых строк журнала, и при первом запуске (файла ещё нет) тоже: тогда он берётся по Windows.
+    // При импорте и сбросе настроек язык не трогаем здесь: его меняет окно (main.dart), перестраиваясь целиком.
+    lang = resolveLang(settings.language);
     routingProfiles.removeWhere((r) => RoutingProfile.legacyPresetIds.contains(r.id));
     if (!routingProfiles.any((r) => r.id == RoutingProfile.globalPresetId)) {
       routingProfiles.insert(0, RoutingProfile.global());
@@ -955,7 +988,6 @@ class AppState extends ChangeNotifier {
   /// в файле они зашифрованы, в старом файле и в файле экспорта лежат открыто рядом с настройками.
   void _applyData(Map<String, dynamic> j, {required Map<String, dynamic> secret}) {
     settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>? ?? const {});
-    lang = resolveLang(settings.language);
     subscriptions.addAll(((secret['subscriptions'] as List?) ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(Subscription.fromJson));
@@ -2126,7 +2158,8 @@ class AppState extends ChangeNotifier {
       final zapret = WinSys.zapretRunning();
       if (zapret != null) {
         log.add('app', tr('Предупреждение: запущен {0} — он меняет соединения и может мешать VPN. Если VPN-сервер '
-            'не отвечает или сайты не открываются, добавьте адрес VPN-сервера в исключения {1} или закройте его', [zapret, zapret]));
+            'не отвечает или сайты не открываются, добавьте адрес VPN-сервера в исключения {1} или закройте его',
+            [zapret, zapret]));
       }
       // Без прав администратора ядра с адаптером, Kill Switch и уборку адаптеров берёт на себя служба SkipIt.
       final viaService = usesTun && !isAdmin;

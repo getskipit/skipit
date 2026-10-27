@@ -292,8 +292,16 @@ class _SettingsPageState extends State<SettingsPage> {
         Icons.palette_rounded,
         tr('Внешний вид'),
         tr('Тема, масштаб, где стоит меню, что показывать на главной, анимации'),
-        tr('{0} · '
-            '{1} % · меню {2}', [switch (s.theme) { AppTheme.dark => tr('Тёмная'), AppTheme.black => tr('Чёрная'), AppTheme.light => tr('Светлая'), AppTheme.system => tr('Как в Windows') }, s.uiScale, s.navTop ? tr('сверху') : tr('слева')]),
+        tr('{0} · {1} % · меню {2}', [
+          switch (s.theme) {
+            AppTheme.dark => tr('Тёмная'),
+            AppTheme.black => tr('Чёрная'),
+            AppTheme.light => tr('Светлая'),
+            AppTheme.system => tr('Как в Windows'),
+          },
+          s.uiScale,
+          s.navTop ? tr('сверху') : tr('слева'),
+        ]),
         [
         _Section('', [
           _Row(

@@ -212,7 +212,12 @@ class _ServersPanelState extends State<ServersPanel> {
           child: Text(
             tr('Подписок: {0}{1}  ·  '
             'серверов: {2}{3}. '
-            'Скрытое не показывается на главной и в меню значка в трее.', [state.subscriptions.length, hiddenSubs > 0 ? tr(' (скрыто {0})', [hiddenSubs]) : '', state.servers.length, hiddenServers > 0 ? tr(' (скрыто {0})', [hiddenServers]) : '']),
+            'Скрытое не показывается на главной и в меню значка в трее.', [
+          state.subscriptions.length,
+          hiddenSubs > 0 ? tr(' (скрыто {0})', [hiddenSubs]) : '',
+          state.servers.length,
+          hiddenServers > 0 ? tr(' (скрыто {0})', [hiddenServers]) : '',
+        ]),
             style: TextStyle(color: C.muted, fontSize: 12),
           ),
         ),
