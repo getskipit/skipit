@@ -69,6 +69,7 @@ class SingboxConfig {
     int? statsPort,
     String statsSecret = '',
     int? xrayDnsPort,
+    int? dnsSplitPort,
     bool adapterIpv6 = true,
   }) {
     final rules = <Map<String, dynamic>>[
@@ -119,7 +120,10 @@ class SingboxConfig {
         'servers': [
           // Запросы программ пересылаются ядру Xray (см. XrayConfig.addDnsInbound): у него полный список
           // DNS с запасными и правила провайдера. Без порта — прежняя схема: удалённый DNS через VPN.
-          if (xrayDnsPort != null)
+          // DNS по программам: посредник службы SkipIt сам решает, спросить DNS ядра Xray или местный.
+          if (dnsSplitPort != null)
+            {'type': 'udp', 'tag': 'remote', 'server': '127.0.0.1', 'server_port': dnsSplitPort}
+          else if (xrayDnsPort != null)
             {'type': 'udp', 'tag': 'remote', 'server': '127.0.0.1', 'server_port': xrayDnsPort}
           else
             _dnsServer('remote', routing.remoteDnsAddress, detour: 'proxy'),

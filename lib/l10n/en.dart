@@ -396,6 +396,16 @@ const en = <String, String>{
   'Предупреждение: в Windows выключен IPv6 — адаптер VPN поднят без него': 'Warning: IPv6 is turned off in Windows — the VPN adapter was brought up without it',
   'Предупреждение: Windows не включила адаптер VPN за 4 с — перезапускаю sing-box и пробую ещё раз': 'Warning: Windows didn\'t enable the VPN adapter within 4 s — restarting sing-box and trying again',
   'Ошибка подключения: {0}': 'Connection error: {0}',
+  'Предупреждение: служба SkipIt не включила DNS по программам ({0}) — программы мимо VPN '
+          'получают адреса, найденные через VPN':
+      'Warning: the SkipIt service didn\'t enable per-app DNS ({0}) — apps that bypass the VPN get addresses '
+          'found through the VPN',
+  'Предупреждение: службы SkipIt нет — DNS по программам не работает, программы мимо VPN '
+          'получают адреса, найденные через VPN':
+      'Warning: the SkipIt service is missing — per-app DNS is off, apps that bypass the VPN get addresses '
+          'found through the VPN',
+  'DNS по программам: программам мимо VPN адреса ищет местный DNS {0}':
+      'Per-app DNS: apps that bypass the VPN get addresses from the local DNS {0}',
   'Kill Switch держит интернет закрытым': 'Kill Switch keeps the internet blocked',
   'Предупреждение: у адаптера VPN долго не появлялся адрес — первую минуту правила по программам могут не действовать': 'Warning: the VPN adapter took a long time to get an address — per-app rules may not work during the first minute',
   'Windows не смогла включить сетевой адаптер VPN — это сбой на стороне Windows, не настроек. Обычно помогает перезагрузка компьютера. Прямо сейчас можно подключиться в режиме «Прокси»: он работает без адаптера.': 'Windows couldn\'t enable the VPN network adapter — this is a Windows-side failure, not a settings problem. Restarting the computer usually helps. Right now you can connect in “Proxy” mode: it works without the adapter.',

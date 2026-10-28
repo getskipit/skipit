@@ -18,9 +18,9 @@ class ServiceClient {
   static String get name => AppPaths.isDev ? 'SkipItDev' : 'SkipIt';
 
   /// Версия протокола, с которой умеет работать программа.
-  static const protocol = 'skipit-service 4';
+  static const protocol = 'skipit-service 5';
 
-  /// Версия протокола службы («skipit-service 4») или null, если служба не установлена, не запущена
+  /// Версия протокола службы («skipit-service 5») или null, если служба не установлена, не запущена
   /// или не отвечает.
   static Future<String?> hello({String? serviceName}) {
     final target = serviceName ?? name;
@@ -40,6 +40,23 @@ class ServiceClient {
 
   /// Остановить ядро, которое запустила служба.
   static Future<void> stop(int pid) => command('stop $pid');
+
+  /// DNS по программам (windows\service\dns_split.cpp): служба принимает запросы DNS из адаптера на
+  /// 127.0.0.1:[listen] и по журналу DNS-клиента Windows узнаёт, какая программа спросила имя. Программы
+  /// из списка [matches] при «все, кроме списка» (при [onlySelected] — все, кроме них) получают адрес от
+  /// местного DNS через вход Xray [local], остальные — от DNS ядра на [remote], как раньше. Служба держит
+  /// посредника, пока программа не вызовет [dnsRelease] или не закроется. Ответ — «ok», «error …» или null.
+  static Future<String?> dnsHold({
+    required bool onlySelected,
+    required int listen,
+    required int remote,
+    required int local,
+    required List<String> matches,
+  }) =>
+      hold('dns hold\n${onlySelected ? 'o' : 'a'}\n$listen\n$remote\n$local\n'
+          '${matches.where((m) => !m.contains('\n')).join('\n')}');
+
+  static Future<void> dnsRelease() => command('dns release');
 
   /// Служба копирует скачанный установщик [path] в папку программы (туда без прав не записать) и сверяет
   /// копию с контрольной суммой [sha256]. Возвращает путь к копии; ошибка — с причиной от службы.

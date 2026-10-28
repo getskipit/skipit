@@ -44,11 +44,17 @@
 //       запускает уже эту копию — сам файл установщика между сверкой и запуском не подменить (рабочую часть Inno Setup распаковывает во временную папку пользователя — от
 //       программы, уже работающей от имени пользователя, это не защищает; см. SECURITY.md). Скачанный файл
 //       служба открывает от имени программы (с её правами, не с правами системы).
+//   «dns hold\n<a|o>\n<порт посредника>\n<порт DNS ядра>\n<порт местного DNS>\n<запись списка>…» → «ok» или
+//       «error <текст>»: DNS по программам (dns_split.cpp). a — «все, кроме списка», o — «только выбранные».
+//       Посредник работает, пока открыто это подключение; после «dns release» по нему приходит «released».
+//   «dns release»                    → «ok».
 
+#include <winsock2.h>
 #include <windows.h>
 #include <bcrypt.h>
 #include <sddl.h>
 
+#include "dns_split.h"
 #include "kill_switch.h"
 
 #include <algorithm>
@@ -65,7 +71,7 @@
 namespace {
 
 // Версия протокола между программой и службой: растёт, когда меняются команды.
-constexpr char kProtocol[] = "skipit-service 4";
+constexpr char kProtocol[] = "skipit-service 5";
 constexpr size_t kMaxMessage = 16 * 1024 * 1024;
 
 std::wstring g_name;
@@ -823,6 +829,136 @@ void KsStatus(HANDLE pipe) {
   PipeWrite(pipe, std::string(KillSwitchEngaged() ? "1 " : "0 ") + std::to_string(KillSwitchCountFilters()));
 }
 
+// ---------- DNS по программам ----------
+
+// Запуск и остановка посредника идут строго по очереди: иначе при быстром переподключении прежний
+// посредник, останавливаясь, мог задеть уже запущенный новый (сеанс журнала событий у них с одним именем).
+std::mutex g_dns_mutex;
+std::shared_ptr<DnsSplit> g_dns_split;
+HANDLE g_dns_holder = nullptr;  // Событие подключения, которое держит посредника.
+
+std::string Utf8(const std::wstring& w);
+
+bool PortOk(const std::string& s, unsigned short& port) {
+  if (s.empty() || s.size() > 5 || s.find_first_not_of("0123456789") != std::string::npos) return false;
+  const int n = std::atoi(s.c_str());
+  if (n < 1024 || n > 65535) return false;
+  port = static_cast<unsigned short>(n);
+  return true;
+}
+
+// Разбор «<a|o>\n<порт>\n<порт>\n<порт>\n<запись>…» (то, что идёт после «dns hold\n»).
+bool DnsConfig(const std::string& text, DnsSplitConfig& config) {
+  std::vector<std::string> lines;
+  size_t start = 0;
+  while (start <= text.size()) {
+    const size_t end = text.find('\n', start);
+    lines.push_back(text.substr(start, end == std::string::npos ? std::string::npos : end - start));
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  if (lines.size() < 5 || (lines[0] != "a" && lines[0] != "o")) return false;
+  config.only_selected = lines[0] == "o";
+  if (!PortOk(lines[1], config.listen) || !PortOk(lines[2], config.remote) || !PortOk(lines[3], config.local)) {
+    return false;
+  }
+  for (size_t i = 4; i < lines.size(); i++) {
+    if (lines[i].empty() || lines[i].size() > 1024) continue;
+    config.matches.push_back(Wide(lines[i]));
+  }
+  return !config.matches.empty() && config.matches.size() <= 4096;
+}
+
+// Остановить действующего посредника и отпустить подключение, которое его держало (под g_dns_mutex).
+// Возвращается, когда посредник остановлен полностью.
+void DnsStopLocked() {
+  if (g_dns_split) {
+    DnsSplitStop(g_dns_split);
+    g_dns_split.reset();
+  }
+  if (g_dns_holder != nullptr) {
+    ::SetEvent(g_dns_holder);
+    g_dns_holder = nullptr;
+  }
+}
+
+void DnsHold(HANDLE pipe, const std::string& request) {
+  DnsSplitConfig config;
+  if (!DnsConfig(request.substr(std::string("dns hold\n").size()), config)) {
+    PipeWrite(pipe, "error неверная команда");
+    return;
+  }
+  config.session_name = L"SkipIt DNS " + g_name;
+  HANDLE released = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (released == nullptr) return;
+  std::wstring error;
+  {
+    std::lock_guard<std::mutex> lock(g_dns_mutex);
+    // Посредник один: прежний (если был) останавливается полностью до запуска нового.
+    DnsStopLocked();
+    auto split = DnsSplitStart(config, error);
+    if (split) {
+      g_dns_split = split;
+      g_dns_holder = released;
+    }
+  }
+  if (!error.empty()) {
+    ::CloseHandle(released);
+    std::string text;  // Текст ошибки — латиница и цифры («trace 5»).
+    for (wchar_t c : error) text += c < 0x80 ? static_cast<char>(c) : '?';
+    PipeWrite(pipe, "error dns " + text);
+    return;
+  }
+  PipeWrite(pipe, "ok");
+  std::string message;
+  int r;
+  while ((r = PipeRead(pipe, message, released)) == 1) {
+  }
+  {
+    std::lock_guard<std::mutex> lock(g_dns_mutex);
+    // Программа отключилась, не отпустив посредника (закрылась или упала), — останавливаем его.
+    if (g_dns_holder == released) DnsStopLocked();
+  }
+  if (r == 2) PipeWrite(pipe, "released");
+  ::CloseHandle(released);
+}
+
+void DnsRelease(HANDLE pipe) {
+  {
+    std::lock_guard<std::mutex> lock(g_dns_mutex);
+    DnsStopLocked();
+  }
+  PipeWrite(pipe, "ok");
+}
+
+// Проверка посредника без программы (с правами администратора, из консоли):
+//   skipit-service.exe --dns-test <a|o> <порт посредника> <порт DNS ядра> <порт местного DNS> <запись> …
+// Работает, пока не нажать Enter.
+int DnsTest(int argc, wchar_t** argv) {
+  std::string text;
+  for (int i = 2; i < argc; i++) {
+    if (i > 2) text += '\n';
+    text += Utf8(argv[i]);
+  }
+  DnsSplitConfig config;
+  if (!DnsConfig(text, config)) {
+    std::fputs("bad arguments\n", stdout);
+    return 2;
+  }
+  config.session_name = L"SkipIt DNS test";
+  std::wstring error;
+  auto split = DnsSplitStart(config, error);
+  if (!split) {
+    std::fwprintf(stdout, L"error %ls\n", error.c_str());
+    return 1;
+  }
+  std::fputs("running, press Enter to stop\n", stdout);
+  std::fflush(stdout);
+  std::getchar();
+  DnsSplitStop(split);
+  return 0;
+}
+
 // ---------- уборка адаптеров ----------
 
 // Те же скрипты, что делала программа с правами администратора (WinSys.removeOwnTunAdapters и
@@ -1064,6 +1200,11 @@ void Serve(HANDLE pipe) {
       Cleanup(pipe, request == "cleanup own");
     } else if (request.rfind("update stage\n", 0) == 0) {
       StageUpdate(pipe, request);
+    } else if (request.rfind("dns hold\n", 0) == 0) {
+      DnsHold(pipe, request);
+      return;  // Подключение держит посредника DNS, пока не закроется или не придёт «dns release».
+    } else if (request == "dns release") {
+      DnsRelease(pipe);
     } else if (!PipeWrite(pipe, "error неизвестная команда")) {
       return;
     }
@@ -1264,6 +1405,7 @@ int wmain(int argc, wchar_t** argv) {
   if (!check.empty()) return CheckConfig(check, false);
   const std::wstring clean = Arg(argc, argv, L"--clean-config");
   if (!clean.empty()) return CheckConfig(clean, true);
+  if (argc > 1 && std::wstring(argv[1]) == L"--dns-test") return DnsTest(argc, argv);
   g_name = Arg(argc, argv, L"--name");
   if (!NameOk(g_name)) return 10;
   if (HasArg(argc, argv, L"--uninstall")) return StopOrUninstall(true);

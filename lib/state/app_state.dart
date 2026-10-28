@@ -2056,6 +2056,20 @@ class AppState extends ChangeNotifier {
   /// (если порт из настроек держит другая программа, берётся свободный).
   AppSettings? _session;
 
+  /// Служба держит посредника DNS по программам (см. connect).
+  bool _dnsSplit = false;
+
+  /// Свободен ли локальный порт UDP.
+  static Future<bool> _udpFree(int port) async {
+    try {
+      final s = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, port);
+      s.close();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Свободен ли локальный порт (его никто не слушает).
   static Future<bool> _portFree(int port) async {
     try {
@@ -2222,12 +2236,49 @@ class AppState extends ChangeNotifier {
 
       final config = XrayConfig.build(server: server, routing: routing, settings: session);
       final xrayTun = this.xrayTun;
+      // DNS по программам: запрос DNS отправляет не сама программа, а служба Windows «DNS-клиент», и в ядре
+      // не видно, чей он. Служба SkipIt узнаёт это по журналу DNS-клиента: программам, которые идут мимо VPN,
+      // адрес ищет местный DNS (иначе сайты с узлами в разных странах называли бы им узел страны VPN-сервера,
+      // далёкий, а то и закрытый для прямых подключений), остальным — DNS ядра, как раньше.
+      final splitMatches = appRules.enabledMatches;
+      int? splitPort, splitRemote, splitLocal;
+      final split = usesTun && appRules.mode != AppRoutingMode.off && splitMatches.isNotEmpty;
+      // С правами администратора ядра запускает сама программа, но посредника всё равно держит служба.
+      if (split && !viaService) {
+        serviceVersion = await ServiceClient.hello();
+        if (serviceVersion != ServiceClient.protocol) {
+          log.add('app', tr('Предупреждение: службы SkipIt нет — DNS по программам не работает, программы мимо VPN '
+              'получают адреса, найденные через VPN'));
+        }
+      }
+      if (split && serviceVersion == ServiceClient.protocol) {
+        final ports = <int>[];
+        for (var p = session.apiPort + 300; ports.length < 3 && p < session.apiPort + 600; p++) {
+          if (!taken.contains(p) && await _portFree(p) && await _udpFree(p)) ports.add(p);
+        }
+        if (ports.length == 3) {
+          final reply = await ServiceClient.dnsHold(
+              onlySelected: appRules.mode == AppRoutingMode.onlySelected,
+              listen: ports[0],
+              remote: ports[1],
+              local: ports[2],
+              matches: splitMatches);
+          if (reply == 'ok') {
+            _dnsSplit = true;
+            taken.addAll(ports);
+            (splitPort, splitRemote, splitLocal) = (ports[0], ports[1], ports[2]);
+          } else {
+            log.add('app', tr('Предупреждение: служба SkipIt не включила DNS по программам ({0}) — программы мимо VPN '
+                'получают адреса, найденные через VPN', [reply ?? tr('служба SkipIt не отвечает')]));
+          }
+        }
+      }
       if (xrayTun) {
         if (!File(AppPaths.wintunDll).existsSync()) {
           throw CoreException(tr('Не найден файл wintun.dll рядом с ядром Xray — без него Xray не может создать адаптер. '
               'Переустановите SkipIt или выберите режим TUN «sing-box».'));
         }
-        XrayConfig.addTun(config, settings: session, apps: appRules, directDomains: [
+        XrayConfig.addTun(config, settings: session, apps: appRules, dnsSplitPort: splitPort, directDomains: [
           for (final domestic in routing.domesticDnsList.map(Uri.tryParse))
             if (domestic != null && domestic.scheme == 'https' && InternetAddress.tryParse(domestic.host) == null)
               domestic.host,
@@ -2260,7 +2311,14 @@ class AppState extends ChangeNotifier {
       XrayConfig.addCheckInbound(config, port: checkPort);
       // Адаптер держит sing-box: запросы DNS он пересылает ядру Xray на отдельный локальный порт.
       int? dnsPort;
-      if (usesTun && !xrayTun) {
+      if (splitRemote != null && splitLocal != null) {
+        // Посредник службы пересылает запросы в DNS ядра (как sing-box без посредника) или местному DNS.
+        dnsPort = splitRemote;
+        XrayConfig.addDnsInbound(config, port: splitRemote, settings: session);
+        final local = XrayConfig.localDnsServer(routing, session);
+        XrayConfig.addLocalDnsInbound(config, port: splitLocal, server: local, settings: session);
+        log.add('app', tr('DNS по программам: программам мимо VPN адреса ищет местный DNS {0}', ['${local.$1}:${local.$2}']));
+      } else if (usesTun && !xrayTun) {
         var port = checkPort + 1;
         while (taken.contains(port) || !await _portFree(port)) {
           if (++port > checkPort + 200) throw CoreException(tr('Не нашлось свободного порта для DNS'));
@@ -2398,6 +2456,7 @@ class AppState extends ChangeNotifier {
               statsPort: tunStatsPort,
               statsSecret: tunStatsSecret,
               xrayDnsPort: dnsPort,
+              dnsSplitPort: splitPort,
               adapterIpv6: adapterIpv6);
           tunText = const JsonEncoder.withIndent('  ').convert(tun);
           await _debugCopy(AppPaths.tunConfigFile, tunText);
@@ -2628,6 +2687,10 @@ class AppState extends ChangeNotifier {
     }
     await _singbox.stop();
     await _xray.stop();
+    if (_dnsSplit) {
+      _dnsSplit = false;
+      await ServiceClient.dnsRelease();
+    }
     // Возвращённый нами прокси может указывать на локальный порт, который больше никто не слушает (его
     // запомнили раньше, до этого исправления, или оставил другой клиент) — тогда выключаем его. Если прокси
     // мы не ставили, его не трогаем: это чужая настройка.

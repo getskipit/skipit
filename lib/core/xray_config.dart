@@ -685,8 +685,10 @@ class XrayConfig {
     required AppSettings settings,
     required AppRules apps,
     List<String> directDomains = const [],
+    int? dnsSplitPort,
   }) {
-    const direct = _direct, block = _block, dnsOut = 'skipit-dns';
+    const direct = _direct, block = _block;
+    final dnsOut = dnsSplitPort == null ? 'skipit-dns' : _dnsSplitTag;
     final inbound = [tunTag];
     _addOwnOutbounds(cfg, settings);
 
@@ -727,6 +729,15 @@ class XrayConfig {
     final domains = <String>{...directDomains};
     _collectAddresses(outbounds, domains);
     outbounds.add(_dnsOutbound);
+    // DNS по программам: запросы из адаптера уходят посреднику службы SkipIt (см. ServiceClient.dnsHold).
+    // К 127.0.0.1 ядро подключается мимо сетевой карты, хотя остальные его выходы к ней привязаны.
+    if (dnsSplitPort != null) {
+      outbounds.add({
+        'tag': _dnsSplitTag,
+        'protocol': 'freedom',
+        'settings': {'redirect': '127.0.0.1:$dnsSplitPort'},
+      });
+    }
     cfg['outbounds'] = outbounds;
     resolveLocalDnsNames(cfg, settings: settings);
 
@@ -923,7 +934,8 @@ class XrayConfig {
 
   /// Локальный вход DNS для режима, где адаптер держит sing-box: тот пересылает сюда запросы программ,
   /// и отвечает на них встроенный DNS Xray — со всеми серверами из конфига, запасными и правилами
-  /// провайдера, как в режиме «TUN на ядре Xray». Слушает только этот компьютер.
+  /// провайдера, как в режиме «TUN на ядре Xray». Сюда же посредник службы (DNS по программам) пересылает
+  /// запросы всех программ, кроме тех, что идут мимо VPN. Слушает только этот компьютер.
   static void addDnsInbound(Map<String, dynamic> cfg, {required int port, required AppSettings settings}) {
     resolveLocalDnsNames(cfg, settings: settings);
     cfg['inbounds'] = [
@@ -937,10 +949,62 @@ class XrayConfig {
         'settings': {'address': _tunDns, 'port': 53, 'network': 'tcp,udp'},
       },
     ];
-    cfg['outbounds'] = [...(cfg['outbounds'] as List), _dnsOutbound];
+    // В режиме «TUN на ядре Xray» с DNS по программам этот выход уже добавил addTun.
+    final outbounds = cfg['outbounds'] as List;
+    if (!outbounds.any((o) => o is Map && o['tag'] == _dnsOutbound['tag'])) {
+      cfg['outbounds'] = [...outbounds, _dnsOutbound];
+    }
     final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     routing['rules'] = [
       {'inboundTag': const [dnsInTag], 'outboundTag': 'skipit-dns'},
+      ...(routing['rules'] as List? ?? const []),
+    ];
+    cfg['routing'] = routing;
+  }
+
+  static const _dnsSplitTag = 'skipit-dns-split';
+  static const localDnsInTag = 'skipit-local-dns';
+
+  /// Местный DNS для программ, которые идут мимо VPN: первый сервер с IPv4-адресом из «Мой DNS» (локальные)
+  /// или из локального DNS профиля; DoH такой вход передать не может — тогда первый из [bootstrapDns].
+  /// Пара «адрес, порт».
+  static (String, int) localDnsServer(RoutingProfile routing, AppSettings settings) {
+    final list = settings.ownDns ? RoutingProfile.splitDns(settings.ownDnsDomestic) : routing.domesticDnsList;
+    for (final a in list) {
+      if (a.trim().startsWith('tcp://')) continue;
+      final server = dnsServer(a);
+      if (server == null) continue;
+      final entry = _dnsEntry(server);
+      final address = InternetAddress.tryParse('${entry['address']}');
+      if (address == null || address.type != InternetAddressType.IPv4) continue;
+      return (address.address, (entry['port'] as int?) ?? 53);
+    }
+    final first = bootstrapDns(settings).first.split(':');
+    return (first[0], first.length > 1 ? int.tryParse(first[1]) ?? 53 : 53);
+  }
+
+  /// Вход «местный DNS» для посредника DNS службы: запрос, пришедший на 127.0.0.1:[port], уходит DNS-серверу
+  /// [server] напрямую, мимо VPN. Слушает только этот компьютер; пропускает только запросы к этому серверу.
+  static void addLocalDnsInbound(
+    Map<String, dynamic> cfg, {
+    required int port,
+    required (String, int) server,
+    required AppSettings settings,
+  }) {
+    cfg['inbounds'] = [
+      ...(cfg['inbounds'] as List? ?? const []),
+      {
+        'tag': localDnsInTag,
+        'protocol': 'dokodemo-door',
+        'listen': '127.0.0.1',
+        'port': port,
+        'settings': {'address': server.$1, 'port': server.$2, 'network': 'tcp,udp'},
+      },
+    ];
+    _addOwnOutbounds(cfg, settings);
+    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    routing['rules'] = [
+      {'inboundTag': const [localDnsInTag], 'outboundTag': _direct},
       ...(routing['rules'] as List? ?? const []),
     ];
     cfg['routing'] = routing;
