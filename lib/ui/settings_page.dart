@@ -15,6 +15,7 @@ import '../state/app_scope.dart';
 import '../state/app_state.dart';
 import '../version.dart';
 import 'app_icon.dart';
+import 'appearance_previews.dart';
 import 'groups.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -303,7 +304,7 @@ class _SettingsPageState extends State<SettingsPage> {
           s.navTop ? tr('сверху') : tr('слева'),
         ]),
         [
-        _Section('', [
+        _Section(tr('Язык и цвета'), [
           _Row(
             title: tr('Язык'),
             subtitle: tr('«Как в Windows» — русский, если Windows на русском, украинском, белорусском или казахском, '
@@ -322,13 +323,14 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: s.theme == AppTheme.black
                 ? tr('Чёрная: фон совсем чёрный — для экранов AMOLED и OLED')
                 : tr('«Как в системе» следует за настройкой Windows'),
-            trailing: Segmented<AppTheme>(
+            trailing: const SizedBox.shrink(),
+            below: PictureChoice<AppTheme>(
               value: s.theme,
               items: {
-                AppTheme.dark: tr('Тёмная'),
-                AppTheme.black: tr('Чёрная'),
-                AppTheme.light: tr('Светлая'),
-                AppTheme.system: tr('Как в системе'),
+                AppTheme.dark: (tr('Тёмная'), MiniWindow(p: Palette.dark)),
+                AppTheme.black: (tr('Чёрная'), MiniWindow(p: Palette.black)),
+                AppTheme.light: (tr('Светлая'), MiniWindow(p: Palette.light)),
+                AppTheme.system: (tr('Как в системе'), const MiniSystemTheme()),
               },
               onChanged: (v) {
                 s.theme = v;
@@ -358,18 +360,8 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
-          _Row(
-            title: tr('Скругление углов'),
-            subtitle: tr('Углы карточек, кнопок и полей'),
-            trailing: Segmented<double>(
-              value: s.corners,
-              items: Palette.cornerSteps,
-              onChanged: (v) {
-                s.corners = v;
-                state.changed();
-              },
-            ),
-          ),
+        ]),
+        _Section(tr('Окно'), [
           _Row(
             title: tr('Масштаб'),
             subtitle: tr('Размер всего окна: текста, значков и отступов. Меньше — больше помещается на экране'),
@@ -385,9 +377,13 @@ class _SettingsPageState extends State<SettingsPage> {
           _Row(
             title: tr('Расположение меню'),
             subtitle: tr('Где стоят разделы программы: слева или вдоль верхнего края окна'),
-            trailing: Segmented<bool>(
+            trailing: const SizedBox.shrink(),
+            below: PictureChoice<bool>(
               value: s.navTop,
-              items: {false: tr('Слева'), true: tr('Сверху')},
+              items: {
+                false: (tr('Слева'), MiniWindow(p: C.palette)),
+                true: (tr('Сверху'), MiniWindow(p: C.palette, navTop: true)),
+              },
               onChanged: (v) {
                 s.navTop = v;
                 state.changed();
@@ -395,39 +391,25 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           _Row(
-            title: tr('Вид настроек'),
-            subtitle: s.settingsList
-                ? tr('Списком: слева группы, справа настройки выбранной')
-                : tr('Плитки: сначала группы, у каждой своя страница'),
-            trailing: Segmented<bool>(
-              value: s.settingsList,
-              items: {false: tr('Плитки'), true: tr('Списком')},
-              // Смена вида оставляет открытой ту же группу: в ней только что и меняли вид.
+            title: tr('Скругление углов'),
+            subtitle: tr('Углы карточек, кнопок и полей'),
+            trailing: const SizedBox.shrink(),
+            below: PictureChoice<double>(
+              value: s.corners,
+              items: {
+                for (final MapEntry(key: k, value: label) in Palette.cornerSteps.entries)
+                  k: (label, MiniWindow(p: C.palette, corners: k * 2.6)),
+              },
               onChanged: (v) {
-                if (v) {
-                  if (_group != null) _listGroup = _group!;
-                } else {
-                  _group = _listGroup;
-                }
-                s.settingsList = v;
+                s.corners = v;
                 state.changed();
               },
             ),
           ),
-          _Row(
-            title: tr('Вид логов'),
-            subtitle: s.logsList
-                ? tr('Списком: слева группы, справа журнал выбранной')
-                : tr('Плитки: сначала группы, у каждой своя страница'),
-            trailing: Segmented<bool>(
-              value: s.logsList,
-              items: {false: tr('Плитки'), true: tr('Списком')},
-              onChanged: (v) {
-                s.logsList = v;
-                state.changed();
-              },
-            ),
-          ),
+          toggle(tr('Меньше анимаций'), tr('Списки, меню и переходы срабатывают сразу, без плавного движения. Для слабых компьютеров'),
+              s.reduceMotion, (v) => s.reduceMotion = v),
+        ]),
+        _Section(tr('Главная'), [
           _Row(
             title: tr('На главной'),
             subtitle: tr('Что показывать под кнопкой подключения. Ошибки и подсказки видны всегда'),
@@ -455,6 +437,8 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
+        ]),
+        _Section(tr('Меню и страницы'), [
           _Row(
             title: tr('Пункты меню'),
             subtitle: tr('Какие разделы видны в меню. Главная и Настройки — всегда'),
@@ -468,8 +452,48 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
-          toggle(tr('Меньше анимаций'), tr('Списки, меню и переходы срабатывают сразу, без плавного движения. Для слабых компьютеров'),
-              s.reduceMotion, (v) => s.reduceMotion = v),
+          _Row(
+            title: tr('Вид настроек'),
+            subtitle: s.settingsList
+                ? tr('Списком: слева группы, справа настройки выбранной')
+                : tr('Плитки: сначала группы, у каждой своя страница'),
+            trailing: const SizedBox.shrink(),
+            below: PictureChoice<bool>(
+              value: s.settingsList,
+              items: {
+                false: (tr('Плитки'), MiniWindow(p: C.palette, body: MiniBody.tiles)),
+                true: (tr('Списком'), MiniWindow(p: C.palette, body: MiniBody.list)),
+              },
+              // Смена вида оставляет открытой ту же группу: в ней только что и меняли вид.
+              onChanged: (v) {
+                if (v) {
+                  if (_group != null) _listGroup = _group!;
+                } else {
+                  _group = _listGroup;
+                }
+                s.settingsList = v;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: tr('Вид логов'),
+            subtitle: s.logsList
+                ? tr('Списком: слева группы, справа журнал выбранной')
+                : tr('Плитки: сначала группы, у каждой своя страница'),
+            trailing: const SizedBox.shrink(),
+            below: PictureChoice<bool>(
+              value: s.logsList,
+              items: {
+                false: (tr('Плитки'), MiniWindow(p: C.palette, body: MiniBody.tiles)),
+                true: (tr('Списком'), MiniWindow(p: C.palette, body: MiniBody.list)),
+              },
+              onChanged: (v) {
+                s.logsList = v;
+                state.changed();
+              },
+            ),
+          ),
         ]),
       ]),
       _Group(
@@ -1223,7 +1247,12 @@ class _Section extends StatelessWidget {
     // При поиске остаются только подходящие строки; раздел без них не показывается.
     final rows = _found(title, children, _SettingsQuery.of(context));
     if (rows.isEmpty) return const SizedBox.shrink();
-    return Padding(
+    // На широком окне строки не растягиваются во всю ширину: переключатель остаётся рядом с подписью.
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _maxWidth),
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Раздел без названия — единственный или первый в своей группе: заголовок ему не нужен.
@@ -1246,8 +1275,13 @@ class _Section extends StatelessWidget {
           ]),
         ),
       ]),
+    ),
+    ),
     );
   }
+
+  /// Наибольшая ширина раздела вместе с полями.
+  static const _maxWidth = 1000.0;
 }
 
 /// Поле User-Agent с кнопкой «Сбросить»: она появляется, когда значение отличается от стандартного.
