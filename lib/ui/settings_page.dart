@@ -178,7 +178,7 @@ class _SettingsPageState extends State<SettingsPage> {
         );
 
     // Поле фрагментации: значение сохраняется, только если его примет ядро (см. [XrayConfig.fragmentValueOk]).
-    Widget fragmentField(String title, String subtitle, String value, void Function(String) set,
+    _Row fragmentField(String title, String subtitle, String value, void Function(String) set,
             {bool packets = false, bool zero = true}) =>
         _Row(
           title: title,
@@ -202,7 +202,7 @@ class _SettingsPageState extends State<SettingsPage> {
         );
 
     // Поле числа соединений mux: от −1 до 1024 (см. [XrayConfig.muxValue]).
-    Widget muxField(String title, String subtitle, int value, void Function(int) set) => _Row(
+    _Row muxField(String title, String subtitle, int value, void Function(int) set) => _Row(
           title: title,
           subtitle: subtitle,
           trailing: SizedBox(
@@ -805,22 +805,25 @@ class _SettingsPageState extends State<SettingsPage> {
                   'к серверу. Только серверы из ссылок с TLS или Reality, не конфиги провайдера в JSON'),
               s.fragment,
               (v) => s.fragment = v),
-          if (s.fragment) ...[
+          // Значения раскрываются плавно, как «Свой адрес проверки», а не появляются сразу.
+          for (final row in [
             fragmentField(tr('Фрагментация: пакеты'), tr('tlshello — приветствие TLS; 1-3 — первые пакеты соединения'),
                 s.fragmentPackets, (v) => s.fragmentPackets = v, packets: true),
             fragmentField(tr('Фрагментация: длина части'), tr('Байт, число или диапазон: 100-200'), s.fragmentLength,
                 (v) => s.fragmentLength = v, zero: false),
             fragmentField(tr('Фрагментация: пауза'), tr('Миллисекунд между частями: 10-20'), s.fragmentInterval,
                 (v) => s.fragmentInterval = v),
-          ],
+          ])
+            _RevealRow(open: s.fragment, row: row),
           toggle(
               tr('Шумы (Noises)'),
               tr('Перед соединением с сервером отправлять лишний UDP-пакет — мешает распознать и заблокировать '
                   'QUIC. Только серверы Hysteria и mKCP из ссылок, не конфиги провайдера в JSON'),
               s.noise,
               (v) => s.noise = v),
-          if (s.noise) ...[
-            _Row(
+          _RevealRow(
+            open: s.noise,
+            row: _Row(
               title: tr('Шумы: вид пакета'),
               subtitle: tr('Случайный подходит почти всегда. Текст, Hex и Base64 — заданный пакет, если провайдер '
                   'или инструкция назвали конкретное значение'),
@@ -833,11 +836,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
             ),
-            if (s.noiseType == 'rand')
-              fragmentField(tr('Шумы: длина пакета'), tr('Байт, число или диапазон: 10-20'), s.noisePacket,
-                  (v) => s.noisePacket = v, zero: false)
-            else
-              _Row(
+          ),
+          _RevealRow(
+            open: s.noise && s.noiseType == 'rand',
+            row: fragmentField(tr('Шумы: длина пакета'), tr('Байт, число или диапазон: 10-20'), s.noisePacket,
+                (v) => s.noisePacket = v, zero: false),
+          ),
+          _RevealRow(
+            open: s.noise && s.noiseType != 'rand',
+            row: _Row(
                 title: tr('Шумы: пакет'),
                 subtitle: switch (s.noiseType) {
                   'hex' => tr('Байты в шестнадцатеричном виде, например 0a1b2c. Неверное значение — шумов нет'),
@@ -859,8 +866,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               ),
-            fragmentField(tr('Шумы: пауза'), tr('Миллисекунд после пакета: 10-16'), s.noiseDelay, (v) => s.noiseDelay = v),
-          ],
+          ),
+          _RevealRow(
+            open: s.noise,
+            row: fragmentField(tr('Шумы: пауза'), tr('Миллисекунд после пакета: 10-16'), s.noiseDelay,
+                (v) => s.noiseDelay = v),
+          ),
           toggle(
               tr('Мультиплексирование (Mux)'),
               tr('Несколько соединений программ идут по одному соединению с сервером: новые открываются быстрее, '
@@ -868,12 +879,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   'XHTTP и конфиги провайдера в JSON'),
               s.mux,
               (v) => s.mux = v),
-          if (s.mux) ...[
-            muxField(tr('Mux: TCP-соединения'), tr('Сколько соединений программ идёт по одному соединению с сервером, '
-                'от −1 до 1024. −1 — TCP мимо mux. Обычно 8'), s.muxConcurrency, (v) => s.muxConcurrency = v),
-            muxField(tr('Mux: XUDP-соединения'), tr('То же для UDP (игры, звонки), от −1 до 1024. −1 — UDP мимо mux, '
-                '0 — вместе с TCP. Обычно 16'), s.muxXudp, (v) => s.muxXudp = v),
-          ],
+          _RevealRow(
+            open: s.mux,
+            row: muxField(tr('Mux: TCP-соединения'), tr('Сколько соединений программ идёт по одному соединению с '
+                'сервером, от −1 до 1024. −1 — TCP мимо mux. Обычно 8'), s.muxConcurrency, (v) => s.muxConcurrency = v),
+          ),
+          _RevealRow(
+            open: s.mux,
+            row: muxField(tr('Mux: XUDP-соединения'), tr('То же для UDP (игры, звонки), от −1 до 1024. −1 — UDP мимо '
+                'mux, 0 — вместе с TCP. Обычно 16'), s.muxXudp, (v) => s.muxXudp = v),
+          ),
         ]),
         _Section(tr('Локальные порты'), [
           number(tr('SOCKS-порт'), tr('Локальный SOCKS5-прокси'), s.socksPort, (v) => s.socksPort = v),
@@ -1108,8 +1123,9 @@ class _SettingsPageState extends State<SettingsPage> {
           child: KeyedSubtree(
             key: _shownKey = ValueKey(query.isNotEmpty
                 ? 'search'
+                // Та же группа в обоих видах — тот же ключ: при смене вида страница не гаснет и не проявляется заново.
                 : listMode
-                    ? 'list$listGroup'
+                    ? 'group$listGroup'
                     : (_group == null ? 'grid' : 'group$_group')),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
           ),

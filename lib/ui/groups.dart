@@ -19,10 +19,14 @@ class GroupListLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final list = groups;
-    if (list == null) return child;
+    // Разметка одна и та же в обоих видах: при смене «Плитки / Списком» содержимое справа остаётся тем же
+    // виджетом — не пересоздаётся и не прыгает наверх.
     return LayoutBuilder(builder: (context, c) {
       final wide = c.maxWidth >= 820;
       return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (list == null)
+          const SizedBox.shrink()
+        else
         Padding(
           padding: const EdgeInsets.fromLTRB(28, 2, 0, 0),
           child: SizedBox(
