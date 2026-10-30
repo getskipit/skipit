@@ -244,13 +244,14 @@ void Render(Popup& p) {
   g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
   const Gdiplus::RectF& c = p.card;
 
-  // Мягкая тень: несколько всё более широких полупрозрачных подложек.
-  for (int i = 8; i >= 1; i--) {
-    const float grow = i * 1.5f * s;
-    Gdiplus::RectF r(c.X - grow, c.Y - grow + 3 * s, c.Width + grow * 2, c.Height + grow * 2);
+  // Мягкая тень, как у уведомлений Windows: под карточкой и чуть по бокам, сверху её почти нет
+  // (одинаковая со всех сторон выглядела тёмным ореолом вокруг).
+  for (int i = 6; i >= 1; i--) {
+    const float grow = i * 1.2f * s;
+    Gdiplus::RectF r(c.X - grow * 0.7f, c.Y + 4 * s - grow * 0.3f, c.Width + grow * 1.4f, c.Height + grow * 1.3f);
     Gdiplus::GraphicsPath path;
-    AddRounded(path, r, kRadius * s + grow);
-    Gdiplus::SolidBrush shadow(Gdiplus::Color(static_cast<BYTE>(p.model.dark ? 14 : 7), 0, 0, 0));
+    AddRounded(path, r, kRadius * s + grow * 0.7f);
+    Gdiplus::SolidBrush shadow(Gdiplus::Color(static_cast<BYTE>(p.model.dark ? 9 : 5), 0, 0, 0));
     g.FillPath(&shadow, &path);
   }
 
