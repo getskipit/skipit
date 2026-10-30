@@ -53,6 +53,9 @@ void main() {
     'SOCKS5': 'socks://${base64.encode(utf8.encode('user:pass'))}@example.com:1080#a',
     'Hysteria 2': 'hysteria2://password@example.com:443?sni=example.com#a',
     'Hysteria 2 без проверки сертификата': 'hy2://password@example.com:443?sni=example.com&insecure=1#a',
+    'Hysteria 2 + Salamander + смена портов':
+        'hy2://user:password@example.com:443,20000-30000?sni=example.com&obfs=salamander&obfs-password=ob&hop-interval=10#a',
+    'Hysteria 2 + mport, без порта в адресе': 'hysteria2://password@example.com?sni=example.com&mport=20000-30000#a',
   };
 
   // TUN на ядре Xray: вход TUN, перехват DNS и правила по приложениям — во всех режимах списка,

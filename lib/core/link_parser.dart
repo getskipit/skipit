@@ -638,10 +638,36 @@ class LinkParser {
   }
 
   /// Hysteria2 в Xray-core (протокол `hysteria`, версия 2) — требуется свежее ядро.
+  /// Обфускация Salamander и смена портов — маски finalmask.udp; смена портов должна стоять последней.
   static ServerProfile _hysteria2(String link) {
-    final l = _split(link);
+    final hop = _hysteriaPorts(link);
+    final l = _split(hop.link);
     final warnings = <String>[];
-    if (l.q('obfs').isNotEmpty) warnings.add(tr('Обфускация {0} может не поддерживаться ядром', [l.q('obfs')]));
+    final masks = <Map<String, dynamic>>[];
+    final obfs = l.q('obfs').toLowerCase();
+    if (obfs == 'salamander' && l.q('obfs-password').isNotEmpty) {
+      masks.add({
+        'type': 'salamander',
+        'settings': {'password': l.q('obfs-password')},
+      });
+    } else if (obfs.isNotEmpty && obfs != 'none') {
+      warnings.add(tr('Обфускация {0} не поддерживается: подключиться, скорее всего, не получится', [l.q('obfs')]));
+    }
+    // Порты для смены: из адреса («443,20000-30000») или параметром mport / ports.
+    var ports = hop.ports.isNotEmpty ? hop.ports : l.q('mport', l.q('ports'));
+    if (ports.isNotEmpty && !RegExp(r'^\d{1,5}(-\d{1,5})?(,\d{1,5}(-\d{1,5})?)*$').hasMatch(ports)) {
+      warnings.add(tr('Список портов {0} не разобран — смена портов выключена', [ports]));
+      ports = '';
+    }
+    if (ports.isNotEmpty) {
+      if (hop.ports.isEmpty) ports = '${l.port},$ports';
+      // Интервал в секундах («30» или «30s»); ядро не принимает меньше 5, по умолчанию 30, как в Hysteria.
+      final iv = int.tryParse(RegExp(r'\d+').firstMatch(l.q('hop-interval', l.q('hopInterval')))?.group(0) ?? '') ?? 30;
+      masks.add({
+        'type': 'udphop',
+        'settings': {'mode': 'intervalRemote', 'interval': iv < 5 ? 5 : iv, 'remotePorts': ports},
+      });
+    }
     final sni = l.q('sni', l.q('peer'));
     // В ссылках Hysteria отпечаток пишут как pinSHA256, часто с двоеточиями.
     final pin = l.q('pcs', l.q('pinSHA256')).replaceAll(':', '');
@@ -662,10 +688,34 @@ class LinkParser {
           'tlsSettings': {
             'serverName': sni.isNotEmpty ? sni : l.host,
             'alpn': ['h3'],
+            if (l.q('ech').isNotEmpty) 'echConfigList': l.q('ech'),
             ...tlsTrust(insecure: parseBool(l.q('insecure')), pcs: pin, vcn: l.q('vcn'), warnings: warnings),
           },
+          if (masks.isNotEmpty) 'finalmask': {'udp': masks},
         },
       },
     );
+  }
+
+  /// Порт в адресе hysteria2://: без порта — 443; список («443,20000-30000») — первый порт,
+  /// а весь список — для смены портов.
+  static ({String link, String ports}) _hysteriaPorts(String link) {
+    final start = link.indexOf('://') + 3;
+    var end = link.length;
+    for (final c in const ['/', '?', '#']) {
+      final i = link.indexOf(c, start);
+      if (i >= 0 && i < end) end = i;
+    }
+    final auth = link.substring(start, end);
+    final at = auth.lastIndexOf('@') + 1;
+    final hostPort = auth.substring(at);
+    String withPort(String hp) => link.substring(0, start) + auth.substring(0, at) + hp + link.substring(end);
+    final colon = hostPort.lastIndexOf(':');
+    if (colon < 0 || colon < hostPort.lastIndexOf(']')) return (link: withPort('$hostPort:443'), ports: '');
+    final spec = hostPort.substring(colon + 1);
+    final host = hostPort.substring(0, colon);
+    if (spec.isEmpty) return (link: withPort('$host:443'), ports: '');
+    if (!spec.contains(',') && !spec.contains('-')) return (link: link, ports: '');
+    return (link: withPort('$host:${RegExp(r'^\d*').firstMatch(spec)!.group(0)}'), ports: spec);
   }
 }

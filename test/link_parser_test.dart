@@ -45,6 +45,35 @@ void main() {
     expect(server['password'], 'pw');
   });
 
+  test('Hysteria2: Salamander, смена портов, порт по умолчанию, ECH', () {
+    Map stream(String link) => LinkParser.parseLink(link)!.outbound['streamSettings'] as Map;
+    List masks(String link) => (stream(link)['finalmask'] as Map)['udp'] as List;
+
+    final a = LinkParser.parseLink('hy2://user:pw@h.example:443,20000-30000/?obfs=salamander&obfs-password=ob&ech=AEX&hop-interval=10s#A')!;
+    expect(a.port, 443);
+    expect(a.warning, isNull);
+    expect(((a.outbound['streamSettings'] as Map)['hysteriaSettings'] as Map)['auth'], 'user:pw');
+    expect((stream(a.link)['tlsSettings'] as Map)['echConfigList'], 'AEX');
+    // Смена портов — последней: ядро требует её первой после разворота списка масок.
+    expect(masks(a.link), [
+      {'type': 'salamander', 'settings': {'password': 'ob'}},
+      {'type': 'udphop', 'settings': {'mode': 'intervalRemote', 'interval': 10, 'remotePorts': '443,20000-30000'}},
+    ]);
+
+    // mport: основной порт тоже в списке; интервал меньше 5 с ядро не примет.
+    expect((masks('hysteria2://pw@[2001:db8::1]:8443?mport=20000-30000&hopInterval=2')[0] as Map)['settings'],
+        {'mode': 'intervalRemote', 'interval': 5, 'remotePorts': '8443,20000-30000'});
+    expect(LinkParser.parseLink('hy2://pw@[2001:db8::1]:8443?mport=20000-30000')!.address, '2001:db8::1');
+
+    final noPort = LinkParser.parseLink('hy2://pw@h.example?sni=h.example#B')!;
+    expect(noPort.port, 443);
+    expect(stream(noPort.link)['finalmask'], isNull);
+    expect(LinkParser.parseLink('hy2://pw@h.example:/?sni=h.example')!.port, 443);
+
+    expect(LinkParser.parseLink('hy2://pw@h.example:443?obfs=gecko&obfs-password=x')!.warning, isNotNull);
+    expect(LinkParser.parseLink('hy2://pw@h.example:443?mport=abc')!.warning, isNotNull);
+  });
+
   test('Trojan, Hysteria2, подписка base64, URL и диплинки', () {
     final body = base64.encode(utf8.encode('trojan://pw@t.com:443?sni=t.com#T\nhy2://auth@h.com:443?sni=h.com#H'));
     final r = LinkParser.parseText(body);
