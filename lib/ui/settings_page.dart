@@ -101,19 +101,6 @@ class _SettingsPageState extends State<SettingsPage> {
     scroll.jumpTo(0);
   }
 
-  /// Как в «Логах», где страницу двигает переключатель групп: при открытии группы всё едет вниз — плитки
-  /// уходят, страница группы опускается сверху; при возврате всё едет вверх — страница группы уходит, плитки
-  /// поднимаются снизу на своё место. Вбок ничего не сдвигается. Сдвиг идёт с первого кадра по кривой самого
-  /// перехода — так же, как там движется переключатель: к моменту, когда страница проявляется, остаётся мягкий
-  /// доезд. Сдвиг только во второй половине перехода проходил почти весь, пока страница ещё прозрачная, и в
-  /// конце она заметно «подпрыгивала».
-  static Widget _rise(bool tiles, Animation<double> anim, Widget child) => AnimatedBuilder(
-        animation: anim,
-        builder: (context, child) =>
-            Transform.translate(offset: Offset(0, (tiles ? 54 : -54) * (1 - anim.value)), child: child),
-        child: child,
-      );
-
   @override
   void dispose() {
     _outShift.dispose();
@@ -1089,22 +1076,22 @@ class _SettingsPageState extends State<SettingsPage> {
         // Плитки, страница группы и результаты поиска сменяют друг друга плавно: старое гаснет,
         // новое проявляется и чуть подъезжает (страница группы — сверху, плитки — снизу).
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 320),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
+          duration: pageSwitchDuration,
           layoutBuilder: (current, previous) =>
               Stack(alignment: Alignment.topCenter, children: [...previous, if (current != null) current]),
-          // Без наложения: старая страница гаснет за первую половину, новая проявляется во второй.
-          transitionBuilder: (child, anim) => _rise(child.key == const ValueKey('grid'), anim, FadeTransition(
-            opacity: CurvedAnimation(parent: anim, curve: const Interval(0.5, 1)),
-            child: ValueListenableBuilder<(Key?, double)>(
+          // При открытии группы всё едет вниз: плитки уходят, страница группы опускается сверху; при возврате —
+          // вверх: плитки поднимаются снизу. Вбок ничего не сдвигается.
+          transitionBuilder: (child, anim) => pageSwitchTransition(
+            ValueListenableBuilder<(Key?, double)>(
               valueListenable: _outShift,
               builder: (context, shift, child) => shift.$1 == child!.key && shift.$1 != _shownKey && shift.$2 != 0
                   ? Transform.translate(offset: Offset(0, -shift.$2), child: child)
                   : child,
               child: child,
             ),
-          )),
+            anim,
+            shift: child.key == const ValueKey('grid') ? 54 : -54,
+          ),
           child: KeyedSubtree(
             key: _shownKey = ValueKey(query.isNotEmpty
                 ? 'search'

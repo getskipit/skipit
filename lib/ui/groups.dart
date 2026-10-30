@@ -8,7 +8,24 @@ import 'widgets.dart';
 /// Вид «Списком»: слева — группы раздела (как в «Параметрах» Windows), справа — [child] с содержимым
 /// выбранной. Список групп не прокручивается вместе с содержимым; в узком окне от него остаются значки.
 /// [groups] = null — обычный вид, [child] на всю ширину.
-class GroupListLayout extends StatelessWidget {
+/// Смена страниц в «Настройках» и «Логах»: старая гаснет, новая проявляется (чуть внахлёст) и доезжает
+/// [shift] точек по вертикали. Время у перехода идёт ровно, кривые — внутри: с кривой на самом переходе
+/// новая страница к началу проявления была уже почти на месте и почти непрозрачной — смена выглядела рывком.
+const pageSwitchDuration = Duration(milliseconds: 420);
+
+Widget pageSwitchTransition(Widget child, Animation<double> anim, {double shift = 0}) {
+  final fade = CurvedAnimation(parent: anim, curve: const Interval(0.3, 1, curve: Curves.easeOut));
+  final move = CurvedAnimation(parent: anim, curve: const Interval(0.15, 1, curve: Curves.easeOutCubic));
+  final faded = FadeTransition(opacity: fade, child: child);
+  if (shift == 0) return faded;
+  return AnimatedBuilder(
+    animation: move,
+    builder: (context, child) => Transform.translate(offset: Offset(0, shift * (1 - move.value)), child: child),
+    child: faded,
+  );
+}
+
+class GroupListLayout extends StatefulWidget {
   const GroupListLayout(
       {super.key, required this.groups, required this.selected, required this.onSelect, required this.child});
   final List<PageGroup>? groups;
@@ -17,28 +34,57 @@ class GroupListLayout extends StatelessWidget {
   final Widget child;
 
   @override
+  State<GroupListLayout> createState() => _GroupListLayoutState();
+}
+
+class _GroupListLayoutState extends State<GroupListLayout> {
+  /// Группы, пока колонка уезжает после переключения на «Плитки».
+  List<PageGroup>? _last;
+
+  @override
   Widget build(BuildContext context) {
-    final list = groups;
-    if (list == null) return child;
+    final list = widget.groups;
+    if (list != null) _last = list;
+    final shown = _last;
     return LayoutBuilder(builder: (context, c) {
       final wide = c.maxWidth >= 820;
+      final width = 28 + (wide ? 220.0 : 44.0);
+      // Колонка групп при смене вида «Плитки / Списком» выезжает и прячется плавно, а содержимое справа
+      // остаётся тем же виджетом: раньше оно пересоздавалось, и всё выскакивало сразу.
       return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 2, 0, 0),
-          child: SizedBox(
-            width: wide ? 220 : 44,
-            child: Column(children: [
-              for (var i = 0; i < list.length; i++)
-                GroupNavItem(
-                  group: list[i],
-                  selected: i == selected,
-                  showLabel: wide,
-                  onTap: () => onSelect(i),
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: list == null ? 0 : 1),
+          duration: pageSwitchDuration,
+          curve: Curves.easeOutCubic,
+          builder: (context, t, _) => t == 0 || shown == null
+              ? const SizedBox.shrink()
+              : ClipRect(
+                  child: SizedBox(
+                    width: width * t,
+                    child: OverflowBox(
+                      alignment: Alignment.topRight,
+                      minWidth: width,
+                      maxWidth: width,
+                      child: Opacity(
+                        opacity: t,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(28, 2, 0, 0),
+                          child: Column(children: [
+                            for (var i = 0; i < shown.length; i++)
+                              GroupNavItem(
+                                group: shown[i],
+                                selected: i == widget.selected,
+                                showLabel: wide,
+                                onTap: () => widget.onSelect(i),
+                              ),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-            ]),
-          ),
         ),
-        Expanded(child: child),
+        Expanded(child: widget.child),
       ]);
     });
   }

@@ -46,6 +46,7 @@ void main() {
     await tester.tap(find.byTooltip('Все настройки'));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Тема'), findsNothing);
     expect(find.text('Внешний вид'), findsOneWidget);
 
@@ -99,6 +100,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.tune_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Тема'), findsNothing);
     expect(find.text('Внешний вид'), findsOneWidget);
 
