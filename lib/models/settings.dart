@@ -117,6 +117,12 @@ class AppSettings {
   /// Выбран «Свой адрес»: [testUrl] вписан вручную.
   bool testUrlOwn = false;
   PingType pingType = PingType.realDelay;
+
+  /// «Реальная» проверка: сколько секунд ждать ответа сервера и сколько серверов проверять одновременно.
+  int pingTimeout = 6;
+  int pingParallel = 12;
+  static const pingTimeouts = [2, 3, 4, 5, 6, 8, 10, 15];
+  static const pingParallels = [1, 2, 4, 8, 12, 16];
   String logLevel = 'warning';
   /// User-Agent по умолчанию несёт версию программы: провайдер видит, каким SkipIt пользуется клиент.
   static const defaultUserAgent = 'SkipIt/$appVersion';
@@ -252,6 +258,8 @@ class AppSettings {
         'testUrl': testUrl,
         'testUrlOwn': testUrlOwn,
         'pingType': pingType.name,
+        'pingTimeout': pingTimeout,
+        'pingParallel': pingParallel,
         'logLevel': logLevel,
         'userAgent': userAgent,
         'proxyBypass': proxyBypass,
@@ -335,6 +343,8 @@ class AppSettings {
     // Адрес, вписанный раньше вручную, — это «Свой адрес».
     s.testUrlOwn = parseBool(j['testUrlOwn'], !testUrls.containsKey(s.testUrl));
     s.pingType = PingType.values.asNameMap()[j['pingType']] ?? s.pingType;
+    s.pingTimeout = (asInt(j['pingTimeout']) ?? s.pingTimeout).clamp(1, 15);
+    s.pingParallel = (asInt(j['pingParallel']) ?? s.pingParallel).clamp(1, 16);
     s.logLevel = j['logLevel'] as String? ?? s.logLevel;
     // Сохранённое значение вида «SkipIt/<версия>» — это прежнее значение по умолчанию, а не выбор
     // пользователя: после обновления программы версия в нём должна обновиться сама.

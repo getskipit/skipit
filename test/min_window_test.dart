@@ -188,6 +188,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Финляндия'), findsOneWidget);
 
+    // Рядом со страной — внешний IP; длинный адрес IPv6 не вылезает за край.
+    state
+      ..exitIp = '2001:db8:85a3:1234:5678:8a2e:370:7334'
+      ..notifyListeners();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('2001:db8:85a3:1234:5678:8a2e:370:7334'), findsOneWidget);
+    state
+      ..exitIp = '203.0.113.7'
+      ..notifyListeners();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('203.0.113.7'), findsOneWidget);
+
     const shots = String.fromEnvironment('SKIPIT_SHOTS');
     Future<void> shot(String name) async {
       if (shots.isEmpty) return;

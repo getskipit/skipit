@@ -554,6 +554,9 @@ class AppState extends ChangeNotifier {
   /// Страна, из которой сайты видят этот компьютер через VPN (код `fi`); null — ещё не узнали.
   String? exitCountry;
 
+  /// Внешний IP — адрес, с которого сайты видят этот компьютер через VPN; null — ещё не узнали.
+  String? exitIp;
+
   /// VPN числится подключённым, но запросы через сервер не проходят (две проверки подряд).
   /// С признаками блокировки файрволом хватает и одной неудачной проверки.
   bool get linkDown => isConnected && (_linkFails >= 2 || (_linkFails >= 1 && _firewallHits >= 3));
@@ -565,6 +568,7 @@ class AppState extends ChangeNotifier {
     _linkTimer?.cancel();
     _linkFails = 0;
     exitCountry = null;
+    exitIp = null;
     _linkTimer = Timer(const Duration(seconds: 1), _checkLink);
     _linkDownSince = null;
     _healSkipNoted = false;
@@ -580,6 +584,7 @@ class AppState extends ChangeNotifier {
     _linkFails = 0;
     _linkDownSince = null;
     exitCountry = null;
+    exitIp = null;
     _firewallCore = null;
     _firewallHits = 0;
     _netChangedAt = null;
@@ -614,10 +619,10 @@ class AppState extends ChangeNotifier {
   Future<void> _checkLinkOnce() async {
     final port = _checkPort;
     if (port == null || status != ConnStatus.connected) return;
-    String? country;
+    ({String? country, String? ip})? exit;
     var ok = true;
     try {
-      country = await Net.exitCountry(XrayConfig.checkHost, port);
+      exit = await Net.exitInfo(XrayConfig.checkHost, port);
     } catch (_) {
       ok = false;
     }
@@ -628,7 +633,8 @@ class AppState extends ChangeNotifier {
       _linkFails = 0;
       _linkDownSince = null;
       _healSkipNoted = false;
-      if (country != null) exitCountry = country;
+      if (exit?.country != null) exitCountry = exit!.country;
+      if (exit?.ip != null) exitIp = exit!.ip;
       if (wasDown) {
         log.add('app', tr('Связь через VPN восстановилась'));
         _notify(tr('Связь через VPN восстановилась'), 'ok');
@@ -1767,9 +1773,11 @@ class AppState extends ChangeNotifier {
     // Конец проверки — один раз: или когда она закончилась сама, или сразу по «Остановить». Остановленная
     // проверка отпускает кнопку и строки немедленно, не дожидаясь, пока досидят её соединения: какое-то
     // ожидание внутри (у Windows бывают долгие поиски адреса по имени) могло держать её секундами.
+    // Проверка не смогла начаться (тестовое ядро не запустилось) — серверы ни при чём.
+    var failed = false;
     void finish() {
       if (!identical(_pingCancel, cancel)) return;
-      if (cancel.cancelled) {
+      if (cancel.cancelled || failed) {
         for (final s in list) {
           s.delayMs ??= before[s];
         }
@@ -1817,6 +1825,10 @@ class AppState extends ChangeNotifier {
       } else {
         await Pinger.realDelayAll(list, settings.testUrl, log, onResult, cancel, settings);
       }
+    } on PingSetupException catch (e) {
+      // У серверов остаются прежние результаты: «нет» означало бы, что не отвечают они.
+      failed = true;
+      if (!cancel.cancelled) toast(tr('Проверка задержки не началась: {0}', [e.message]));
     } catch (e) {
       if (!cancel.cancelled) toast(tr('Ошибка проверки: {0}', [e]));
     } finally {

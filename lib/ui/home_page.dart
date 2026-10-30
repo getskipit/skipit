@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/util.dart';
 import '../models/settings.dart';
@@ -134,7 +135,15 @@ class _HomePageState extends State<HomePage> {
         height: 16,
         // Пока связи нет, последняя известная страна не показывается: сейчас это уже неправда.
         child: connected
-            ? _ExitInfo(country: state.linkDown ? null : state.exitCountry, killSwitch: state.killSwitchOn)
+            ? _ExitInfo(
+                country: state.linkDown ? null : state.exitCountry,
+                ip: state.linkDown ? null : state.exitIp,
+                killSwitch: state.killSwitchOn,
+                onCopyIp: (ip) async {
+                  await Clipboard.setData(ClipboardData(text: ip));
+                  state.toast(tr('IP скопирован'), kind: ToastKind.success, detail: ip);
+                },
+              )
             : null,
       ),
       ])),
@@ -501,9 +510,11 @@ class _NoticeBox extends StatelessWidget {
 
 /// Строка под временем подключения: страна выхода (флаг и название) и отметка Kill Switch.
 class _ExitInfo extends StatelessWidget {
-  const _ExitInfo({required this.country, required this.killSwitch});
+  const _ExitInfo({required this.country, required this.ip, required this.killSwitch, required this.onCopyIp});
   final String? country;
+  final String? ip;
   final bool killSwitch;
+  final void Function(String ip) onCopyIp;
 
   @override
   Widget build(BuildContext context) {
@@ -520,7 +531,23 @@ class _ExitInfo extends StatelessWidget {
           ]),
         ),
       ],
-      if (country != null && killSwitch) Text('  ·  ', style: style),
+      // Внешний IP: по нажатию копируется.
+      if (country != null && ip != null) Text('  ·  ', style: style),
+      if (ip != null)
+        Flexible(
+          child: Tooltip(
+            message: tr('Внешний IP — с этого адреса сайты видят ваш компьютер. Нажмите, чтобы скопировать'),
+            waitDuration: const Duration(milliseconds: 500),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () => onCopyIp(ip!),
+                child: Text(ip!, style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+          ),
+        ),
+      if ((country != null || ip != null) && killSwitch) Text('  ·  ', style: style),
       if (killSwitch) ...[
         Icon(Icons.shield_rounded, size: 12, color: C.muted),
         const SizedBox(width: 4),

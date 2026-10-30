@@ -502,6 +502,38 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
+          _RevealRow(
+            open: s.pingType == PingType.realDelay,
+            row: _Row(
+              title: tr('Сколько ждать ответа'),
+              subtitle: tr('Сервер, который не ответил за это время, получает «нет». На медленной сети или '
+                  'далёком сервере стоит ждать дольше'),
+              trailing: AppDropdown<int>(
+                value: s.pingTimeout,
+                items: {for (final v in {...AppSettings.pingTimeouts, s.pingTimeout}) v: tr('{0} с', [v])},
+                onChanged: (v) {
+                  s.pingTimeout = v;
+                  state.changed();
+                },
+              ),
+            ),
+          ),
+          _RevealRow(
+            open: s.pingType == PingType.realDelay,
+            row: _Row(
+              title: tr('Серверов одновременно'),
+              subtitle: tr('Больше — список проверяется быстрее; меньше — точнее на слабой сети: проверки не '
+                  'мешают друг другу'),
+              trailing: AppDropdown<int>(
+                value: s.pingParallel,
+                items: {for (final v in {...AppSettings.pingParallels, s.pingParallel}) v: '$v'},
+                onChanged: (v) {
+                  s.pingParallel = v;
+                  state.changed();
+                },
+              ),
+            ),
+          ),
           _Row(
             title: tr('Адрес для проверки'),
             subtitle: tr('Его открывает «Реальная» проверка через каждый сервер. Подойдёт любой адрес, который быстро '
@@ -1135,6 +1167,8 @@ Map<String, String> get _keywords => {
   tr('Mux: XUDP-соединения'): tr('mux мультиплексор udp потоки игры'),
   tr('Уровень логов'): tr('журнал логи отладка debug info warning подробность'),
   tr('Адрес для проверки'): tr('пинг задержка url ссылка тест google cloudflare apple firefox gstatic'),
+  tr('Сколько ждать ответа'): tr('пинг задержка тайм-аут timeout ожидание секунды'),
+  tr('Серверов одновременно'): tr('пинг задержка параллельно одновременно потоки concurrency'),
   tr('Свой адрес проверки'): tr('пинг задержка url ссылка тест свой'),
   tr('Исключения системного прокси'): tr('proxy bypass обход мимо исключить localhost локальные адреса'),
   'User-Agent': tr('ua юзер агент заголовок подписка'),

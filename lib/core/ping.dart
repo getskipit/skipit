@@ -31,9 +31,16 @@ class PingCancel {
   }
 }
 
+/// Проверка задержки не смогла начаться (нет свободных портов, тестовое ядро не запустилось).
+class PingSetupException implements Exception {
+  PingSetupException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 class Pinger {
   static const _basePort = 20800;
-  static const _timeout = Duration(seconds: 6);
 
   /// TCP-рукопожатие с сервером. -1 — недоступен.
   ///
@@ -197,15 +204,16 @@ class Pinger {
     AppSettings? settings,
   ]) async {
     if (servers.isEmpty) return;
-    void failAll(String why) {
-      for (final s in servers) {
-        onResult(s, -1);
-      }
+    final timeout = Duration(seconds: settings?.pingTimeout ?? 6);
+    // Проверка не началась по нашей вине (нет портов, ядро не запустилось) — серверы тут ни при чём:
+    // им не ставим «нет», а сообщаем об ошибке проверки.
+    Never failAll(String why) {
       log.add('test', why);
+      throw PingSetupException(why);
     }
 
     final base = await _freeRange(servers.length);
-    if (base == null) return failAll(tr('Нет свободных портов для проверки задержки'));
+    if (base == null) failAll(tr('Нет свободных портов для проверки задержки'));
     // Конфиг проверки (в нём адреса и ключи серверов) ядро получает напрямую, без файла на диске.
     final config = jsonEncode(XrayConfig.buildTest(servers, base, settings));
     try {
@@ -219,12 +227,12 @@ class Pinger {
       await proc.start(AppPaths.xrayExe, ['run', '-c', 'stdin:'], input: config);
       final ok = await waitForPort(base, alive: () => proc.running && !(cancel?.cancelled ?? false));
       if (cancel?.cancelled ?? false) return;
-      if (!ok || !proc.running) return failAll(tr('Xray не запустился для проверки задержки'));
+      if (!ok || !proc.running) failAll(tr('Xray не запустился для проверки задержки'));
       // Результат каждого сервера показывается сразу, как пришёл, — не ждём самый медленный.
       var died = false;
       final indexed = List.generate(servers.length, (i) => i);
-      await _pool(indexed, 12, (i) async {
-        final ms = await _httpDelay(base + i, testUrl);
+      await _pool(indexed, settings?.pingParallel ?? 12, (i) async {
+        final ms = await _httpDelay(base + i, testUrl, timeout);
         if (cancel?.cancelled ?? false) return;
         // Тестовый Xray умер посреди проверки — ответ получен не от него: такому результату не верим.
         if (!proc.running) died = true;
@@ -236,10 +244,10 @@ class Pinger {
     }
   }
 
-  static Future<int> _httpDelay(int port, String url) async {
+  static Future<int> _httpDelay(int port, String url, Duration timeout) async {
     final client = HttpClient()
       ..findProxy = ((_) => 'PROXY 127.0.0.1:$port')
-      ..connectionTimeout = _timeout;
+      ..connectionTimeout = timeout;
     try {
       Future<int> once() async {
         final sw = Stopwatch()..start();
@@ -252,9 +260,9 @@ class Pinger {
       }
 
       // Первый запрос прогревает соединение (TLS/Reality-рукопожатие), второй — честная задержка.
-      final first = await once().timeout(_timeout);
+      final first = await once().timeout(timeout);
       try {
-        return await once().timeout(_timeout);
+        return await once().timeout(timeout);
       } catch (_) {
         return first;
       }
