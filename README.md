@@ -20,8 +20,6 @@
 [![engine](https://img.shields.io/badge/Xray--core%20%2B%20sing--box-161B22?style=for-the-badge&label=engine&labelColor=010409&logo=v&logoColor=FF6A1A)](#-протоколы)
 [![protocols](https://img.shields.io/badge/VLESS%20%C2%B7%20Reality%20%C2%B7%20Hysteria2-161B22?style=for-the-badge&label=protocols&labelColor=010409&logo=wireguard&logoColor=88171A)](#-протоколы)
 
-<br>
-
 <a href="https://github.com/getskipit/skipit/releases/latest"><img src="https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C%20%D0%B4%D0%BB%D1%8F%20Windows-FF6A1A?style=for-the-badge&logo=windows11&logoColor=white" alt="Скачать для Windows" height="44"></a>
 
 <br>
