@@ -2566,11 +2566,19 @@ class AppState extends ChangeNotifier {
       _startLinkCheck();
       _pollStats = ({bool xray = true}) => stats.poll(session.apiPort, _routes,
           skip: statsSkip, tunPort: tunStatsPort, tunSecret: tunStatsSecret, xray: xray);
+      var polling = false;
       _statsTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
         // Окно спрятано — цифры никто не видит: ядро Xray не опрашивается, главная не перерисовывается.
         final visible = windowVisible;
         if (!visible && tunStatsPort == null) return;
-        await _pollStats?.call(xray: visible);
+        // Прежний запрос ещё идёт — новый не начинаем: запросы не накладываются друг на друга.
+        if (polling) return;
+        polling = true;
+        try {
+          await _pollStats?.call(xray: visible);
+        } finally {
+          polling = false;
+        }
         // Будятся только плитки скорости на главной, а не всё окно.
         if (visible) stats.changed();
       });

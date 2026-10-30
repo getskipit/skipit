@@ -210,11 +210,18 @@ class TrafficStats extends ChangeNotifier {
   }) async {
     if (xray) {
       try {
-        final r = await Process.run(AppPaths.xrayExe,
-            ['api', 'statsquery', '--server=127.0.0.1:$apiPort', '-pattern', 'outbound>>>'],
-            stdoutEncoding: utf8);
-        if (r.exitCode == 0) {
-          final data = jsonDecode(r.stdout as String) as Map<String, dynamic>;
+        // Запрос счётчиков — отдельный процесс ядра. Подвисший (ядро занято, процессор загружен) через 2 с
+        // закрывается: иначе такие процессы копились десятками, по одному в секунду.
+        final p = await Process.start(
+            AppPaths.xrayExe, ['api', 'statsquery', '--server=127.0.0.1:$apiPort', '-pattern', 'outbound>>>']);
+        final out = utf8.decodeStream(p.stdout);
+        unawaited(p.stderr.drain<void>());
+        final code = await p.exitCode.timeout(const Duration(seconds: 2), onTimeout: () {
+          p.kill();
+          return -1;
+        });
+        if (code == 0) {
+          final data = jsonDecode(await out) as Map<String, dynamic>;
           applyXray(data['stat'] as List? ?? const [], routes, skip: skip);
         }
       } catch (_) {}
