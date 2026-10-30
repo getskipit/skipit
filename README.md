@@ -28,7 +28,7 @@
 
 <br>
 
-<img src="docs/screenshots/home.png" alt="Главное окно SkipIt: подключено, сервер Germany, режим «Смешанный»" width="75%">
+<img src="docs/screenshots/skipit-home.png" alt="Главное окно SkipIt: подключено, сервер Germany, режим «Смешанный»" width="75%">
 
 </div>
 
@@ -158,12 +158,12 @@
 <table>
 <tr>
 <td width="50%" valign="top" align="center">
-<a href="docs/screenshots/check-page.png"><img src="docs/screenshots/check-page.png" alt="Раздел «Проверка»"></a><br>
+<a href="docs/screenshots/skipit-check.png"><img src="docs/screenshots/skipit-check.png" alt="Раздел «Проверка»"></a><br>
 <b>Проверка</b><br>
 <sub>Почему тормозит сайт, стабильность связи, UDP для игр и звонков, скорость, DNS и отчёт для разбора</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<a href="docs/screenshots/settings-page.png"><img src="docs/screenshots/settings-page.png" alt="Раздел «Настройки»"></a><br>
+<a href="docs/screenshots/skipit-settings.png"><img src="docs/screenshots/skipit-settings.png" alt="Раздел «Настройки»"></a><br>
 <b>Настройки</b><br>
 <sub>Разбиты на группы, нужная находится поиском по названию или по слову</sub>
 </td>
