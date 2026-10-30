@@ -12,6 +12,7 @@
 #include <vector>
 #include <string>
 
+#include "notify_popup.h"
 #include "tray_menu.h"
 #include "win32_window.h"
 
@@ -37,8 +38,8 @@ class FlutterWindow : public Win32Window {
 
   void AddTrayIcon();
   void RemoveTrayIcon();
-  // Уведомление Windows у значка в трее.
-  void ShowNotification(const std::wstring& title, const std::wstring& text);
+  // Уведомление: своё окно над треем, а во время игры во весь экран — обычное уведомление Windows.
+  void ShowNotification(const std::wstring& title, const std::wstring& text, NotifyKind kind = NotifyKind::kInfo);
   void ShowFromTray();
   // Значок, выбранный в настройках SkipIt: картинки RGBA нескольких размеров (сторона → пиксели).
   // Пустой список — обычный значок из ресурсов exe.

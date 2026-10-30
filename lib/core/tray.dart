@@ -128,7 +128,9 @@ class Tray {
       _call('setIcon', [for (final i in images) {'size': i.size, 'rgba': i.rgba}]);
 
   /// Уведомление Windows у значка. Оболочка показывает его, только когда окно спрятано или свёрнуто.
-  static Future<void> notify(String text) => _call('notify', {'title': AppPaths.appName, 'text': text});
+  /// [kind] — цвет отметки на значке уведомления: ok — связь вернулась, warn — сбой, error — ошибка, info — без отметки.
+  static Future<void> notify(String text, {String kind = 'info'}) =>
+      _call('notify', {'title': AppPaths.appName, 'text': text, 'kind': kind});
 
   /// Убирает значок и закрывает окно. Перед вызовом всё уже должно быть остановлено.
   static Future<void> quit() => _call('quit');

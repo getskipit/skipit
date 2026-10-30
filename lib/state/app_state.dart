@@ -631,14 +631,14 @@ class AppState extends ChangeNotifier {
       if (country != null) exitCountry = country;
       if (wasDown) {
         log.add('app', tr('Связь через VPN восстановилась'));
-        _notify(tr('Связь через VPN восстановилась'));
+        _notify(tr('Связь через VPN восстановилась'), 'ok');
       }
     } else {
       _linkFails++;
       _linkDownSince ??= DateTime.now();
       if (!wasDown && linkDown) {
         log.add('app', tr('Ошибка: VPN подключён, но связи через сервер нет'));
-        _notify(tr('VPN подключён, но связи через сервер нет'));
+        _notify(tr('VPN подключён, но связи через сервер нет'), 'warn');
       }
     }
     notifyListeners();
@@ -727,7 +727,8 @@ class AppState extends ChangeNotifier {
       // Пока обновлялась подписка, человек мог сам подключиться или открыть интернет без VPN.
       if (token != _crashRetry || isBusy || isConnected) return;
       await connect();
-      _notify(isConnected ? tr('Связи через сервер не было — VPN переподключён') : tr('Не удалось переподключиться. {0}', [_withoutVpn]));
+      _notify(isConnected ? tr('Связи через сервер не было — VPN переподключён') : tr('Не удалось переподключиться. {0}', [_withoutVpn]),
+          isConnected ? 'ok' : 'error');
     } finally {
       _healing = false;
     }
@@ -2722,7 +2723,7 @@ class AppState extends ChangeNotifier {
       // Включённый Kill Switch остаётся стоять: пока VPN не вернулся, трафик напрямую не идёт.
       await disconnect(keepError: true, hold: true);
       if (delay != null) {
-        _notify(tr('VPN оборвался, переподключаюсь'));
+        _notify(tr('VPN оборвался, переподключаюсь'), 'warn');
         final token = ++_crashRetry;
         final waiting = tr('Ядро VPN неожиданно закрылось — переподключусь через {0} с', [delay.inSeconds]);
         if (delay > const Duration(seconds: 5)) {
@@ -2741,15 +2742,15 @@ class AppState extends ChangeNotifier {
         }
         await connect();
         if (isConnected) {
-          _notify(tr('VPN снова подключён'));
+          _notify(tr('VPN снова подключён'), 'ok');
         } else {
-          _notify(tr('Не удалось переподключиться. {0}', [_withoutVpn]));
+          _notify(tr('Не удалось переподключиться. {0}', [_withoutVpn]), 'error');
         }
       } else {
         lastError = tr('Ядро VPN неожиданно закрылось, подключение остановлено. Если запущен другой VPN-клиент '
             '(например, Happ) — закройте его: он может закрывать ядро SkipIt.');
         notifyListeners();
-        _notify(tr('VPN отключился: ядро неожиданно закрылось. {0}', [_withoutVpn]));
+        _notify(tr('VPN отключился: ядро неожиданно закрылось. {0}', [_withoutVpn]), 'error');
       }
     }());
   }
@@ -2782,8 +2783,8 @@ class AppState extends ChangeNotifier {
 
   /// Уведомление Windows о сбое или восстановлении VPN. Показывается, только когда окно спрятано
   /// или свёрнуто (это решает оболочка окна) и уведомления не выключены в настройках.
-  void _notify(String text) {
-    if (settings.notifications) unawaited(Tray.notify(text));
+  void _notify(String text, [String kind = 'info']) {
+    if (settings.notifications) unawaited(Tray.notify(text, kind: kind));
   }
 
   Future<void> _ensureGeoFiles(RoutingProfile routing, {bool force = false}) async {

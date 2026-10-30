@@ -8,6 +8,7 @@
 #include "flutter/generated_plugin_registrant.h"
 #include "kill_switch.h"
 #include "net_watch.h"
+#include "notify_popup.h"
 #include "resource.h"
 #include "screen_image.h"
 #include "utils.h"
@@ -21,6 +22,8 @@ constexpr UINT kQuitMessage = WM_APP + 2;
 constexpr UINT kTrayMenuCommand = WM_APP + 3;
 // Сменилась сеть (net_watch.cpp). Уведомления идут пачками — в Dart уходит одно, через 2 с после последнего.
 constexpr UINT kNetChangeMessage = WM_APP + 4;
+// Нажали на своё уведомление над треем (notify_popup.cpp).
+constexpr UINT kNotifyClick = WM_APP + 5;
 constexpr UINT_PTR kNetChangeTimer = 1;
 constexpr UINT kNetChangeDelayMs = 2000;
 constexpr UINT kCmdOpen = 1;
@@ -118,6 +121,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  CloseNotifyPopup();
   NetWatchStop();
   RemoveTrayIcon();
   if (icon_small_) DestroyIcon(icon_small_);
@@ -192,8 +196,16 @@ void FlutterWindow::RemoveTrayIcon() {
   tray_added_ = false;
 }
 
-void FlutterWindow::ShowNotification(const std::wstring& title, const std::wstring& text) {
+void FlutterWindow::ShowNotification(const std::wstring& title, const std::wstring& text, NotifyKind kind) {
   if (!tray_added_) return;
+  NotifyModel model;
+  model.title = title;
+  model.text = text;
+  model.kind = kind;
+  model.dark = tray_menu_.dark;
+  model.accent = tray_menu_.accent;
+  model.images = icon_images_;
+  if (ShowNotifyPopup(GetHandle(), kNotifyClick, model)) return;
   NOTIFYICONDATAW data = tray_icon_;
   data.uFlags = NIF_INFO;
   wcsncpy_s(data.szInfoTitle, title.c_str(), _TRUNCATE);
@@ -291,6 +303,7 @@ void FlutterWindow::SetCustomIcon(const std::vector<std::pair<int, std::vector<u
 }
 
 void FlutterWindow::ShowFromTray() {
+  CloseNotifyPopup();
   HWND hwnd = GetHandle();
   ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);
   SetForegroundWindow(hwnd);
@@ -475,7 +488,12 @@ void FlutterWindow::HandleTrayCall(
         const auto* s = it == args->end() ? nullptr : std::get_if<std::string>(&it->second);
         return s ? Utf8ToWide(*s) : std::wstring();
       };
-      ShowNotification(text("title"), text("text"));
+      const std::wstring kind = text("kind");
+      ShowNotification(text("title"), text("text"),
+                       kind == L"ok"      ? NotifyKind::kOk
+                       : kind == L"warn"  ? NotifyKind::kWarn
+                       : kind == L"error" ? NotifyKind::kError
+                                          : NotifyKind::kInfo);
     }
     result->Success();
   } else if (method == "setIcon") {
@@ -577,6 +595,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         return 0;
       }
       break;
+    case kNotifyClick:
+      ShowFromTray();
+      return 0;
     case kTrayMessage:
       switch (LOWORD(lparam)) {
         case WM_LBUTTONUP:
