@@ -8,7 +8,7 @@ import 'widgets.dart';
 /// Вид «Списком»: слева — группы раздела (как в «Параметрах» Windows), справа — [child] с содержимым
 /// выбранной. Список групп не прокручивается вместе с содержимым; в узком окне от него остаются значки.
 /// [groups] = null — обычный вид, [child] на всю ширину.
-class GroupListLayout extends StatelessWidget {
+class GroupListLayout extends StatefulWidget {
   const GroupListLayout(
       {super.key, required this.groups, required this.selected, required this.onSelect, required this.child});
   final List<PageGroup>? groups;
@@ -17,32 +17,58 @@ class GroupListLayout extends StatelessWidget {
   final Widget child;
 
   @override
+  State<GroupListLayout> createState() => _GroupListLayoutState();
+}
+
+class _GroupListLayoutState extends State<GroupListLayout> {
+  /// Группы, пока колонка уезжает после переключения на «Плитки».
+  List<PageGroup>? _last;
+
+  @override
   Widget build(BuildContext context) {
-    final list = groups;
+    final list = widget.groups;
+    if (list != null) _last = list;
+    final shown = _last;
     // Разметка одна и та же в обоих видах: при смене «Плитки / Списком» содержимое справа остаётся тем же
-    // виджетом — не пересоздаётся и не прыгает наверх.
+    // виджетом — не пересоздаётся и не прыгает наверх. Колонка групп выезжает и прячется за то же время,
+    // что и смена страниц (0,32 с), а не выскакивает сразу.
     return LayoutBuilder(builder: (context, c) {
       final wide = c.maxWidth >= 820;
+      final width = 28 + (wide ? 220.0 : 44.0);
       return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (list == null)
-          const SizedBox.shrink()
-        else
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 2, 0, 0),
-          child: SizedBox(
-            width: wide ? 220 : 44,
-            child: Column(children: [
-              for (var i = 0; i < list.length; i++)
-                GroupNavItem(
-                  group: list[i],
-                  selected: i == selected,
-                  showLabel: wide,
-                  onTap: () => onSelect(i),
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: list == null ? 0 : 1),
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, _) => t == 0 || shown == null
+              ? const SizedBox.shrink()
+              : ClipRect(
+                  child: SizedBox(
+                    width: width * t,
+                    child: OverflowBox(
+                      alignment: Alignment.topRight,
+                      minWidth: width,
+                      maxWidth: width,
+                      child: Opacity(
+                        opacity: t,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(28, 2, 0, 0),
+                          child: Column(children: [
+                            for (var i = 0; i < shown.length; i++)
+                              GroupNavItem(
+                                group: shown[i],
+                                selected: i == widget.selected,
+                                showLabel: wide,
+                                onTap: () => widget.onSelect(i),
+                              ),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-            ]),
-          ),
         ),
-        Expanded(child: child),
+        Expanded(child: widget.child),
       ]);
     });
   }
