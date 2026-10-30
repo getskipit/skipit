@@ -1247,12 +1247,7 @@ class _Section extends StatelessWidget {
     // При поиске остаются только подходящие строки; раздел без них не показывается.
     final rows = _found(title, children, _SettingsQuery.of(context));
     if (rows.isEmpty) return const SizedBox.shrink();
-    // На широком окне строки не растягиваются во всю ширину: переключатель остаётся рядом с подписью.
-    return Align(
-      alignment: Alignment.topLeft,
-      child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: _maxWidth),
-      child: Padding(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Раздел без названия — единственный или первый в своей группе: заголовок ему не нужен.
@@ -1275,13 +1270,8 @@ class _Section extends StatelessWidget {
           ]),
         ),
       ]),
-    ),
-    ),
     );
   }
-
-  /// Наибольшая ширина раздела вместе с полями.
-  static const _maxWidth = 1000.0;
 }
 
 /// Поле User-Agent с кнопкой «Сбросить»: она появляется, когда значение отличается от стандартного.
