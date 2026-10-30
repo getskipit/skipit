@@ -1,11 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 /// Контроллер с плавной прокруткой колесом мыши: вместо мгновенного скачка
 /// каждое деление колеса анимируется, а быстрые прокрутки подряд накапливаются.
 class SmoothScrollController extends ScrollController {
+  /// Строка, которую при следующей раскладке нужно оставить там же на экране, и где она была (точек
+  /// от верха видимой части): страница перестраивается (например, меняет ширину), а строка не уезжает.
+  /// Поправка вносится в том же кадре и сбрасывается.
+  (GlobalKey, double)? anchor;
+
+  /// Где строка сейчас: точек от верха видимой части прокрутки; null — её нет на экране.
+  static double? offsetOf(GlobalKey key) {
+    final box = key.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached || !box.hasSize) return null;
+    final viewport = RenderAbstractViewport.maybeOf(box);
+    if (viewport == null) return null;
+    return box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+  }
+
   @override
   ScrollPosition createScrollPosition(ScrollPhysics physics, ScrollContext context, ScrollPosition? oldPosition) =>
       _SmoothScrollPosition(
+        owner: this,
         physics: physics,
         context: context,
         initialPixels: initialScrollOffset,
@@ -17,6 +33,7 @@ class SmoothScrollController extends ScrollController {
 
 class _SmoothScrollPosition extends ScrollPositionWithSingleContext {
   _SmoothScrollPosition({
+    required this.owner,
     required super.physics,
     required super.context,
     super.initialPixels,
@@ -25,8 +42,22 @@ class _SmoothScrollPosition extends ScrollPositionWithSingleContext {
     super.debugLabel,
   });
 
+  final SmoothScrollController owner;
   static const _duration = Duration(milliseconds: 320);
   double? _target;
+
+  @override
+  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    final ok = super.applyContentDimensions(minScrollExtent, maxScrollExtent);
+    final anchor = owner.anchor;
+    if (anchor == null) return ok;
+    owner.anchor = null;
+    final now = SmoothScrollController.offsetOf(anchor.$1);
+    if (now == null || (now - anchor.$2).abs() < 0.5) return ok;
+    // Сдвиг прокрутки и повторная раскладка в этом же кадре — строка не мелькает на новом месте.
+    correctPixels((pixels + now - anchor.$2).clamp(minScrollExtent, maxScrollExtent));
+    return false;
+  }
 
   @override
   void pointerScroll(double delta) {
