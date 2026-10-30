@@ -22,8 +22,6 @@
 
 <a href="https://github.com/getskipit/skipit/releases/latest"><img src="https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C%20%D0%B4%D0%BB%D1%8F%20Windows-FF6A1A?style=for-the-badge&logo=windows11&logoColor=white" alt="Скачать для Windows" height="44"></a>
 
-<br>
-
 <img src="docs/screenshots/skipit-home.png" alt="Главное окно SkipIt: подключено, сервер Germany, режим «Смешанный»" width="75%">
 
 </div>
