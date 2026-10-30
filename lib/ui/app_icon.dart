@@ -93,7 +93,8 @@ class SkipItIconPainter extends CustomPainter {
 }
 
 /// Размеры картинок для значка окна и трея: Windows берёт ближайшую под свой масштаб экрана.
-const iconSizes = [16, 20, 24, 32, 40, 48, 64, 96];
+/// 256 — для крупного значка в уведомлении над треем (≈105 точек при 125 %): уменьшать чётче, чем растягивать.
+const iconSizes = [16, 20, 24, 32, 40, 48, 64, 96, 256];
 
 /// Картинки значка [style] всех размеров [iconSizes] — пиксели RGBA без предумножения альфы.
 Future<List<({int size, Uint8List rgba})>> renderIcon(IconStyle style, Accent accent) async {

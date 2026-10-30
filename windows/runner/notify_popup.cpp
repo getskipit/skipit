@@ -31,6 +31,7 @@ constexpr float kPad = 14;
 constexpr float kMargin = 14;
 constexpr float kOverhang = 14;
 constexpr float kPicture = 84;
+constexpr float kSmallIcon = 18;
 constexpr float kRadius = 10;
 // От края рабочей области (над панелью задач).
 constexpr float kScreenGap = 12;
@@ -41,11 +42,6 @@ constexpr ULONGLONG kAfterHoverMs = 3000;
 constexpr ULONGLONG kInMs = 260;
 constexpr ULONGLONG kOutMs = 200;
 constexpr ULONGLONG kBackMs = 200;
-
-// Значки из системного шрифта Segoe Fluent Icons / Segoe MDL2 Assets (коды у них общие).
-constexpr wchar_t kGlyphCheck[] = L"\xE73E";
-constexpr wchar_t kGlyphCancel[] = L"\xE711";
-constexpr wchar_t kGlyphClose[] = L"\xE8BB";
 
 constexpr COLORREF kGreen = RGB(0x4A, 0xDE, 0x80);
 constexpr COLORREF kWarn = RGB(0xFF, 0x9F, 0x1A);
@@ -58,6 +54,7 @@ struct Popup {
   UINT message = 0;
   NotifyModel model;
   std::unique_ptr<Gdiplus::Bitmap> picture;
+  std::unique_ptr<Gdiplus::Bitmap> small_picture;
   float s = 1;
   // Размер окна и место карточки в нём.
   int width = 0, height = 0;
@@ -122,8 +119,16 @@ std::unique_ptr<Gdiplus::Bitmap> FromRgba(int size, const std::vector<uint8_t>& 
   return bmp;
 }
 
-// Значок из ресурсов exe с прозрачностью (Bitmap::FromHICON прозрачность теряет).
-std::unique_ptr<Gdiplus::Bitmap> FromResource(int size) {
+// Значок из ресурсов exe с прозрачностью (Bitmap::FromHICON прозрачность теряет). Берём готовую картинку
+// из .ico не меньше нужной: размер «между» Windows растягивает грубо, со ступеньками.
+std::unique_ptr<Gdiplus::Bitmap> FromResource(int want) {
+  int size = 256;
+  for (int s : {16, 20, 24, 32, 40, 48, 64, 128, 256}) {
+    if (s >= want) {
+      size = s;
+      break;
+    }
+  }
   HICON icon = static_cast<HICON>(LoadImageW(GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
                                              size, size, LR_DEFAULTCOLOR));
   if (!icon) return nullptr;
@@ -157,6 +162,22 @@ std::unique_ptr<Gdiplus::Bitmap> FromResource(int size) {
   return result;
 }
 
+// Копия картинки ровно стороной |size| — её рисуем без растяжения, по целым пикселям.
+std::unique_ptr<Gdiplus::Bitmap> Scaled(std::unique_ptr<Gdiplus::Bitmap> src, int size) {
+  if (!src) return nullptr;
+  if (static_cast<int>(src->GetWidth()) == size) return src;
+  auto bmp = std::make_unique<Gdiplus::Bitmap>(size, size, PixelFormat32bppPARGB);
+  Gdiplus::Graphics g(bmp.get());
+  g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+  g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+  g.SetCompositingMode(Gdiplus::CompositingModeSourceCopy);
+  Gdiplus::ImageAttributes attrs;
+  attrs.SetWrapMode(Gdiplus::WrapModeTileFlipXY);
+  g.DrawImage(src.get(), Gdiplus::Rect(0, 0, size, size), 0, 0, static_cast<INT>(src->GetWidth()),
+              static_cast<INT>(src->GetHeight()), Gdiplus::UnitPixel, &attrs);
+  return bmp;
+}
+
 std::unique_ptr<Gdiplus::Bitmap> MakePicture(const NotifyModel& model, int want) {
   // Картинка не меньше нужного размера (ближайшая), иначе самая большая.
   const std::pair<int, std::vector<uint8_t>>* best = nullptr;
@@ -166,9 +187,9 @@ std::unique_ptr<Gdiplus::Bitmap> MakePicture(const NotifyModel& model, int want)
     }
   }
   if (best) {
-    if (auto bmp = FromRgba(best->first, best->second)) return bmp;
+    if (auto bmp = FromRgba(best->first, best->second)) return Scaled(std::move(bmp), want);
   }
-  return FromResource(want);
+  return Scaled(FromResource(want), want);
 }
 
 COLORREF KindColor(const Popup& p) {
@@ -182,14 +203,6 @@ COLORREF KindColor(const Popup& p) {
     default:
       return p.model.accent;
   }
-}
-
-const wchar_t* IconFamily() {
-  // В Windows 11 — Segoe Fluent Icons, в Windows 10 — Segoe MDL2 Assets.
-  static const wchar_t* family = Gdiplus::FontFamily(L"Segoe Fluent Icons").IsAvailable()
-                                     ? L"Segoe Fluent Icons"
-                                     : L"Segoe MDL2 Assets";
-  return family;
 }
 
 // Цвета — как у меню в трее и всплывающих меню программы (lib/ui/theme.dart).
@@ -266,8 +279,9 @@ void Render(Popup& p) {
   }
 
   // Крупный значок программы — выступает над верхним краем карточки.
-  const Gdiplus::RectF pic(c.GetRight() - (34 + kPicture) * s, c.Y - kOverhang * s, kPicture * s, kPicture * s);
-  if (p.picture) g.DrawImage(p.picture.get(), pic);
+  const float pic_size = p.picture ? static_cast<float>(p.picture->GetWidth()) : std::round(kPicture * s);
+  const Gdiplus::RectF pic(std::round(c.GetRight() - 34 * s - pic_size), std::round(c.Y - kOverhang * s), pic_size, pic_size);
+  if (p.picture) g.DrawImage(p.picture.get(), static_cast<INT>(pic.X), static_cast<INT>(pic.Y));
   // Отметка на значке: галочка, «!» или крестик в кружке цвета уведомления.
   if (p.model.kind != NotifyKind::kInfo) {
     const float b = 28 * s;
@@ -276,25 +290,40 @@ void Render(Popup& p) {
     g.FillEllipse(&ring, badge.X - 3 * s, badge.Y - 3 * s, b + 6 * s, b + 6 * s);
     Gdiplus::SolidBrush fill(Rgb(KindColor(p)));
     g.FillEllipse(&fill, badge);
-    Gdiplus::StringFormat center;
-    center.SetAlignment(Gdiplus::StringAlignmentCenter);
-    center.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    Gdiplus::SolidBrush white(Gdiplus::Color(255, 255, 255, 255));
-    if (p.model.kind == NotifyKind::kWarn) {
-      Gdiplus::Font bang(L"Segoe UI", 17 * s, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-      g.DrawString(L"!", -1, &bang, Gdiplus::RectF(badge.X, badge.Y - 0.5f * s, b, b), &center, &white);
+    // Знак рисуем линиями от центра кружка: у букв шрифта свои отступы, и знак съезжал вбок.
+    const float cx = badge.X + b / 2, cy = badge.Y + b / 2;
+    Gdiplus::Pen pen(Gdiplus::Color(255, 255, 255, 255), 0.11f * b);
+    pen.SetStartCap(Gdiplus::LineCapRound);
+    pen.SetEndCap(Gdiplus::LineCapRound);
+    pen.SetLineJoin(Gdiplus::LineJoinRound);
+    if (p.model.kind == NotifyKind::kOk) {
+      const Gdiplus::PointF check[] = {Gdiplus::PointF(cx - 0.21f * b, cy + 0.01f * b),
+                                       Gdiplus::PointF(cx - 0.06f * b, cy + 0.16f * b),
+                                       Gdiplus::PointF(cx + 0.22f * b, cy - 0.14f * b)};
+      g.DrawLines(&pen, check, 3);
+    } else if (p.model.kind == NotifyKind::kWarn) {
+      g.DrawLine(&pen, cx, cy - 0.22f * b, cx, cy + 0.05f * b);
+      const float dot = 0.07f * b;
+      Gdiplus::SolidBrush white(Gdiplus::Color(255, 255, 255, 255));
+      g.FillEllipse(&white, cx - dot, cy + 0.2f * b - dot, dot * 2, dot * 2);
     } else {
-      Gdiplus::Font glyph(IconFamily(), 13 * s, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-      g.DrawString(p.model.kind == NotifyKind::kOk ? kGlyphCheck : kGlyphCancel, -1, &glyph,
-                   Gdiplus::RectF(badge.X, badge.Y + 0.5f * s, b, b), &center, &white);
+      const float d = 0.15f * b;
+      g.DrawLine(&pen, cx - d, cy - d, cx + d, cy + d);
+      g.DrawLine(&pen, cx - d, cy + d, cx + d, cy - d);
     }
   }
 
   // Шапка: маленький значок и название, ниже — текст.
-  const float x = c.X + kPad * s;
+  const float x = std::round(c.X + kPad * s);
   const float text_w = pic.X - 12 * s - x;
-  const float icon = 18 * s;
-  if (p.picture) g.DrawImage(p.picture.get(), Gdiplus::RectF(x, c.Y + kPad * s + 1 * s, icon, icon));
+  const float icon = p.small_picture ? static_cast<float>(p.small_picture->GetWidth()) : std::round(kSmallIcon * s);
+  if (p.small_picture) {
+    g.DrawImage(p.small_picture.get(), static_cast<INT>(std::round(x)), static_cast<INT>(std::round(c.Y + kPad * s + 1 * s)));
+  }
+  // Текст — ClearType, как у Windows, по целым пикселям: сглаживание оттенками серого и сдвиг на
+  // полпикселя делали его размытым. Под текстом непрозрачная карточка, так что ClearType здесь можно.
+  g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
+  g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
   Gdiplus::StringFormat line;
   line.SetLineAlignment(Gdiplus::StringAlignmentCenter);
   line.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
@@ -302,13 +331,13 @@ void Render(Popup& p) {
   Gdiplus::Font title(L"Segoe UI", 14 * s, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
   Gdiplus::SolidBrush text_brush(Rgb(pal.text));
   g.DrawString(p.model.title.c_str(), -1, &title,
-               Gdiplus::RectF(x + icon + 8 * s, c.Y + kPad * s, text_w - icon - 8 * s, 20 * s), &line, &text_brush);
+               Gdiplus::RectF(std::round(x + icon + 8 * s), std::round(c.Y + kPad * s), text_w - icon - 8 * s, std::round(20 * s)), &line, &text_brush);
   Gdiplus::StringFormat wrap;
   wrap.SetTrimming(Gdiplus::StringTrimmingEllipsisWord);
   wrap.SetFormatFlags(Gdiplus::StringFormatFlagsLineLimit);
   Gdiplus::Font body(L"Segoe UI", 13.5f * s, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
   Gdiplus::SolidBrush muted(Rgb(pal.muted));
-  const float body_y = c.Y + (kPad + 28) * s;
+  const float body_y = std::round(c.Y + (kPad + 28) * s);
   g.DrawString(p.model.text.c_str(), -1, &body,
                Gdiplus::RectF(x, body_y, text_w, c.GetBottom() - kPad * s - body_y + 2 * s), &wrap, &muted);
 
@@ -319,11 +348,13 @@ void Render(Popup& p) {
     Gdiplus::SolidBrush hover(Rgb(pal.hover, 230));
     g.FillPath(&hover, &path);
   }
-  Gdiplus::StringFormat center;
-  center.SetAlignment(Gdiplus::StringAlignmentCenter);
-  center.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-  Gdiplus::Font close_font(IconFamily(), 10 * s, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-  g.DrawString(kGlyphClose, -1, &close_font, p.close, &center, p.close_hover ? &text_brush : &muted);
+  g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+  const float ccx = p.close.X + p.close.Width / 2, ccy = p.close.Y + p.close.Height / 2, d = 4.5f * s;
+  Gdiplus::Pen close_pen(Rgb(p.close_hover ? pal.text : pal.muted), 1.3f * s);
+  close_pen.SetStartCap(Gdiplus::LineCapRound);
+  close_pen.SetEndCap(Gdiplus::LineCapRound);
+  g.DrawLine(&close_pen, ccx - d, ccy - d, ccx + d, ccy + d);
+  g.DrawLine(&close_pen, ccx - d, ccy + d, ccx + d, ccy - d);
 }
 
 void Present(Popup& p) {
@@ -587,6 +618,7 @@ bool ShowNotifyPopup(HWND owner, UINT message, const NotifyModel& model) {
   p->model = model;
   const float s = p->s = dpi_x / 96.0f;
   p->picture = MakePicture(model, static_cast<int>(std::lround(kPicture * s)));
+  p->small_picture = MakePicture(model, static_cast<int>(std::lround(kSmallIcon * s)));
 
   // Размеры: карточка по тексту (не ниже значка), вокруг — поле под тень, сверху — под выступ значка.
   const float card_w = std::round(kCardWidth * s);
