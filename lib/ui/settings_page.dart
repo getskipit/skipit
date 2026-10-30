@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../core/paths.dart';
@@ -91,12 +92,27 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Прежняя страница и на сколько её сдвинуть вверх, пока она гаснет.
   final _outShift = ValueNotifier<(Key?, double)>((null, 0));
 
+  /// Строка «Вид настроек»: при смене вида она остаётся там же на экране, где на неё нажали.
+  final _viewRowKey = GlobalKey();
+
+  /// Прокрутка настроек: умеет удержать строку на месте, пока страница перестраивается.
+  final _scroll = _AnchorScrollController();
+
+  /// В другом виде страница уже или шире — текст и картинки переносятся иначе, и строка уехала бы
+  /// вверх или вниз. Прокрутка подстраивается в том же кадре, ещё до отрисовки, так, чтобы строка
+  /// осталась на прежнем месте.
+  void _keepViewRow(VoidCallback change) {
+    final before = _AnchorScrollController.offsetOf(_viewRowKey);
+    change();
+    if (before != null) _scroll.anchor = (_viewRowKey, before);
+  }
+
   /// Прокрутка к началу при смене страницы (плитки ↔ группа ↔ поиск): новая страница сразу стоит
   /// в начале, а прежняя, пока гаснет, сдвигается на прежнюю прокрутку — остаётся на месте, а не
   /// уезжает на глазах к своему началу.
   void _scrollToTop() {
-    final scroll = PrimaryScrollController.maybeOf(context);
-    if (scroll == null || !scroll.hasClients) return;
+    final scroll = _scroll;
+    if (!scroll.hasClients) return;
     _outShift.value = (_shownKey, scroll.offset);
     scroll.jumpTo(0);
   }
@@ -116,6 +132,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
+    _scroll.dispose();
     _outShift.dispose();
     _search.dispose();
     super.dispose();
@@ -453,6 +470,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           _Row(
+            key: _viewRowKey,
             title: tr('Вид настроек'),
             subtitle: s.settingsList
                 ? tr('Списком: слева группы, справа настройки выбранной')
@@ -465,7 +483,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 true: (tr('Списком'), MiniWindow(p: C.palette, body: MiniBody.list)),
               },
               // Смена вида оставляет открытой ту же группу: в ней только что и меняли вид.
-              onChanged: (v) {
+              onChanged: (v) => _keepViewRow(() {
                 if (v) {
                   if (_group != null) _listGroup = _group!;
                 } else {
@@ -473,7 +491,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 }
                 s.settingsList = v;
                 state.changed();
-              },
+              }),
             ),
           ),
           _Row(
@@ -1100,7 +1118,7 @@ class _SettingsPageState extends State<SettingsPage> {
               setState(() => _listGroup = i);
               _scrollToTop();
             },
-            child: ListView(primary: true, padding: const EdgeInsets.only(top: 2, bottom: 28), children: [
+            child: ListView(controller: _scroll, padding: const EdgeInsets.only(top: 2, bottom: 28), children: [
         // Плитки, страница группы и результаты поиска сменяют друг друга плавно: старое гаснет,
         // новое проявляется и чуть подъезжает (страница группы — сверху, плитки — снизу).
         AnimatedSwitcher(
@@ -1135,6 +1153,44 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ]),
     );
+  }
+}
+
+/// Прокрутка, которая может удержать строку [anchor] на прежнем месте видимой части, пока страница
+/// перестраивается: поправка вносится при раскладке, в том же кадре, — строка не мелькает на новом месте.
+class _AnchorScrollController extends ScrollController {
+  /// Строка и где она была (точек от верха видимой части); после одной поправки сбрасывается.
+  (GlobalKey, double)? anchor;
+
+  /// Где строка сейчас: точек от верха видимой части прокрутки; null — её нет на экране.
+  static double? offsetOf(GlobalKey key) {
+    final box = key.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached || !box.hasSize) return null;
+    final viewport = RenderAbstractViewport.maybeOf(box);
+    if (viewport == null) return null;
+    return box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+  }
+
+  @override
+  ScrollPosition createScrollPosition(ScrollPhysics physics, ScrollContext context, ScrollPosition? oldPosition) =>
+      _AnchorPosition(this, physics: physics, context: context, oldPosition: oldPosition);
+}
+
+class _AnchorPosition extends ScrollPositionWithSingleContext {
+  _AnchorPosition(this.owner, {required super.physics, required super.context, super.oldPosition});
+  final _AnchorScrollController owner;
+
+  @override
+  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    final ok = super.applyContentDimensions(minScrollExtent, maxScrollExtent);
+    final anchor = owner.anchor;
+    if (anchor == null) return ok;
+    owner.anchor = null;
+    final now = _AnchorScrollController.offsetOf(anchor.$1);
+    if (now == null || (now - anchor.$2).abs() < 0.5) return ok;
+    // Сдвиг прокрутки и повторная раскладка в этом же кадре.
+    correctPixels((pixels + now - anchor.$2).clamp(minScrollExtent, maxScrollExtent));
+    return false;
   }
 }
 
@@ -1476,7 +1532,7 @@ class _RevealRow extends StatelessWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.title, required this.subtitle, required this.trailing, this.subtitleColor, this.below});
+  const _Row({super.key, required this.title, required this.subtitle, required this.trailing, this.subtitleColor, this.below});
   final String title;
   final String subtitle;
   final Widget trailing;
