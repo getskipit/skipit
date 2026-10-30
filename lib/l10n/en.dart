@@ -434,6 +434,7 @@ const en = <String, String>{
   'Язык и цвета': 'Language and colors',
   'Окно': 'Window',
   'Меню и страницы': 'Menu and pages',
+  'Медленный кадр: {0} мс (сборка {1}, отрисовка {2}), страница {3}': 'Slow frame: {0} ms (build {1}, raster {2}), page {3}',
   'Тестовая сборка не обновляется из релизов': 'The test build doesn\'t update from releases',
   'Доступна новая версия': 'A new version is available',
   'У вас установлена последняя версия': 'You have the latest version',

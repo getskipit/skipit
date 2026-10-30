@@ -240,6 +240,17 @@ Future<void> main(List<String> rawArgs) async {
 
   runApp(SkipItApp(state: state));
   unawaited(state.init(args));
+  // Только в тестовой копии: медленные кадры (дольше 25 мс) — в журнал, чтобы искать подтормаживания
+  // по фактам. Сборка — работа Dart (построение и раскладка), отрисовка — растеризация.
+  if (AppPaths.isDev) {
+    SchedulerBinding.instance.addTimingsCallback((timings) {
+      for (final t in timings) {
+        if (t.totalSpan.inMilliseconds < 25) continue;
+        state.log.add('app', 'Медленный кадр: ${t.totalSpan.inMilliseconds} мс (сборка ${t.buildDuration.inMilliseconds}, '
+            'отрисовка ${t.rasterDuration.inMilliseconds}), страница ${state.pageIndex}');
+      }
+    });
+  }
 }
 
 class SkipItApp extends StatefulWidget {
