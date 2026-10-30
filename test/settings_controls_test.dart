@@ -233,12 +233,17 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(find.text('Цвет акцента'), findsOneWidget);
+    // Выбор вида — внизу страницы: сначала прокручиваем к нему.
+    await tester.ensureVisible(find.text('Списком').first);
+    await tester.pump();
     await tester.tap(find.text('Списком').first);
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(state.settings.settingsList, isTrue);
     expect(find.text('Цвет акцента').hitTestable(), findsOneWidget);
+    await tester.ensureVisible(find.text('Плитки').first);
+    await tester.pump();
     await tester.tap(find.text('Плитки').first);
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
