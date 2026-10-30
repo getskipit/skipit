@@ -2713,17 +2713,18 @@ class AppState extends ChangeNotifier {
     if (status != ConnStatus.connected) return;
     final now = DateTime.now();
     final uptime = connectedAt == null ? Duration.zero : now.difference(connectedAt!);
-    _crashTimes
-      ..add(now)
-      ..removeWhere((t) => now.difference(t) > const Duration(minutes: 10));
-    final delay = settings.autoReconnect ? crashRetryDelay(_crashTimes.length, uptime: uptime) : null;
+    final delay = settings.autoReconnect ? countCrash(_crashTimes, now, uptime) : null;
     log.add('app', tr('Ядро завершилось (код {0}) через {1} с работы'
         '{2}', [code, uptime.inSeconds, delay != null ? tr(', переподключаюсь через {0} с', [delay.inSeconds]) : '']));
     unawaited(() async {
       // Включённый Kill Switch остаётся стоять: пока VPN не вернулся, трафик напрямую не идёт.
       await disconnect(keepError: true, hold: true);
       if (delay != null) {
-        _notify(tr('VPN оборвался, переподключаюсь'), 'warn');
+        _notify(
+            delay > const Duration(seconds: 5)
+                ? tr('VPN оборвался, переподключусь через {0} с', [delay.inSeconds])
+                : tr('VPN оборвался, переподключаюсь'),
+            'warn');
         final token = ++_crashRetry;
         final waiting = tr('Ядро VPN неожиданно закрылось — переподключусь через {0} с', [delay.inSeconds]);
         if (delay > const Duration(seconds: 5)) {
@@ -2753,6 +2754,16 @@ class AppState extends ChangeNotifier {
         _notify(tr('VPN отключился: ядро неожиданно закрылось. {0}', [_withoutVpn]), 'error');
       }
     }());
+  }
+
+  /// Записывает падение ядра в [times] (падения за последние 10 минут) и возвращает паузу перед повтором
+  /// или null. Падение, после которого повтора нет (ядро не проработало и 30 с), не засчитывается:
+  /// иначе первый настоящий повтор ждал бы 30 с вместо 3.
+  static Duration? countCrash(List<DateTime> times, DateTime now, Duration uptime) {
+    times.removeWhere((t) => now.difference(t) > const Duration(minutes: 10));
+    if (crashRetryDelay(1, uptime: uptime) == null) return null;
+    times.add(now);
+    return crashRetryDelay(times.length, uptime: uptime);
   }
 
   /// Пауза перед повтором после [attempt]-го падения ядра за 10 минут: 3 с, 30 с, 2 мин. После четвёртого —

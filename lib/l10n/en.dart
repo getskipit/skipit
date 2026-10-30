@@ -418,6 +418,7 @@ const en = <String, String>{
   'Ядро завершилось (код {0}) через {1} с работы{2}': 'The core exited (code {0}) after {1} s of work{2}',
   ', переподключаюсь через {0} с': ', reconnecting in {0} s',
   'VPN оборвался, переподключаюсь': 'The VPN dropped, reconnecting',
+  'VPN оборвался, переподключусь через {0} с': 'The VPN dropped, reconnecting in {0} s',
   'Ядро VPN неожиданно закрылось — переподключусь через {0} с': 'The VPN core closed unexpectedly — reconnecting in {0} s',
   'VPN снова подключён': 'The VPN is connected again',
   'Ядро VPN неожиданно закрылось, подключение остановлено. Если запущен другой VPN-клиент (например, Happ) — закройте его: он может закрывать ядро SkipIt.': 'The VPN core closed unexpectedly, the connection was stopped. If another VPN client is running (e.g. Happ), close it: it may be closing the SkipIt core.',

@@ -44,4 +44,20 @@ void main() {
     expect(AppState.crashRetryDelay(1, uptime: const Duration(seconds: 29)), isNull);
     expect(AppState.crashRetryDelay(1, uptime: const Duration(seconds: 30)), const Duration(seconds: 3));
   });
+
+  test('падение без повтора не засчитывается: следующий повтор — через 3 с, а не через 30', () {
+    final times = <DateTime>[];
+    final t0 = DateTime(2026, 1, 1, 12);
+    // Ядро закрылось через 21 с работы — повтора нет, и в счёт падение не идёт.
+    expect(AppState.countCrash(times, t0, const Duration(seconds: 21)), isNull);
+    expect(times, isEmpty);
+    // Через две минуты закрылось после 104 с работы — это первое засчитанное падение.
+    expect(AppState.countCrash(times, t0.add(const Duration(minutes: 2)), const Duration(seconds: 104)),
+        const Duration(seconds: 3));
+    expect(AppState.countCrash(times, t0.add(const Duration(minutes: 4)), const Duration(minutes: 1)),
+        const Duration(seconds: 30));
+    // Падения старше 10 минут забываются.
+    expect(AppState.countCrash(times, t0.add(const Duration(minutes: 20)), const Duration(minutes: 1)),
+        const Duration(seconds: 3));
+  });
 }
