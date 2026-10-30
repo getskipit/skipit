@@ -1758,8 +1758,9 @@ class AppState extends ChangeNotifier {
   /// Останавливает идущую проверку задержки (повторное нажатие на её кнопку).
   Future<void> cancelPing() async => _pingCancel?.cancel();
 
-  Future<void> ping(List<ServerProfile> list) async {
-    if (pinging || list.isEmpty) return;
+  /// false — проверка не прошла до конца (остановлена или не смогла начаться): у серверов прежние замеры.
+  Future<bool> ping(List<ServerProfile> list) async {
+    if (pinging || list.isEmpty) return false;
     pinging = true;
     final cancel = _pingCancel = PingCancel();
     // Прежние значения: если проверку остановят, у непроверенных серверов они вернутся.
@@ -1814,7 +1815,7 @@ class AppState extends ChangeNotifier {
                 Pinger.physicalSources([tunnel, ...WinSys.tunNames]),
                 cancel.whenCancelled.then((_) => const <InternetAddress>[]),
               ]);
-        if (cancel.cancelled) return;
+        if (cancel.cancelled) return false;
         var answered = false;
         await Pinger.tcpAll(list, (s, ms) {
           if (ms >= 0) answered = true;
@@ -1832,9 +1833,11 @@ class AppState extends ChangeNotifier {
       if (!cancel.cancelled) toast(tr('Проверка задержки не началась: {0}', [e.message]));
     } catch (e) {
       if (!cancel.cancelled) toast(tr('Ошибка проверки: {0}', [e]));
+      return false;
     } finally {
       finish();
     }
+    return !failed && !cancel.cancelled;
   }
 
   /// Серверы, у которых сейчас идёт проверка UDP.
@@ -2207,15 +2210,20 @@ class AppState extends ChangeNotifier {
 
       if (settings.autoSelect && selectedServer != null) {
         final group = serversOf(selectedServer!.subscriptionId).where(isShown).toList();
-        await ping(group);
-        final best = bestOf(group);
-        if (best != null) settings.selectedServerId = best.id;
+        // Проверка не прошла — у серверов старые замеры, по ним сервер не выбираем.
+        if (await ping(group)) {
+          final best = bestOf(group);
+          if (best != null) settings.selectedServerId = best.id;
+        }
       }
       _checkCancel();
       final server = selectedServer;
       if (server == null) throw CoreException(tr('Сначала добавьте и выберите сервер'));
 
       final routing = routingForConfig;
+      // Гео-базы этому подключению могут быть не нужны — тогда профиль прошлого подключения не должен
+      // остаться для фонового обновления.
+      _geoRouting = null;
       // У серверов с JSON-конфигом провайдера действуют его правила, а правила профиля — вместе с ними.
       final provider = XrayConfig.providerConfig(server);
       if (provider != null) {

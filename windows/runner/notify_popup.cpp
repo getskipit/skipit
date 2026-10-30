@@ -23,6 +23,7 @@ namespace {
 
 constexpr wchar_t kClassName[] = L"SkipItNotifyPopup";
 constexpr UINT_PTR kAnimTimer = 1;
+constexpr UINT_PTR kHideTimer = 2;
 
 // Размеры в пикселях при масштабе 100 %; умножаются на масштаб монитора.
 constexpr float kCardWidth = 384;
@@ -219,17 +220,17 @@ Palette PaletteFor(bool dark) {
 
 // Высота текста сообщения (не больше трёх строк) при ширине |width|.
 float TextHeight(const std::wstring& text, float width, float s) {
-  HDC dc = GetDC(nullptr);
-  float h;
-  {
-    Gdiplus::Graphics g(dc);
-    Gdiplus::Font font(L"Segoe UI", 13.5f * s, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::RectF box;
-    g.MeasureString(text.c_str(), -1, &font, Gdiplus::RectF(0, 0, width, 1000 * s), &box);
-    h = std::min(box.Height, std::ceil(font.GetHeight(&g) * 3));
-  }
-  ReleaseDC(nullptr, dc);
-  return h;
+  // Меряем так же, как потом рисуем: ClearType по целым пикселям и тот же перенос. Ширина — на точку
+  // уже: при рисовании места не меньше, и строк не окажется больше, чем намерено.
+  Gdiplus::Bitmap probe(1, 1, PixelFormat32bppPARGB);
+  Gdiplus::Graphics g(&probe);
+  g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
+  Gdiplus::Font font(L"Segoe UI", 13.5f * s, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+  Gdiplus::StringFormat wrap;
+  wrap.SetFormatFlags(Gdiplus::StringFormatFlagsLineLimit);
+  Gdiplus::RectF box;
+  g.MeasureString(text.c_str(), -1, &font, Gdiplus::RectF(0, 0, std::floor(width) - 1, 1000 * s), &wrap, &box);
+  return std::min(box.Height, std::ceil(font.GetHeight(&g) * 3));
 }
 
 void Render(Popup& p) {
@@ -383,6 +384,16 @@ void StartPhase(Popup& p, Phase phase, float to_offset = 0) {
   p.from_offset = p.offset;
   p.from_alpha = p.alpha;
   p.to_offset = to_offset;
+  // Частый таймер нужен только пока что-то движется.
+  if (g_popup) SetTimer(g_popup, kAnimTimer, 10, nullptr);
+}
+
+// Уведомление встало на место: частый таймер не нужен, до времени скрыться — один редкий.
+void Rest(HWND hwnd, Popup& p) {
+  KillTimer(hwnd, kAnimTimer);
+  const ULONGLONG now = GetTickCount64();
+  SetTimer(hwnd, kHideTimer, static_cast<UINT>(p.hide_at > now ? std::max<ULONGLONG>(10, p.hide_at - now) : 10),
+           nullptr);
 }
 
 // Уехать: крестиком или по времени — недалеко с растворением, смахиванием — за край экрана.
@@ -403,6 +414,7 @@ void Tick(HWND hwnd, Popup& p) {
         p.offset = 0;
         p.alpha = 255;
         p.phase = Phase::kShown;
+        Rest(hwnd, p);
       }
       break;
     }
@@ -420,6 +432,7 @@ void Tick(HWND hwnd, Popup& p) {
         p.alpha = 255;
         p.phase = Phase::kShown;
         p.hide_at = std::max(p.hide_at, now + kAfterHoverMs);
+        Rest(hwnd, p);
       }
       break;
     }
@@ -506,6 +519,7 @@ LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
       if (!p) break;
       p->hover = false;
       p->hide_at = std::max(p->hide_at, GetTickCount64() + kAfterHoverMs);
+      if (p->phase == Phase::kShown) Rest(hwnd, *p);
       if (p->close_hover) {
         p->close_hover = false;
         Render(*p);
@@ -554,9 +568,21 @@ LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
       return 0;
     case WM_TIMER:
       if (p && wparam == kAnimTimer) Tick(hwnd, *p);
+      if (p && wparam == kHideTimer) {
+        KillTimer(hwnd, kHideTimer);
+        // Курсор над уведомлением — ждём: уход курсора заведёт таймер заново.
+        if (p->phase == Phase::kShown && !p->hover) {
+          if (GetTickCount64() >= p->hide_at) {
+            Dismiss(*p, false);
+          } else {
+            Rest(hwnd, *p);
+          }
+        }
+      }
       return 0;
     case WM_DESTROY:
       KillTimer(hwnd, kAnimTimer);
+      KillTimer(hwnd, kHideTimer);
       if (p) {
         SetWindowLongPtr(hwnd, GWLP_USERDATA, 0);
         SelectObject(p->dc, p->old_bitmap);

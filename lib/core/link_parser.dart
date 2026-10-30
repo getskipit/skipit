@@ -655,7 +655,11 @@ class LinkParser {
     }
     // Порты для смены: из адреса («443,20000-30000») или параметром mport / ports.
     var ports = hop.ports.isNotEmpty ? hop.ports : l.q('mport', l.q('ports'));
-    if (ports.isNotEmpty && !RegExp(r'^\d{1,5}(-\d{1,5})?(,\d{1,5}(-\d{1,5})?)*$').hasMatch(ports)) {
+    // Порты от 1 до 65535: иначе ядро не примет конфиг, и ошибка вылезла бы только при подключении.
+    bool portsOk(String spec) =>
+        RegExp(r'^\d{1,5}(-\d{1,5})?(,\d{1,5}(-\d{1,5})?)*$').hasMatch(spec) &&
+        spec.split(RegExp('[,-]')).every((p) => (int.tryParse(p) ?? 0) >= 1 && int.parse(p) <= 65535);
+    if (ports.isNotEmpty && !portsOk(ports)) {
       warnings.add(tr('Список портов {0} не разобран — смена портов выключена', [ports]));
       ports = '';
     }

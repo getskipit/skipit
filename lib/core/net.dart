@@ -151,19 +151,27 @@ class Net {
       final sink = tmp.openWrite();
       var received = 0;
       try {
-        await for (final chunk in res) {
-          sink.add(chunk);
-          received += chunk.length;
-          onProgress?.call(received, res.contentLength);
+        try {
+          await for (final chunk in res) {
+            sink.add(chunk);
+            received += chunk.length;
+            onProgress?.call(received, res.contentLength);
+          }
+        } finally {
+          await sink.close();
         }
-      } finally {
-        await sink.close();
+        // Соединение оборвалось раньше времени — недокачанный файл на место не ставим.
+        if (res.contentLength > 0 && received != res.contentLength) {
+          throw HttpException(tr('Файл скачался не полностью: {0}', [url]));
+        }
+        await tmp.rename(path);
+      } catch (_) {
+        // Недокачанный кусок рядом не оставляем.
+        try {
+          if (tmp.existsSync()) tmp.deleteSync();
+        } catch (_) {}
+        rethrow;
       }
-      // Соединение оборвалось раньше времени — недокачанный файл на место не ставим.
-      if (res.contentLength > 0 && received != res.contentLength) {
-        throw HttpException(tr('Файл скачался не полностью: {0}', [url]));
-      }
-      await tmp.rename(path);
     } finally {
       client.close(force: true);
     }

@@ -102,7 +102,11 @@ class _SettingsPageState extends State<SettingsPage> {
     final before = SmoothScrollController.offsetOf(_viewRowKey);
     change();
     final scroll = PrimaryScrollController.maybeOf(context);
-    if (before != null && scroll is SmoothScrollController) scroll.anchor = (_viewRowKey, before);
+    if (before == null || scroll is! SmoothScrollController) return;
+    scroll.anchor = (_viewRowKey, before);
+    // Раскладки не было (вид не поменялся) — якорь не должен дожить до какой-нибудь следующей и сдвинуть
+    // страницу невпопад.
+    WidgetsBinding.instance.addPostFrameCallback((_) => scroll.anchor = null);
   }
 
   /// Прокрутка к началу при смене страницы (плитки ↔ группа ↔ поиск): новая страница сразу стоит
@@ -480,7 +484,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 true: (tr('Списком'), MiniWindow(p: C.palette, body: MiniBody.list)),
               },
               // Смена вида оставляет открытой ту же группу: в ней только что и меняли вид.
-              onChanged: (v) => _keepViewRow(() {
+              onChanged: (v) => v == s.settingsList ? null : _keepViewRow(() {
                 if (v) {
                   if (_group != null) _listGroup = _group!;
                 } else {

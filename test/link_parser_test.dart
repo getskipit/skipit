@@ -72,6 +72,10 @@ void main() {
 
     expect(LinkParser.parseLink('hy2://pw@h.example:443?obfs=gecko&obfs-password=x')!.warning, isNotNull);
     expect(LinkParser.parseLink('hy2://pw@h.example:443?mport=abc')!.warning, isNotNull);
+    // Порт вне 1–65535 — предупреждение при добавлении, смена портов выключена.
+    final big = LinkParser.parseLink('hy2://pw@h.example:443?mport=60000-70000')!;
+    expect(big.warning, isNotNull);
+    expect(stream(big.link)['finalmask'], isNull);
   });
 
   test('Trojan, Hysteria2, подписка base64, URL и диплинки', () {
