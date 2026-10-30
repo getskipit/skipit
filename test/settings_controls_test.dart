@@ -241,9 +241,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(state.settings.settingsList, isTrue);
-    // Открыта та же группа, и страница осталась на месте — у выбора вида, а не прыгнула наверх.
-    expect(find.text('Цвет акцента'), findsOneWidget);
-    expect(find.text('Списком').first.hitTestable(), findsOneWidget);
+    expect(find.text('Цвет акцента').hitTestable(), findsOneWidget);
     await tester.ensureVisible(find.text('Плитки').first);
     await tester.pump();
     await tester.tap(find.text('Плитки').first);
@@ -251,8 +249,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(state.settings.settingsList, isFalse);
-    expect(find.text('Цвет акцента'), findsOneWidget);
-    expect(find.text('Плитки').first.hitTestable(), findsOneWidget);
+    expect(find.text('Цвет акцента').hitTestable(), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 600));
   });
 

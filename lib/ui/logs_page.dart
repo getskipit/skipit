@@ -271,10 +271,15 @@ class _LogsPageState extends State<LogsPage> {
               // старое гаснет, новое проявляется. Вбок ничего не сдвигается: вверх и вниз страницу двигает
               // сам переключатель групп, который появляется и прячется в заголовке.
               child: AnimatedSwitcher(
-                duration: pageSwitchDuration,
+                duration: const Duration(milliseconds: 320),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
                 layoutBuilder: (current, previous) =>
                     Stack(fit: StackFit.expand, children: [...previous, if (current != null) current]),
-                transitionBuilder: (child, anim) => pageSwitchTransition(child, anim),
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: CurvedAnimation(parent: anim, curve: const Interval(0.5, 1)),
+                  child: child,
+                ),
                 child: KeyedSubtree(
                   key: ValueKey(shown == null ? 'grid' : 'group$shown${shown == 2 ? '-${picked?.id}' : ''}'),
                   child: body,
