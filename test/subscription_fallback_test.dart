@@ -49,7 +49,7 @@ void main() {
 
     await main.close(force: true);
     await spare.close(force: true);
-    await tmp.delete(recursive: true);
+    await _cleanUp(state, tmp);
   });
 
   test('не ответил и запасной адрес — в подписке ошибка основного', () async {
@@ -73,7 +73,7 @@ void main() {
     expect(sub.error, contains('402'));
 
     await main.close(force: true);
-    await tmp.delete(recursive: true);
+    await _cleanUp(state, tmp);
   });
 
   test('подписку удалили, пока шёл запрос, — её серверы не возвращаются', () async {
@@ -98,7 +98,7 @@ void main() {
     expect(state.subscriptions, isEmpty);
 
     await slow.close(force: true);
-    await tmp.delete(recursive: true);
+    await _cleanUp(state, tmp);
   });
 
   test('запасной адрес из тела подписки; принимаются только http и https', () {
@@ -111,4 +111,21 @@ void main() {
     sub.applyMeta(const {});
     expect(sub.fallbackUrl, 'https://b.example/sub');
   });
+}
+
+/// Уборка после теста. Отложенная запись state.json (через 400 мс после изменения) иначе срабатывала
+/// уже в следующем тесте и писала в его временную папку, а та не удалялась: файл открыт. [AppState.saveNow]
+/// отменяет её и дописывает файл сейчас. Только что записанный файл Windows (антивирус, индексатор)
+/// может ещё держать — папку удаляем с повторами; временную папку, которая так и не удалилась, не считаем ошибкой.
+Future<void> _cleanUp(AppState state, Directory tmp) async {
+  await state.saveNow();
+  state.dispose();
+  for (var attempt = 1; attempt <= 10; attempt++) {
+    try {
+      await tmp.delete(recursive: true);
+      return;
+    } on FileSystemException {
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+  }
 }
