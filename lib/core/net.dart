@@ -159,6 +159,10 @@ class Net {
       } finally {
         await sink.close();
       }
+      // Соединение оборвалось раньше времени — недокачанный файл на место не ставим.
+      if (res.contentLength > 0 && received != res.contentLength) {
+        throw HttpException(tr('Файл скачался не полностью: {0}', [url]));
+      }
       await tmp.rename(path);
     } finally {
       client.close(force: true);

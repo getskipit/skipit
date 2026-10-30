@@ -915,6 +915,7 @@ class AppState extends ChangeNotifier {
     Timer(const Duration(seconds: 8), () => step(tr('обновления'), () => checkUpdates(silent: true)));
     _updateTimer = Timer.periodic(const Duration(hours: 6), (_) {
       if (!downloadingAppUpdate) checkUpdates(silent: true);
+      unawaited(_refreshOldGeoFiles());
     });
     notifyListeners();
 
@@ -2556,6 +2557,8 @@ class AppState extends ChangeNotifier {
       status = ConnStatus.connected;
       connectedAt = DateTime.now();
       log.add('app', tr('Подключено'));
+      // Через минуту, когда подключение устоялось, — не устарели ли гео-базы.
+      Timer(const Duration(minutes: 1), () => unawaited(_refreshOldGeoFiles()));
       _flushDns();
       stats.reset();
       _statsTimer?.cancel();
@@ -2811,23 +2814,71 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _ensureGeoFiles(RoutingProfile routing, {bool force = false}) async {
+    _geoRouting = null;
     if (!force && !XrayConfig.needsGeoFiles(routing)) return;
+    _geoRouting = routing;
+    // Свежие гео-базы, скачанные в фоне за прошлое подключение, встают на место до запуска ядра.
+    for (final path in [AppPaths.geoipFile, AppPaths.geositeFile]) {
+      final fresh = File('$path.new');
+      try {
+        if (fresh.existsSync()) await fresh.rename(path);
+      } catch (_) {}
+    }
     if (File(AppPaths.geoipFile).existsSync() && File(AppPaths.geositeFile).existsSync()) return;
     await updateGeoFiles(routing);
   }
 
   bool updatingGeo = false;
 
-  Future<void> updateGeoFiles([RoutingProfile? routing]) async {
+  /// Гео-базы старше этого обновляются сами в фоне, пока VPN подключён.
+  static const geoMaxAge = Duration(days: 7);
+
+  /// Профиль, чьими гео-базами пользуется текущее подключение; null — подключению они не нужны.
+  RoutingProfile? _geoRouting;
+  DateTime? _geoTriedAt;
+
+  /// Гео-базы текущего подключения старше недели — тихо качаем свежие через VPN. Ядро читает их при
+  /// запуске, поэтому новые файлы ложатся рядом (*.new) и встают на место перед следующим подключением.
+  /// Неудачная попытка повторяется не чаще раза в 6 часов.
+  Future<void> _refreshOldGeoFiles() async {
+    final routing = _geoRouting;
+    if (routing == null || updatingGeo || !isConnected) return;
+    final now = DateTime.now();
+    if (_geoTriedAt != null && now.difference(_geoTriedAt!) < const Duration(hours: 6)) return;
+    DateTime? age(String path) => File(path).existsSync() ? File(path).lastModifiedSync() : null;
+    final dates = [
+      for (final path in [AppPaths.geoipFile, AppPaths.geositeFile]) age('$path.new') ?? age(path),
+    ];
+    if (dates.any((d) => d == null) || dates.every((d) => now.difference(d!) < geoMaxAge)) return;
+    _geoTriedAt = now;
+    try {
+      await updateGeoFiles(routing, true);
+    } catch (e) {
+      log.add('app', tr('Не удалось обновить гео-базы: {0}', [e]));
+    }
+  }
+
+  /// [staged] — файлы ложатся рядом (*.new) и встают на место перед следующим подключением: работающее
+  /// ядро держит старые открытыми.
+  Future<void> updateGeoFiles([RoutingProfile? routing, bool staged = false]) async {
     final r = routing ?? selectedRouting;
     updatingGeo = true;
     notifyListeners();
     try {
       final proxy = isConnected ? (_session ?? settings).httpPort : null;
       log.add('app', tr('Загрузка geoip/geosite…'));
-      await Net.download(r.geoipUrl, AppPaths.geoipFile, proxyPort: proxy);
-      await Net.download(r.geositeUrl, AppPaths.geositeFile, proxyPort: proxy);
-      log.add('app', tr('Геофайлы обновлены'));
+      final suffix = staged ? '.new' : '';
+      await Net.download(r.geoipUrl, '${AppPaths.geoipFile}$suffix', proxyPort: proxy);
+      await Net.download(r.geositeUrl, '${AppPaths.geositeFile}$suffix', proxyPort: proxy);
+      if (!staged) {
+        // Скачанное вручную новее отложенного с прошлого раза.
+        for (final path in [AppPaths.geoipFile, AppPaths.geositeFile]) {
+          try {
+            File('$path.new').deleteSync();
+          } catch (_) {}
+        }
+      }
+      log.add('app', staged ? tr('Гео-базы обновлены — применятся при следующем подключении') : tr('Геофайлы обновлены'));
     } finally {
       updatingGeo = false;
       notifyListeners();
