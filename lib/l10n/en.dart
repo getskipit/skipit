@@ -1269,4 +1269,5 @@ const en = <String, String>{
   'Файл скачался не полностью': 'The file was not fully downloaded',
   'В списке больше 200000 строк': 'The list exceeds 200000 lines',
   'Загрузка…': 'Downloading…',
+  '{0}: повторяю обновление после сбоя сети при запуске': '{0}: retrying the update after a network error at startup',
 };

@@ -937,10 +937,10 @@ class AppState extends ChangeNotifier {
         } catch (_) {
           // Нет прав администратора — об этом уже написано в журнале и на главной.
         }
-        if (settings.updateSubsOnStart) await _updateDueSubscriptions(force: true);
+        if (settings.updateSubsOnStart) await updateSubscriptionsOnStart();
       }());
     } else if (settings.updateSubsOnStart) {
-      unawaited(_updateDueSubscriptions(force: true));
+      unawaited(updateSubscriptionsOnStart());
     }
   }
 
@@ -1396,6 +1396,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> shutdown() async {
+    _stopping = true;
     await disconnect();
     // Kill Switch мог держать интернет закрытым и без подключения — при выходе снимаем его.
     await KillSwitch.release();
@@ -1574,13 +1575,31 @@ class AppState extends ChangeNotifier {
   // Подписки
   // ---------------------------------------------------------------------------
 
-  Future<void> _updateDueSubscriptions({bool force = false}) async {
+  /// После включения ПК сеть может ещё подниматься; запрос также может попасть на подключение VPN.
+  /// Один сетевой сбой при запуске повторяем быстро, не дожидаясь обычных пяти минут.
+  Future<void> updateSubscriptionsOnStart() => _updateDueSubscriptions(force: true, startup: true);
+
+  bool _stopping = false;
+  final _subsNetworkErrors = <String>{};
+
+  Future<void> _updateDueSubscriptions({bool force = false, bool startup = false}) async {
     for (final s in List.of(subscriptions)) {
+      if (_stopping) return;
       if (!force && !s.isDue) continue;
       // После неудачи повторяем не чаще раза в 5 минут, а не каждую минуту.
       final failed = _subRetryAfter[s.id];
       if (!force && failed != null && DateTime.now().isBefore(failed)) continue;
       await updateSubscription(s, silent: true);
+      if (startup && !_stopping && _subsNetworkErrors.contains(s.id)) {
+        await Future<void>.delayed(const Duration(seconds: 3));
+        // За это время подписку могли удалить, обновить вручную или закрыть программу.
+        if (!_stopping && subscriptions.contains(s) && s.error != null &&
+            _subsNetworkErrors.contains(s.id) && !updatingSubs.contains(s.id)) {
+          log.add('subscription', tr('{0}: повторяю обновление после сбоя сети при запуске', [s.displayName]));
+          await updateSubscription(s, silent: true);
+        }
+      }
+      if (_stopping || !subscriptions.contains(s)) continue;
       if (s.error != null) {
         // Сервер отказал по существу (подписка закончилась, ссылка не действует) — частые повторы
         // ничего не изменят, пробуем раз в час.
@@ -1676,6 +1695,7 @@ class AppState extends ChangeNotifier {
       sub.lastUpdated = DateTime.now();
       sub.error = null;
       _subsRefused.remove(sub.id);
+      _subsNetworkErrors.remove(sub.id);
 
       final old = {for (final s in serversOf(sub.id)) s.link: s};
       // Если формат сменился (ссылки → JSON), ссылки не совпадут — узнаём сервер по названию,
@@ -1718,6 +1738,8 @@ class AppState extends ChangeNotifier {
       if (!silent) toast(tr('Подписка «{0}» обновлена', [sub.displayName]), detail: tr('Серверов: {0}', [fresh.length]));
     } catch (e) {
       sub.error = describeNetError(e);
+      final networkError = e is SocketException || e is TimeoutException || e is HttpException;
+      networkError ? _subsNetworkErrors.add(sub.id) : _subsNetworkErrors.remove(sub.id);
       final refused = e is ServerRefused && e.isFinal;
       refused ? _subsRefused.add(sub.id) : _subsRefused.remove(sub.id);
       // Адрес подписки — ключ доступа: в журнал он не пишется, даже если попал в текст ошибки.
@@ -3170,6 +3192,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopping = true;
     _subsTimer?.cancel();
     _updateTimer?.cancel();
     _statsTimer?.cancel();
