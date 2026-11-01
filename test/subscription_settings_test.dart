@@ -130,7 +130,7 @@ void main() {
       await tester.runAsync(state.saveNow);
       await tester.pump();
       expect(find.text('Укажите целое число часов: 0 — выключить'), findsOneWidget);
-      await tester.tap(find.text('Все подписки'));
+      await tester.tap(find.text('Снять выбор'));
       await tester.pump();
       await tester.tap(find.text('Применить'));
       await tester.runAsync(state.saveNow);
@@ -144,7 +144,7 @@ void main() {
     testWidgets('можно вернуть интервалы провайдеров', (tester) async {
       for (final sub in state.subscriptions) { sub.updateIntervalOverrideHours = 0; }
       await open(tester);
-      await tester.tap(find.text('Интервал провайдера'));
+      await tester.tap(find.text('Провайдера'));
       await tester.pump();
       await tester.tap(find.text('Применить'));
       await tester.runAsync(state.saveNow);
@@ -157,6 +157,10 @@ void main() {
         lang = language;
         await open(tester, minimum: true);
         expect(tester.takeException(), isNull);
+        final hint = find.text(tr('0 — отключить автообновление'));
+        final card = find.ancestor(of: hint, matching: find.byType(Container)).first;
+        final scroll = find.ancestor(of: card, matching: find.byType(Scrollable)).first;
+        expect(tester.getRect(card).bottom, lessThanOrEqualTo(tester.getRect(scroll).bottom + 1));
         const shots = String.fromEnvironment('SKIPIT_SHOTS');
         if (shots.isNotEmpty) {
           await expectLater(find.byKey(const ValueKey('bulk-shot')),
