@@ -8,7 +8,7 @@ import 'package:skipit/state/app_state.dart';
 import 'package:skipit/ui/shell.dart';
 import 'package:skipit/ui/theme.dart';
 
-/// Ctrl+V в окне добавляет ссылку из буфера обмена — в любом разделе и после любых кликов.
+/// Ctrl+V добавляет ссылки в разделах импорта; в остальных разделах ничего не добавляет.
 void main() {
   setUpAll(AppPaths.init);
 
@@ -69,6 +69,54 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await paste(tester);
     expect(state.servers.map((s) => s.name), ['Pasted']);
+    await tester.pump(const Duration(seconds: 9));
+  });
+
+  for (final scheme in ['happ', 'skipit', 'incy', 'v2raytun', 'v2rayng', 'streisand']) {
+  for (final shift in [false, true]) {
+    testWidgets('готовый профиль $scheme вставляется в Маршрутизации, Shift=$shift', (tester) async {
+      final state = await open(tester);
+      final profile = RoutingProfile(name: 'Из буфера', directSites: ['domain:example.com']);
+      final link = profile.toDeeplink().replaceFirst('skipit://', '$scheme://');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.getData') return {'text': link};
+        return null;
+      });
+      await tester.tap(find.byIcon(Icons.alt_route_rounded).first);
+      await tester.pump(const Duration(milliseconds: 400));
+      if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await paste(tester);
+      if (shift) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      expect(state.routingProfiles.where((p) => p.name == 'Из буфера').single.directSites,
+          ['domain:example.com']);
+      expect(state.subscriptions, isEmpty);
+      expect(state.servers, isEmpty);
+      await tester.pump(const Duration(seconds: 9));
+    });
+  }
+
+  }
+
+  testWidgets('Ctrl+V в поле профиля вставляет текст и не импортирует профиль', (tester) async {
+    final state = await open(tester);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.getData') return {'text': 'Вставленный текст'};
+      if (call.method == 'Clipboard.hasStrings') return {'value': true};
+      return null;
+    });
+    await tester.tap(find.byIcon(Icons.alt_route_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byIcon(Icons.edit_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    final field = find.byType(TextField).first;
+    await tester.tap(field);
+    await tester.enterText(field, '');
+    await paste(tester);
+    expect(tester.widget<TextField>(field).controller!.text, 'Вставленный текст');
+    expect(state.routingProfiles.length, 3);
+    expect(state.servers, isEmpty);
+    await tester.tap(find.text('Отмена'));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(seconds: 9));
   });
 

@@ -356,11 +356,10 @@ class _ShellState extends State<Shell> {
     ];
     return Scaffold(
       backgroundColor: C.bg,
-      // Ctrl+V (и Ctrl+Shift+V) на главной и в «Серверах» — импорт ссылки или конфига из буфера. В других
-      // разделах сочетание ничего не добавляет: подписка, появившаяся из журнала или настроек, была бы
-      // неожиданной.
+      // Ctrl+V (и Ctrl+Shift+V) на главной, в «Серверах» и «Маршрутизации» — импорт ссылки или конфига.
+      // В журнале, проверках и настройках сочетание ничего не добавляет.
       body: Shortcuts(
-        shortcuts: _index > 1
+        shortcuts: _index > 2
             ? const {}
             : const {
                 SingleActivator(LogicalKeyboardKey.keyV, control: true): _PasteIntent(),
