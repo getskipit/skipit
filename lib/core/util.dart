@@ -62,8 +62,13 @@ String describeNetError(Object e) {
 /// доступа к VPN, а сетевые ошибки печатают адрес целиком («…, uri = https://…/sub/КЛЮЧ»): в журнал
 /// на диске и в окно такой текст попадать не должен.
 String scrubUrls(String text) => text.replaceAllMapped(
-      RegExp(r'(https?://)([^/\s,;)]+)[^\s,;)]*', caseSensitive: false),
-      (m) => '${m[1]}${m[2]!.split('@').last}/…',
+      // Запятые, точки с запятой и скобки могут быть частью ключа: скрываем URL до пробела.
+      RegExp(r'https?://\S+', caseSensitive: false),
+      (m) {
+        final uri = Uri.tryParse(m[0]!);
+        if (uri == null || uri.host.isEmpty) return 'https://…';
+        return uri.scheme + '://' + uri.authority.split('@').last + '/…';
+      },
     );
 /// Случайный пароль для локальных входов ядра: 32 шестнадцатеричных знака.
 String randomSecret() {

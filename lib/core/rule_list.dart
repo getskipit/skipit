@@ -160,7 +160,9 @@ class RuleList {
           if (bytes.length + chunk.length > maxBytes) throw const FormatException('Список больше 10 МБ');
           bytes.add(chunk);
         }
-        if (res.contentLength >= 0 && bytes.length != res.contentLength) {
+        // При автоматической распаковке Content-Length относится к сжатому телу.
+        if (res.compressionState != HttpClientResponseCompressionState.decompressed &&
+            res.contentLength >= 0 && bytes.length != res.contentLength) {
           throw const HttpException('Файл скачался не полностью');
         }
         final data = bytes.takeBytes();

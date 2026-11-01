@@ -209,7 +209,7 @@ class XrayConfig {
       final cfg = buildFromProvider(provider, settings);
       addOwnRules(cfg, routing, settings, ruleLists: ruleLists);
       addAdBlock(cfg, settings);
-      if (settings.ownDns) useOwnDns(cfg, routing, settings);
+      if (settings.ownDns) useOwnDns(cfg, routing, settings, ruleLists: ruleLists);
       return cfg;
     }
 
@@ -223,7 +223,7 @@ class XrayConfig {
     final proxy = dropRemovedOptions(deepCopyMap(server.outbound))..['tag'] = 'proxy';
     final tweaks = applyServerTweaks(proxy, settings);
 
-    final directDomains = normalizeDomains(routing.directSites);
+    final directDomains = normalizeDomains([...routing.directSites, ...ruleLists?.directDomains ?? const []]);
     final remoteDns = _dnsServers(routing.remoteDnsList, fallback: '1.1.1.1');
     final domesticDns = _dnsServers(routing.domesticDnsList, direct: true, fallback: '77.88.8.8');
     final rules = <Map<String, dynamic>>[
@@ -581,10 +581,12 @@ class XrayConfig {
   /// Свой DNS вместо DNS провайдера (выключатель «Мой DNS»). Записи провайдера «для таких-то сайтов»
   /// (с полем domains) остаются, но спрашивают локальный DNS профиля; все остальные заменяет одна —
   /// удалённый DNS профиля. Локальный идёт напрямую, удалённый — через VPN-сервер.
-  static void useOwnDns(Map<String, dynamic> cfg, RoutingProfile profile, AppSettings settings) {
+  static void useOwnDns(Map<String, dynamic> cfg, RoutingProfile profile, AppSettings settings,
+      {RuleListEntries? ruleLists}) {
     final dns = (cfg['dns'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     final domestic = _dnsServers(profile.domesticDnsList, direct: true, fallback: '77.88.8.8');
-    final directDomains = hasOwnRules(profile) ? normalizeDomains(profile.directSites) : const <String>[];
+    final directDomains = hasOwnRules(profile) || (ruleLists?.directDomains.isNotEmpty ?? false)
+        ? normalizeDomains([...profile.directSites, ...ruleLists?.directDomains ?? const []]) : const <String>[];
     dns['servers'] = [
       ..._dnsServers(profile.remoteDnsList, fallback: '1.1.1.1'),
       for (final s in (dns['servers'] as List? ?? const []))

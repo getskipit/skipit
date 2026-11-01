@@ -96,6 +96,26 @@ void main() {
     expect(cdn, lessThan(catchAll));
   });
 
+  for (final provider in [false, true]) {
+    for (final ownDns in [false, true]) {
+      test('DNS для списка напрямую совпадает с ручным: provider=$provider, ownDns=$ownDns', () {
+        final server = LinkParser.parseText(provider ? _provider : 'trojan://pw@vpn.example:443#S').servers.single;
+        final settings = AppSettings()..ownDns = ownDns;
+        final manual = XrayConfig.build(server: server,
+            routing: RoutingProfile(name: 'Тест', directSites: ['domain:cdn.example']), settings: settings);
+        final linked = XrayConfig.build(server: server, routing: RoutingProfile(name: 'Тест'), settings: settings,
+            ruleLists: RuleListEntries()..directDomains.add('domain:cdn.example'));
+        expect(linked['dns'], manual['dns']);
+        if (provider && !ownDns) {
+          expect(linked['dns'], isNull, reason: 'DNS провайдера без «Мой DNS» не меняется');
+        } else {
+          expect(((linked['dns'] as Map)['servers'] as List).whereType<Map>()
+              .any((s) => (s['domains'] as List?)?.contains('domain:cdn.example') == true), isTrue);
+        }
+      });
+    }
+  }
+
   test('hasOwnRules: профиль только со списками по ссылке — свои правила есть', () {
     final p = RoutingProfile(name: 'Тест', ruleLists: [RuleListSource(url: 'https://rules.example/a.txt')]);
     expect(XrayConfig.hasOwnRules(p), isTrue);

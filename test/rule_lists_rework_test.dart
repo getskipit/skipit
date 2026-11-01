@@ -103,6 +103,28 @@ void main() {
       await expectLater(RuleList.readEntriesAsync(profile), throwsFormatException);
     });
 
+    test('gzip с Content-Length загружается полностью', () async {
+      final bytes = gzip.encode('example.com\n'.codeUnits);
+      server.listen((r) {
+        r.response.headers.set(HttpHeaders.contentEncodingHeader, 'gzip');
+        r.response.contentLength = bytes.length;
+        r.response.add(bytes);
+        r.response.close();
+      });
+      expect(await state.downloadRuleListSource('test', source), isTrue);
+      expect(source.count, 1);
+      expect(File(RuleList.path('test', source.url)).readAsStringSync(), 'domain:example.com');
+    });
+
+    test('ключ URL без пути и с разделителями не попадает в журнал ошибки', () async {
+      server.listen((r) => r.response..statusCode = 404..close());
+      for (final suffix in ['?token=example-secret', '/list?token=public,example-secret']) {
+        final signed = RuleListSource(url: 'http://127.0.0.1:${server.port}$suffix');
+        expect(await state.downloadRuleListSource('test', signed), isFalse);
+      }
+      expect(state.log.lines.any((l) => l.text.contains('example-secret')), isFalse);
+    });
+
     test('переадресация на список работает', () async {
       server.listen((r) {
         if (r.uri.path == '/list') {
