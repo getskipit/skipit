@@ -165,14 +165,21 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
             ]),
             const SizedBox(height: 10),
             Container(
+              key: const ValueKey('subscription-interval-panel'),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: C.bg,
                   border: Border.all(color: _invalid ? C.red : C.border),
                   borderRadius: BorderRadius.circular(C.r(14))),
-              child: _provider
-                  ? Text(tr('Каждый провайдер задаёт интервал своей подписки.'),
-                      style: TextStyle(color: C.muted, fontSize: 13, height: 1.4))
-                  : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              child: AnimatedCrossFade(
+                duration: const Duration(milliseconds: 240),
+                sizeCurve: Curves.easeInOutCubic,
+                firstCurve: Curves.easeInOut,
+                secondCurve: Curves.easeInOut,
+                alignment: Alignment.topLeft,
+                crossFadeState: _provider ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                firstChild: Text(tr('Каждый провайдер задаёт интервал своей подписки.'),
+                      style: TextStyle(color: C.muted, fontSize: 13, height: 1.4)),
+                secondChild: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Row(children: [
                         Text(tr('Каждые'), style: const TextStyle(fontSize: 13)),
                         const SizedBox(width: 12),
@@ -197,6 +204,7 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
                       Text(_invalid ? tr('Укажите целое число часов: 0 — выключить') : tr('0 — отключить автообновление'),
                           style: TextStyle(color: _invalid ? C.red : C.muted, fontSize: 12)),
                     ]),
+              ),
             ),
           ]),
         ),

@@ -152,6 +152,36 @@ void main() {
       expect(state.subscriptions.every((s) => s.effectiveUpdateIntervalHours == 12), isTrue);
     });
 
+    testWidgets('содержимое и высота интервала меняются плавно, введённое число сохраняется', (tester) async {
+      await open(tester);
+      final panel = find.byKey(const ValueKey('subscription-interval-panel'));
+      final field = find.byKey(const ValueKey('subscription-interval'));
+      await tester.enterText(field, '7');
+      final before = tester.getSize(panel).height;
+      await tester.tap(find.text('Провайдера'));
+      await tester.pump();
+      expect(tester.getSize(panel).height, closeTo(before, 0.1));
+      final heights = [before];
+      for (var i = 0; i < 7; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+        heights.add(tester.getSize(panel).height);
+      }
+      final after = heights.last;
+      expect(after, lessThan(before));
+      expect(heights.any((h) => h > after + 1 && h < before - 1), isTrue);
+      for (var i = 1; i < heights.length; i++) {
+        expect(heights[i], lessThanOrEqualTo(heights[i - 1] + 0.1));
+        expect((heights[i] - heights[i - 1]).abs(), lessThan((before - after) * 0.6));
+      }
+      await tester.tap(find.text('Свой'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 280));
+      expect(tester.getSize(panel).height, closeTo(before, 0.1));
+      expect(tester.widget<TextField>(field).controller!.text, '7');
+      await tester.tap(find.text('Отмена'));
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
     for (final language in [Lang.ru, Lang.en]) {
       testWidgets('минимальное окно: ${language.name}', (tester) async {
         lang = language;
