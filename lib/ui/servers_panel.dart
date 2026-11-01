@@ -20,6 +20,7 @@ import 'shell.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'subscription_settings_dialog.dart';
 import '../l10n/l10n.dart';
 
 /// Список серверов на главной: поиск, группы подписок с информацией, строки серверов.
@@ -172,6 +173,8 @@ class _ServersPanelState extends State<ServersPanel> {
           AppMenuItem('qr-file', tr('QR-код из картинки…'), icon: Icons.image_outlined),
           const AppMenuItem.divider(),
           AppMenuItem('update', tr('Обновить все подписки'), icon: Icons.sync_rounded),
+          if (state.subscriptions.isNotEmpty)
+            AppMenuItem('subscription-settings', tr('Настройки подписок'), icon: Icons.tune_rounded),
           const AppMenuItem.divider(),
           // Порядок серверов внутри подписки — один на главную и на раздел «Серверы».
           for (final (value, label) in [
@@ -193,6 +196,8 @@ class _ServersPanelState extends State<ServersPanel> {
               importQrFromFile(context);
             case 'update':
               state.updateAllSubscriptions();
+            case 'subscription-settings':
+              showDialog<void>(context: context, builder: (_) => SubscriptionSettingsDialog(state: state));
             case final String sort when sort.startsWith('sort-'):
               state.settings.serverSort = sort.substring(5);
               state.changed();
@@ -499,7 +504,7 @@ class _GroupCardState extends State<_GroupCard> {
   Future<void> _edit(AppState state, Subscription sub) async {
     final name = TextEditingController(text: sub.name);
     final url = TextEditingController(text: sub.url);
-    final interval = TextEditingController(text: '${sub.updateIntervalHours}');
+    final interval = TextEditingController(text: '${sub.effectiveUpdateIntervalHours}');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -526,7 +531,8 @@ class _GroupCardState extends State<_GroupCard> {
     if (ok != true) return;
     sub.name = name.text.trim();
     sub.url = url.text.trim();
-    sub.updateIntervalHours = asInt(interval.text) ?? sub.updateIntervalHours;
+    final hours = asInt(interval.text);
+    if (hours != null && hours >= 0 && hours != sub.effectiveUpdateIntervalHours) sub.updateIntervalOverrideHours = hours;
     state.changed();
   }
 
@@ -550,7 +556,7 @@ class _GroupCardState extends State<_GroupCard> {
         ? tr('{0} серв.', [widget.servers.length])
         : [
             if (sub.lastUpdated != null) formatDateTime(sub.lastUpdated!),
-            sub.updateIntervalHours > 0 ? tr('Автообновление — {0} ч.', [sub.updateIntervalHours]) : tr('Без автообновления'),
+            sub.effectiveUpdateIntervalHours > 0 ? tr('Автообновление — {0} ч.', [sub.effectiveUpdateIntervalHours]) : tr('Без автообновления'),
           ].join('  |  ');
 
     // Перетаскивание заголовка: за указателем едет маленькая плашка с названием, а не вся карточка —

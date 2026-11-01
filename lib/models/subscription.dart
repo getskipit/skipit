@@ -8,6 +8,7 @@ class Subscription {
     this.name = '',
     this.lastUpdated,
     this.updateIntervalHours = 12,
+    this.updateIntervalOverrideHours,
     this.upload,
     this.download,
     this.total,
@@ -27,6 +28,11 @@ class Subscription {
   String name;
   DateTime? lastUpdated;
   int updateIntervalHours;
+
+  /// Свой интервал не затирается заголовками подписки; null — использовать интервал провайдера.
+  int? updateIntervalOverrideHours;
+  int get effectiveUpdateIntervalHours => updateIntervalOverrideHours != null && updateIntervalOverrideHours! >= 0
+      ? updateIntervalOverrideHours! : updateIntervalHours;
   int? upload;
   int? download;
   int? total;
@@ -57,10 +63,10 @@ class Subscription {
   int get used => (upload ?? 0) + (download ?? 0);
 
   bool get isDue {
-    if (updateIntervalHours <= 0) return false;
+    if (effectiveUpdateIntervalHours <= 0) return false;
     final last = lastUpdated;
     return last == null ||
-        DateTime.now().difference(last) >= Duration(hours: updateIntervalHours);
+        DateTime.now().difference(last) >= Duration(hours: effectiveUpdateIntervalHours);
   }
 
   /// Метаданные из HTTP-заголовков или строк `#key: value` в теле (формат Happ).
@@ -121,6 +127,7 @@ class Subscription {
         'name': name,
         'lastUpdated': lastUpdated?.toIso8601String(),
         'updateIntervalHours': updateIntervalHours,
+        if (updateIntervalOverrideHours != null) 'updateIntervalOverrideHours': updateIntervalOverrideHours,
         'upload': upload,
         'download': download,
         'total': total,
@@ -141,6 +148,7 @@ class Subscription {
         name: j['name'] as String? ?? '',
         lastUpdated: DateTime.tryParse(j['lastUpdated'] as String? ?? ''),
         updateIntervalHours: asInt(j['updateIntervalHours']) ?? 12,
+        updateIntervalOverrideHours: asInt(j['updateIntervalOverrideHours']),
         upload: asInt(j['upload']),
         download: asInt(j['download']),
         total: asInt(j['total']),

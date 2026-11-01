@@ -1270,4 +1270,11 @@ const en = <String, String>{
   'В списке больше 200000 строк': 'The list exceeds 200000 lines',
   'Загрузка…': 'Downloading…',
   '{0}: повторяю обновление после сбоя сети при запуске': '{0}: retrying the update after a network error at startup',
+  'Настройки подписок': 'Subscription settings',
+  'Выберите подписки и задайте общий интервал обновления.': 'Select subscriptions and set a shared update interval.',
+  'Все подписки': 'All subscriptions',
+  'Интервал провайдера': 'Provider interval',
+  'Укажите целое число часов: 0 — выключить': 'Enter whole hours: 0 to disable',
+  'Свой интервал сохранится после обновления подписки.': 'Your interval is kept when the subscription is updated.',
+  'Настройки применены к подпискам: {0}': 'Settings applied to subscriptions: {0}',
 };
