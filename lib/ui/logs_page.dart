@@ -14,6 +14,7 @@ import 'app_menu.dart';
 import 'check_page.dart';
 import 'flag_text.dart';
 import 'groups.dart';
+import 'mouse_back.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -239,7 +240,10 @@ class _LogsPageState extends State<LogsPage> {
               : _padded(_card(sessions.isEmpty ? _empty(tr('Здесь пока пусто')) : _history(sessions))),
         };
 
-        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        return MouseBack(
+          onBack: picked != null ? () => setState(() => _historyId = null)
+              : !listMode && _group != null ? () => setState(() => _group = null) : null,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           header,
           // На странице группы — переключатель между группами: в соседнюю не надо возвращаться к плиткам.
           Reveal(
@@ -287,7 +291,8 @@ class _LogsPageState extends State<LogsPage> {
               ),
             ),
           ),
-        ]);
+        ]),
+        );
       },
     );
   }

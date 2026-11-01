@@ -17,6 +17,7 @@ import '../version.dart';
 import 'app_icon.dart';
 import 'appearance_previews.dart';
 import 'groups.dart';
+import 'mouse_back.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -1109,7 +1110,9 @@ class _SettingsPageState extends State<SettingsPage> {
     return _SettingsQuery(
       query: query,
       // Заголовок со стрелкой назад и поиском закреплён: прокручиваются только настройки под ним.
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      child: MouseBack(
+        onBack: !listMode && query.isEmpty && _group != null ? () => openGroup(null) : null,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         header,
         Expanded(
           child: GroupListLayout(
@@ -1153,6 +1156,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
       ]),
+      ),
     );
   }
 }
