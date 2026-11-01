@@ -272,13 +272,15 @@ void main() {
     });
     state.routingProfiles.addAll([
       RoutingProfile.global(),
-      RoutingProfile(name: 'Мой профиль', ruleLists: [RuleListSource(url: 'https://rules.example/list.txt')]),
+      RoutingProfile(name: 'Мой профиль', ruleLists: [RuleListSource(url: 'https://rules.example/private-example-key/list.txt?token=example-secret')]),
     ]);
-    state.log.add('app', 'Предупреждение: список не обновлён (https://rules.example/list.txt)');
+    state.log.add('app', 'Предупреждение: список не обновлён (https://rules.example/private-example-key/list.txt?token=example-secret)');
 
     final path = await state.makeReport(tmp.path);
     final text = await File(path).readAsString();
     expect(text, isNot(contains('rules.example')));
+    expect(text, isNot(contains('private-example-key')));
+    expect(text, isNot(contains('example-secret')));
   });
 
   test('исключения системного прокси: пусто по умолчанию, свой список сохраняется', () {

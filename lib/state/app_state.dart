@@ -1169,6 +1169,11 @@ class AppState extends ChangeNotifier {
       dnsNodes: dnsNodes,
       // Адрес подписки провайдера — на том же домене, что и его серверы, или на своём. Ссылки на
       // поддержку и сайт сюда не идут: они часто ведут в мессенджер, и скрылся бы весь его домен.
+      privateUrls: {
+        for (final sub in subscriptions) sub.url,
+        for (final sub in subscriptions) if (sub.fallbackUrl != null) sub.fallbackUrl!,
+        for (final profile in routingProfiles) for (final source in profile.ruleLists) source.url,
+      },
       providerHosts: {
         for (final s in subscriptions)
           for (final url in [s.url, if (s.fallbackUrl != null) s.fallbackUrl!])
@@ -2985,14 +2990,14 @@ class AppState extends ChangeNotifier {
       _ruleListTriedAt.remove(url);
       if (parsed.skipped > 0) {
         log.add('app', tr('В списке {0} пропущено записей, которые не похожи на домен или адрес: {1}',
-            [parsed.skipped, url]));
+            [parsed.skipped, scrubUrls(url)]));
       }
       changed();
       return true;
     } catch (e) {
       _ruleListTriedAt[url] = DateTime.now();
       final reason = e is FormatException ? tr(e.message) : e is HttpException ? tr(e.message) : '$e';
-      log.add('app', tr('Предупреждение: список не обновлён ({0}): {1}', [url, reason]));
+      log.add('app', tr('Предупреждение: список не обновлён ({0}): {1}', [scrubUrls(url), scrubUrls(reason)]));
       return false;
     } finally {
       try { if (await tmp.exists()) await tmp.delete(); } on FileSystemException { /* Уже удалён. */ }

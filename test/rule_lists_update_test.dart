@@ -52,7 +52,7 @@ void main() {
 
     final state = AppState();
     final profile = RoutingProfile(name: 'Тест', ruleLists: [
-      RuleListSource(url: 'http://127.0.0.1:${srv.port}/list', action: 'direct'),
+      RuleListSource(url: 'http://127.0.0.1:${srv.port}/private-example-key?token=example-secret', action: 'direct'),
     ]);
     final source = profile.ruleLists.single;
     expect(await state.downloadRuleListSource(profile.id, source), isTrue);
@@ -65,6 +65,7 @@ void main() {
     final cache = File('${tmp.path}\\rulesets\\${RuleList.cacheFile(profile.id, source.url)}');
     expect(cache.existsSync(), isTrue);
     expect(state.log.lines.any((l) => l.text.contains('Предупреждение')), isTrue);
+    expect(state.log.lines.any((l) => l.text.contains('private-example-key') || l.text.contains('example-secret')), isFalse);
 
     await srv.close(force: true);
     await _cleanUp(state, tmp);

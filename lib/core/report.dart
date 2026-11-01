@@ -269,6 +269,7 @@ class DiagReport {
     Map<String, dynamic>? xray,
     Map<String, dynamic>? singbox,
     Set<String> providerHosts = const {},
+    Set<String> privateUrls = const {},
     Set<String> serverIps = const {},
     Map<String, List<String>> dnsNodes = const {},
     required String log,
@@ -312,6 +313,10 @@ class DiagReport {
       ..writeln()
       ..writeln(tr('=== Журнал подключения{0} ===', [logCut ? tr(' (конец, последние {0} МБ)', [logLimit ~/ (1024 * 1024)]) : '']))
       ..writeln(log);
-    return mask(b.toString(), servers, domains: domains);
+    var text = b.toString();
+    // В старых журналах ссылка могла сохраниться целиком: скрываем и путь с ключом, и параметры.
+    final urls = privateUrls.where((u) => u.isNotEmpty).toList()..sort((a, b) => b.length.compareTo(a.length));
+    for (final url in urls) { text = text.replaceAll(url, _hiddenDomain); }
+    return mask(text, servers, domains: domains);
   }
 }
