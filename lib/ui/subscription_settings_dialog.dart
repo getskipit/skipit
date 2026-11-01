@@ -100,7 +100,7 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
                   final sub = _subscriptions[index];
                   final selected = _selected.contains(sub.id);
                   return Material(
-                    color: selected ? C.orange.withValues(alpha: 0.045) : Colors.transparent,
+                    color: Colors.transparent,
                     child: InkWell(
                       key: ValueKey('subscription-${sub.id}'),
                       onTap: () => _toggle(sub.id),
