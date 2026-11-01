@@ -103,4 +103,6 @@ class AppPaths {
   static Directory get logDir => Directory('${dataDir.path}\\logs');
   static String get geoipFile => '${geoDir.path}\\geoip.dat';
   static String get geositeFile => '${geoDir.path}\\geosite.dat';
+  /// Кэш списков правил по ссылке: файл на источник.
+  static String get ruleListsDir => '${dataDir.path}\\rulesets';
 }

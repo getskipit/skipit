@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:skipit/core/paths.dart';
 import 'package:skipit/core/report.dart';
+import 'package:skipit/models/routing.dart';
 import 'package:skipit/models/settings.dart';
+import 'package:skipit/state/app_state.dart';
 
 void main() {
   const uuid = '11111111-2222-3333-4444-555555555555';
@@ -256,6 +259,26 @@ void main() {
     }
     expect(text, contains('(2 программ)'));
     expect(text, contains('socks'));
+  });
+
+  test('отчёт: адрес списка правил по ссылке скрывается, как адрес подписки', () async {
+    await AppPaths.init();
+    final tmp = await Directory.systemTemp.createTemp('skipit-report-rule-list');
+    AppPaths.dataDir = tmp;
+    final state = AppState();
+    addTearDown(() async {
+      state.dispose();
+      await tmp.delete(recursive: true);
+    });
+    state.routingProfiles.addAll([
+      RoutingProfile.global(),
+      RoutingProfile(name: 'Мой профиль', ruleLists: [RuleListSource(url: 'https://rules.example/list.txt')]),
+    ]);
+    state.log.add('app', 'Предупреждение: список не обновлён (https://rules.example/list.txt)');
+
+    final path = await state.makeReport(tmp.path);
+    final text = await File(path).readAsString();
+    expect(text, isNot(contains('rules.example')));
   });
 
   test('исключения системного прокси: пусто по умолчанию, свой список сохраняется', () {

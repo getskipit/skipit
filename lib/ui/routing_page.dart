@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/util.dart';
+import '../core/rule_list.dart';
 import '../core/xray_config.dart';
 import '../models/routing.dart';
 import '../state/app_scope.dart';
@@ -32,6 +34,12 @@ class RoutingPage extends StatelessWidget {
       state.routingProfiles.add(result);
     }
     state.changed();
+    await state.updateRuleLists(result);
+    state.gcRuleListCache();
+    if (result.ruleLists.any((s) => s.updatedAt == null)) {
+      state.toast(tr('Не все списки загружены. Откройте профиль и нажмите «Обновить».'));
+      return;
+    }
     if (state.isConnected && state.settings.selectedRoutingId == result.id) {
       await state.reconnect();
     }
@@ -373,6 +381,7 @@ class _ProfileTile extends StatelessWidget {
               onPressed: () async {
                 if (!await confirm(context, tr('Удалить профиль?'), profile.name)) return;
                 state.routingProfiles.remove(profile);
+                state.gcRuleListCache();
                 if (state.settings.selectedRoutingId == profile.id) {
                   state.setRouting(RoutingProfile.globalPresetId);
                 } else {
@@ -398,6 +407,7 @@ class _RoutingEditorState extends State<_RoutingEditor> {
 
   @override
   void dispose() {
+    for (final c in [_name, _remoteDns, _domesticDns, _hosts, ..._lists.values, ..._urlControllers]) { c.dispose(); }
     _scroll.dispose();
     super.dispose();
   }
@@ -420,7 +430,118 @@ class _RoutingEditorState extends State<_RoutingEditor> {
   List<String> _lines(String key) =>
       _lists[key]!.text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
 
+  final List<TextEditingController> _urlControllers = [];
+  final Set<RuleListSource> _loading = {};
+  final Set<RuleListSource> _failed = {};
+
+  Future<void> _addRuleList() async {
+    final url = TextEditingController();
+    _urlControllers.add(url);
+    var action = 'proxy';
+    var invalid = false;
+    final source = await showDialog<RuleListSource>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(tr('Добавить список')),
+          content: SizedBox(
+            width: 520,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: url,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: tr('Адрес списка'),
+                  hintText: 'https://rules.example/list.txt',
+                  errorText: invalid ? tr('Некорректный адрес') : null,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Segmented<String>(
+                  value: action,
+                  items: {'proxy': tr('через VPN'), 'direct': tr('напрямую'), 'block': tr('Блокировать')},
+                  onChanged: (v) => setLocal(() => action = v),
+                ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена'))),
+            GradientButton(
+              label: tr('Добавить'),
+              onPressed: () {
+                final value = url.text.trim();
+                if (!RuleList.validUrl(value) || p.ruleLists.any((s) => s.url == value)) {
+                  setLocal(() => invalid = true);
+                  return;
+                }
+                Navigator.pop(ctx, RuleListSource(url: value, action: action));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source != null && mounted) setState(() => p.ruleLists.add(source));
+  }
+
+  Future<void> _refreshList(RuleListSource source) async {
+    final state = AppScope.of(context);
+    setState(() { _loading.add(source); _failed.remove(source); });
+    final ok = await state.downloadRuleListSource(p.id, source);
+    if (!mounted) return;
+    setState(() { _loading.remove(source); if (!ok) _failed.add(source); });
+  }
+
+  Widget _ruleListsSection() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Wrap(spacing: 16, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          Text(tr('Списки по ссылке'), style: const TextStyle(fontWeight: FontWeight.w700)),
+          GhostButton(label: tr('Добавить список'), icon: Icons.add_rounded, onPressed: _addRuleList),
+        ]),
+        const SizedBox(height: 6),
+        Text(tr('Домены и IP — по одному в строке. Обновление раз в неделю через VPN. '
+            'Новые записи применятся при следующем подключении.'),
+            style: TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
+        if (p.ruleLists.isEmpty)
+          Padding(padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(tr('Списков пока нет'), style: TextStyle(color: C.muted))),
+        for (final source in p.ruleLists)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(border: Border.all(color: C.muted.withValues(alpha: 0.25)),
+                borderRadius: BorderRadius.circular(12)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Tooltip(message: source.url, child: Text(source.url, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13))),
+              const SizedBox(height: 8),
+              Text(_loading.contains(source) ? tr('Загрузка…') : _failed.contains(source)
+                  ? tr('Не удалось обновить. Прежний список сохранён.') : source.updatedAt == null
+                      ? tr('ещё не загружен')
+                      : tr('{0} записей · обновлён {1}', [source.count, formatDateTime(source.updatedAt!)]),
+                  style: TextStyle(color: _failed.contains(source) ? C.warn : C.muted, fontSize: 12)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                AppDropdown<String>(value: source.action,
+                    items: {'proxy': tr('через VPN'), 'direct': tr('напрямую'), 'block': tr('Блокировать')},
+                    onChanged: (v) => setState(() => source.action = v)),
+                if (_loading.contains(source))
+                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  GhostButton(label: tr('Обновить'), icon: Icons.refresh_rounded,
+                      onPressed: () => _refreshList(source)),
+                IconButton(tooltip: tr('Удалить'), icon: Icon(Icons.delete_outline_rounded, size: 20, color: C.red),
+                    onPressed: _loading.contains(source) ? null : () => setState(() => p.ruleLists.remove(source))),
+              ]),
+            ]),
+          ),
+      ]);
+
   void _save() {
+    if (_loading.isNotEmpty) return;
     p.name = _name.text.trim().isEmpty ? tr('Профиль') : _name.text.trim();
     p.setDns(remote: _remoteDns.text, domestic: _domesticDns.text);
     p.proxySites = _lines('proxySites');
@@ -537,12 +658,14 @@ class _RoutingEditorState extends State<_RoutingEditor> {
                   floatingLabelBehavior: FloatingLabelBehavior.always,
                 ),
               ),
+              const SizedBox(height: 18),
+              _ruleListsSection(),
             ]),
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Отмена'))),
-          GradientButton(label: tr('Сохранить'), onPressed: _save),
+          GradientButton(label: tr('Сохранить'), onPressed: _loading.isEmpty ? _save : null),
         ],
       );
 }

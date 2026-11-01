@@ -15,6 +15,34 @@ class RoutingDeeplink {
   final bool off;
 }
 
+/// Источник списков правил по ссылке: файл с доменами/адресами, который программа скачивает
+/// и обновляет сама. Записи из кэша встают в правила профиля рядом с ручными списками.
+/// Действие: 'proxy' — через VPN, 'direct' — напрямую, 'block' — блокировать.
+class RuleListSource {
+  RuleListSource({required this.url, this.action = 'proxy', this.count = 0, this.updatedAt});
+
+  String url;
+  String action;
+  int count;
+  DateTime? updatedAt;
+
+  Map<String, dynamic> toJson() => {
+        'url': url,
+        'action': action,
+        'count': count,
+        'updatedAt': updatedAt?.millisecondsSinceEpoch,
+      };
+
+  factory RuleListSource.fromJson(Map<String, dynamic> j) => RuleListSource(
+        url: (j['url'] ?? '').toString(),
+        action: const ['proxy', 'direct', 'block'].contains(j['action']) ? j['action'] as String : 'proxy',
+        count: j['count'] is int ? j['count'] as int : int.tryParse('${j['count']}') ?? 0,
+        updatedAt: j['updatedAt'] is int
+            ? DateTime.fromMillisecondsSinceEpoch(j['updatedAt'] as int)
+            : null,
+      );
+}
+
 /// Профиль маршрутизации, совместимый по полям с Happ (`happ://routing/add/{base64}`).
 class RoutingProfile {
   RoutingProfile({
@@ -34,6 +62,7 @@ class RoutingProfile {
     List<String>? proxyIp,
     List<String>? blockSites,
     List<String>? blockIp,
+    List<RuleListSource>? ruleLists,
     Map<String, String>? dnsHosts,
     this.geoipUrl = defaultGeoipUrl,
     this.geositeUrl = defaultGeositeUrl,
@@ -45,6 +74,7 @@ class RoutingProfile {
         proxyIp = proxyIp ?? [],
         blockSites = blockSites ?? [],
         blockIp = blockIp ?? [],
+        ruleLists = ruleLists ?? [],
         dnsHosts = dnsHosts ?? {};
 
   static const defaultGeoipUrl =
@@ -73,6 +103,7 @@ class RoutingProfile {
   List<String> proxyIp;
   List<String> blockSites;
   List<String> blockIp;
+  List<RuleListSource> ruleLists;
   Map<String, String> dnsHosts;
   String geoipUrl;
   String geositeUrl;
@@ -125,7 +156,8 @@ class RoutingProfile {
 
   String get summary {
     final base = globalProxy ? tr('По умолчанию через VPN') : tr('По умолчанию напрямую');
-    return ruleCount == 0 ? base : tr('{0} · правил: {1}', [base, ruleCount]);
+    final manual = ruleCount == 0 ? base : tr('{0} · правил: {1}', [base, ruleCount]);
+    return ruleLists.isEmpty ? manual : tr('{0} · списков: {1}', [manual, ruleLists.length]);
   }
 
   /// Единственный встроенный профиль: без правил, весь трафик через VPN (как по умолчанию в Happ).
@@ -179,6 +211,14 @@ class RoutingProfile {
       rawHosts.forEach((k, v) => hosts[k.toString()] = v.toString());
     }
 
+    final lists = <RuleListSource>[];
+    final rawLists = j['RuleLists'];
+    if (rawLists is List) {
+      for (final e in rawLists) {
+        if (e is Map) lists.add(RuleListSource.fromJson(e.cast<String, dynamic>()));
+      }
+    }
+
     return RoutingProfile(
       id: id,
       name: str('Name', tr('Импортированный профиль')),
@@ -196,6 +236,7 @@ class RoutingProfile {
       proxyIp: list('ProxyIp'),
       blockSites: list('BlockSites'),
       blockIp: list('BlockIp'),
+      ruleLists: lists,
       dnsHosts: hosts,
       geoipUrl: str('Geoipurl', defaultGeoipUrl),
       geositeUrl: str('Geositeurl', defaultGeositeUrl),
@@ -221,6 +262,7 @@ class RoutingProfile {
         'ProxyIp': proxyIp,
         'BlockSites': blockSites,
         'BlockIp': blockIp,
+        'RuleLists': [for (final s in ruleLists) s.toJson()],
         'DomainStrategy': domainStrategy,
         'FakeDNS': 'false',
       };

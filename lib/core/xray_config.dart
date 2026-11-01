@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../models/app_rules.dart';
+import 'rule_list.dart';
 import '../models/routing.dart';
 import '../models/server.dart';
 import '../models/settings.dart';
@@ -199,11 +200,14 @@ class XrayConfig {
     required ServerProfile server,
     required RoutingProfile routing,
     required AppSettings settings,
+
+    /// Записи кэша списков по ссылке (см. RuleList.readEntries): сливаются с ручными списками.
+    RuleListEntries? ruleLists,
   }) {
     final provider = providerConfig(server);
     if (provider != null) {
       final cfg = buildFromProvider(provider, settings);
-      addOwnRules(cfg, routing, settings);
+      addOwnRules(cfg, routing, settings, ruleLists: ruleLists);
       addAdBlock(cfg, settings);
       if (settings.ownDns) useOwnDns(cfg, routing, settings);
       return cfg;
@@ -234,9 +238,12 @@ class XrayConfig {
       if (i.isNotEmpty) rules.add({'ip': i, 'outboundTag': tag});
     }
 
-    add(routing.blockSites, routing.blockIp, 'block');
-    add(routing.proxySites, routing.proxyIp, 'proxy');
-    add(routing.directSites, routing.directIp, 'direct');
+    add([...routing.blockSites, ...ruleLists?.blockDomains ?? const []],
+        [...routing.blockIp, ...ruleLists?.blockIps ?? const []], 'block');
+    add([...routing.proxySites, ...ruleLists?.proxyDomains ?? const []],
+        [...routing.proxyIp, ...ruleLists?.proxyIps ?? const []], 'proxy');
+    add([...routing.directSites, ...ruleLists?.directDomains ?? const []],
+        [...routing.directIp, ...ruleLists?.directIps ?? const []], 'direct');
     rules.add({'network': 'tcp,udp', 'outboundTag': routing.globalProxy ? 'proxy' : 'direct'});
 
     final cfg = <String, dynamic>{
@@ -519,16 +526,20 @@ class XrayConfig {
     return proxy == null ? null : {'outboundTag': (proxy['tag'] ??= 'proxy') as String};
   }
 
-  /// Есть ли у профиля свои правила для сайтов и IP. Встроенный «Весь трафик через VPN» — это «правил нет».
-  static bool hasOwnRules(RoutingProfile r) => r.id != RoutingProfile.globalPresetId && r.ruleCount > 0;
+  /// Есть ли у профиля свои правила для сайтов и IP — ручные или списки по ссылке.
+  /// Встроенный «Весь трафик через VPN» — это «правил нет».
+  static bool hasOwnRules(RoutingProfile r) =>
+      r.id != RoutingProfile.globalPresetId && (r.ruleCount > 0 || r.ruleLists.isNotEmpty);
 
   /// Свой профиль вместе с правилами провайдера: его списки «блокировать», «через VPN» и «напрямую»
   /// стоят после всех правил провайдера, перед его правилом «всё остальное». Они решают только за то,
   /// о чём провайдер ничего не сказал, и потому не могут ему противоречить: при споре действует правило
   /// провайдера. Когда узнавать адрес сайта (domainStrategy), тоже определяет конфиг провайдера.
   /// «Через VPN» — это балансировщик провайдера, если он есть: автовыбор сервера сохраняется.
-  static void addOwnRules(Map<String, dynamic> cfg, RoutingProfile profile, AppSettings settings) {
-    if (!hasOwnRules(profile)) return;
+  static void addOwnRules(Map<String, dynamic> cfg, RoutingProfile profile, AppSettings settings,
+      {RuleListEntries? ruleLists}) {
+    // Записи кэша списков по ссылке применяются и тогда, когда ручных правил нет.
+    if (!hasOwnRules(profile) && (ruleLists == null || ruleLists.isEmpty)) return;
     final vpn = _vpnTarget(cfg);
     final own = <Map<String, dynamic>>[];
     void add(List<String> domains, List<String> ips, Map<String, String>? target) {
@@ -539,9 +550,12 @@ class XrayConfig {
       if (i.isNotEmpty) own.add({'ip': i, ...target});
     }
 
-    add(profile.blockSites, profile.blockIp, const {'outboundTag': _block});
-    add(profile.proxySites, profile.proxyIp, vpn);
-    add(profile.directSites, profile.directIp, const {'outboundTag': _direct});
+    add([...profile.blockSites, ...ruleLists?.blockDomains ?? const []],
+        [...profile.blockIp, ...ruleLists?.blockIps ?? const []], const {'outboundTag': _block});
+    add([...profile.proxySites, ...ruleLists?.proxyDomains ?? const []],
+        [...profile.proxyIp, ...ruleLists?.proxyIps ?? const []], vpn);
+    add([...profile.directSites, ...ruleLists?.directDomains ?? const []],
+        [...profile.directIp, ...ruleLists?.directIps ?? const []], const {'outboundTag': _direct});
     if (own.isEmpty) return;
     _addOwnOutbounds(cfg, settings);
     final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};

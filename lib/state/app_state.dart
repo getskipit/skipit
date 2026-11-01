@@ -16,6 +16,7 @@ import '../core/pac.dart';
 import '../core/paths.dart';
 import '../core/ping.dart';
 import '../core/report.dart';
+import '../core/rule_list.dart';
 import '../core/service_client.dart';
 import '../core/site_check.dart';
 import '../core/speed_test.dart';
@@ -916,6 +917,7 @@ class AppState extends ChangeNotifier {
     _updateTimer = Timer.periodic(const Duration(hours: 6), (_) {
       if (!downloadingAppUpdate) checkUpdates(silent: true);
       unawaited(_refreshOldGeoFiles());
+      unawaited(_refreshOldRuleLists());
     });
     notifyListeners();
 
@@ -1171,6 +1173,9 @@ class AppState extends ChangeNotifier {
         for (final s in subscriptions)
           for (final url in [s.url, if (s.fallbackUrl != null) s.fallbackUrl!])
             if (Uri.tryParse(url)?.host case final String host when host.isNotEmpty) host,
+        for (final p in routingProfiles)
+          for (final s in p.ruleLists)
+            if (Uri.tryParse(s.url)?.host case final String host when host.isNotEmpty) host,
       },
       log: journal.tail,
       logStart: journal.head,
@@ -1561,6 +1566,7 @@ class AppState extends ChangeNotifier {
       routingProfiles.add(p);
     }
     if (rd.activate || subscriptionId != null) setRouting(p.id);
+    gcRuleListCache();
     return tr('маршрутизация «{0}»', [p.name]);
   }
 
@@ -1739,6 +1745,7 @@ class AppState extends ChangeNotifier {
     subscriptions.remove(sub);
     servers.removeWhere((s) => s.subscriptionId == sub.id);
     routingProfiles.removeWhere((r) => r.subscriptionId == sub.id);
+    gcRuleListCache();
     if (selectedServer == null) settings.selectedServerId = servers.firstOrNull?.id;
     changed();
   }
@@ -2221,19 +2228,8 @@ class AppState extends ChangeNotifier {
       if (server == null) throw CoreException(tr('Сначала добавьте и выберите сервер'));
 
       final routing = routingForConfig;
-      // Гео-базы этому подключению могут быть не нужны — тогда профиль прошлого подключения не должен
-      // остаться для фонового обновления.
-      _geoRouting = null;
       // У серверов с JSON-конфигом провайдера действуют его правила, а правила профиля — вместе с ними.
-      final provider = XrayConfig.providerConfig(server);
-      if (provider != null) {
-        final own = XrayConfig.hasOwnRules(routing) && XrayConfig.needsGeoFiles(routing);
-        if (own || settings.adBlock || XrayConfig.configNeedsGeoFiles(provider)) {
-          await _ensureGeoFiles(routing, force: true);
-        }
-      } else {
-        await _ensureGeoFiles(routing, force: settings.adBlock);
-      }
+      await prepareConnectGeoAndLists(routing, XrayConfig.providerConfig(server));
 
       _checkCancel();
       // Порты проверяются ДО запуска: иначе «порт открыт» мог бы означать чужую программу
@@ -2256,7 +2252,8 @@ class AppState extends ChangeNotifier {
       // Сама программа ходит через свой HTTP-порт (обновления, подписки, geo-базы) — с тем же паролем.
       Net.proxyAuth = session.httpAuth ? '${session.portUser}:${session.portPassword}' : null;
 
-      final config = XrayConfig.build(server: server, routing: routing, settings: session);
+      final config = XrayConfig.build(
+          server: server, routing: routing, settings: session, ruleLists: _preparedRuleLists);
       final xrayTun = this.xrayTun;
       // DNS по программам: запрос DNS отправляет не сама программа, а служба Windows «DNS-клиент», и в ядре
       // не видно, чей он. Служба SkipIt узнаёт это по журналу DNS-клиента: программам, которые идут мимо VPN,
@@ -2565,8 +2562,11 @@ class AppState extends ChangeNotifier {
       status = ConnStatus.connected;
       connectedAt = DateTime.now();
       log.add('app', tr('Подключено'));
-      // Через минуту, когда подключение устоялось, — не устарели ли гео-базы.
-      Timer(const Duration(minutes: 1), () => unawaited(_refreshOldGeoFiles()));
+      // Через минуту, когда подключение устоялось, — не устарели ли гео-базы и списки по ссылке.
+      Timer(const Duration(minutes: 1), () {
+        unawaited(_refreshOldGeoFiles());
+        unawaited(_refreshOldRuleLists());
+      });
       _flushDns();
       stats.reset();
       _statsTimer?.cancel();
@@ -2829,6 +2829,35 @@ class AppState extends ChangeNotifier {
     if (settings.notifications) unawaited(Tray.notify(text, kind: kind));
   }
 
+  /// Гео-базы и списки по ссылке перед подключением. Гео-базы скачиваются, если они нужны самому
+  /// профилю, конфигу провайдера, блокировке рекламы или спискам по ссылке с записями
+  /// geosite:/geoip: (без гео-файлов ядро с таким конфигом не запустится). Профиль для фонового
+  /// обновления списков — сохранённый ([selectedRouting]), а не копия из [routingForConfig]
+  /// при включённом «Мой DNS»: обновлённые число записей и дата должны попасть в настройки.
+  Future<void> prepareConnectGeoAndLists(RoutingProfile routing, Map<String, dynamic>? provider) async {
+    // Гео-базы этому подключению могут быть не нужны — тогда профиль прошлого подключения не должен
+    // остаться для фонового обновления. То же со списками по ссылке.
+    _geoRouting = null;
+    _ruleListRouting = null;
+    for (final source in routing.ruleLists) {
+      if (!await File(RuleList.path(routing.id, source.url)).exists()) {
+        throw CoreException(tr('Сначала загрузите списки в редакторе профиля'));
+      }
+    }
+    _preparedRuleLists = await RuleList.readEntriesAsync(routing);
+    if (provider != null) {
+      final own = XrayConfig.hasOwnRules(routing) &&
+          (XrayConfig.needsGeoFiles(routing) || _preparedRuleLists!.needsGeo);
+      if (own || settings.adBlock || XrayConfig.configNeedsGeoFiles(provider)) {
+        await _ensureGeoFiles(routing, force: true);
+      }
+    } else {
+      await _ensureGeoFiles(routing, force: settings.adBlock || _preparedRuleLists!.needsGeo);
+    }
+    final stored = selectedRouting;
+    if (stored.ruleLists.isNotEmpty) _ruleListRouting = stored;
+  }
+
   Future<void> _ensureGeoFiles(RoutingProfile routing, {bool force = false}) async {
     _geoRouting = null;
     if (!force && !XrayConfig.needsGeoFiles(routing)) return;
@@ -2853,6 +2882,17 @@ class AppState extends ChangeNotifier {
   RoutingProfile? _geoRouting;
   DateTime? _geoTriedAt;
 
+  /// Профиль текущего подключения, у которого есть списки правил по ссылке (их фон обновляет
+  /// [_refreshOldRuleLists]); null — списков нет.
+  RoutingProfile? _ruleListRouting;
+
+  /// Профиль, чьи списки по ссылке обновляет фон (тесты).
+  @visibleForTesting
+  RoutingProfile? get ruleListRoutingForUpdate => _ruleListRouting;
+
+  /// Неудачные попытки обновления списков по адресу: повтор не чаще раза в 6 часов.
+  final Map<String, DateTime> _ruleListTriedAt = {};
+
   /// Гео-базы текущего подключения старше недели — тихо качаем свежие через VPN. Ядро читает их при
   /// запуске, поэтому новые файлы ложатся рядом (*.new) и встают на место перед следующим подключением.
   /// Неудачная попытка повторяется не чаще раза в 6 часов.
@@ -2872,6 +2912,93 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       log.add('app', tr('Не удалось обновить гео-базы: {0}', [e]));
     }
+  }
+
+  /// Списки правил по ссылке у текущего подключения обновляются так же, как гео-базы: записи старше
+  /// недели тихо качаются через VPN, неудача помнится 6 часов. Ядро читает кэш при запуске, поэтому
+  /// новая копия просто встаёт на место старой и применится при следующем подключении.
+  Future<void> _refreshOldRuleLists() async {
+    final routing = routingProfiles.where((p) => p.id == _ruleListRouting?.id).firstOrNull;
+    if (routing == null || !isConnected) return;
+    await updateRuleLists(routing);
+  }
+
+  /// Скачать список [s] в кэш. Успех — записи посчитаны и дата обновления свежая; неудача — в журнале
+  /// предупреждение, старая копия в кэше не тронута, адрес помнится в [_ruleListTriedAt] на 6 часов.
+  final Map<String, Future<bool>> _ruleListDownloads = {};
+  RuleListEntries? _preparedRuleLists;
+
+  Future<bool> downloadRuleListSource(String profileId, RuleListSource source) async {
+    final key = RuleList.cacheFile(profileId, source.url);
+    final pending = _ruleListDownloads[key];
+    if (pending != null) {
+      final ok = await pending;
+      if (ok) {
+        final entries = await RuleList.readEntriesAsync(RoutingProfile(id: profileId, name: '', ruleLists: [source]));
+        source.count = [entries.proxyDomains, entries.proxyIps, entries.directDomains,
+            entries.directIps, entries.blockDomains, entries.blockIps].fold(0, (n, list) => n + list.length);
+        source.updatedAt = DateTime.now();
+      }
+      return ok;
+    }
+    final task = _downloadRuleList(profileId, source);
+    _ruleListDownloads[key] = task;
+    try { return await task; } finally { _ruleListDownloads.remove(key); }
+  }
+
+  Future<bool> _downloadRuleList(String profileId, RuleListSource source) async {
+    final url = source.url;
+    final file = File(RuleList.path(profileId, url));
+    final tmp = File(file.path + '.part');
+    try {
+      final parsed = await RuleList.fetch(url, proxyPort: isConnected ? (_session ?? settings).httpPort : null);
+      await file.parent.create(recursive: true);
+      final text = parsed.text;
+      if (utf8.encode(text).length > RuleList.maxBytes) throw const FormatException('Список больше 10 МБ');
+      await tmp.writeAsString(text, flush: true);
+      await tmp.rename(file.path);
+      source
+        ..count = parsed.domains.length + parsed.ips.length
+        ..updatedAt = DateTime.now();
+      _ruleListTriedAt.remove(url);
+      if (parsed.skipped > 0) {
+        log.add('app', tr('В списке {0} пропущено записей, которые не похожи на домен или адрес: {1}',
+            [parsed.skipped, url]));
+      }
+      changed();
+      return true;
+    } catch (e) {
+      _ruleListTriedAt[url] = DateTime.now();
+      final reason = e is FormatException ? tr(e.message) : e is HttpException ? tr(e.message) : '$e';
+      log.add('app', tr('Предупреждение: список не обновлён ({0}): {1}', [url, reason]));
+      return false;
+    } finally {
+      try { if (await tmp.exists()) await tmp.delete(); } on FileSystemException { /* Уже удалён. */ }
+    }
+  }
+
+  /// Обновить списки [p] по ссылке. Без [force] — только те, что устарели ([RuleList.updateDue]),
+  /// и только если неудачная попытка по этому адресу была больше 6 часов назад.
+  Future<void> updateRuleLists(RoutingProfile p, {bool force = false}) async {
+    for (final s in List<RuleListSource>.of(p.ruleLists)) {
+      if (!force &&
+          !RuleList.updateDue(s,
+              cacheExists:
+                  File('${AppPaths.ruleListsDir}\\${RuleList.cacheFile(p.id, s.url)}').existsSync(),
+              now: DateTime.now())) {
+        continue;
+      }
+      final tried = _ruleListTriedAt[s.url];
+      if (!force && tried != null && DateTime.now().difference(tried) < const Duration(hours: 6)) {
+        continue;
+      }
+      await downloadRuleListSource(p.id, s);
+    }
+  }
+
+  /// Кэш списков профилей, которых больше нет, — на диске не держим.
+  void gcRuleListCache() {
+    if (_ruleListDownloads.isEmpty) RuleList.cleanOrphans(routingProfiles);
   }
 
   /// [staged] — файлы ложатся рядом (*.new) и встают на место перед следующим подключением: работающее
