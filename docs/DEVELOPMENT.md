@@ -21,6 +21,14 @@ powershell -ExecutionPolicy Bypass -File tools\dev.ps1                       # �
 Результат сборки — `build\installer\SkipIt-Setup-Windows-1.1.6.exe` и файл `.sha256` с его контрольной суммой.
 Тесты: `flutter test`. Иконка пересобирается скриптом `tools\make_icon.ps1`.
 
+Установщик состоит из своей оболочки Win32 (`installer\shell`, C++) и вложенного Inno Setup
+(`installer\skipit.iss`). Оболочка определяет язык Windows, даёт переключить EN / RU и запускает
+Inno Setup без его мастера после согласия с лицензией. Копирование файлов, обновление и удаление
+службы остаются в Inno Setup. `tools\build-installer.ps1` собирает обе части из уже собранной
+программы и считает SHA-256 итогового файла; `tools\build.ps1` вызывает его автоматически.
+Для просмотра интерфейса без установки: `tools\build-installer.ps1 -Preview`.
+Такая сборка не содержит вложенного установщика, не запрашивает UAC и не может начать установку.
+
 Тест `min_window_test.dart` отрисовывает каждую страницу в окне наименьшего размера. Чтобы посмотреть
 на них глазами, сохраните картинки в папку:
 `flutter test test\min_window_test.dart --update-goldens --dart-define=SKIPIT_SHOTS=C:\Temp\shots`.

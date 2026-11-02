@@ -4,6 +4,8 @@
 #   Цвета как у логотипа: чёрный фон, оранжевые треугольники с выемкой.
 #   powershell -ExecutionPolicy Bypass -File tools\make_icon.ps1
 
+param([switch]$InstallerMarkOnly)
+
 Add-Type -AssemblyName System.Drawing
 $root = Split-Path -Parent $PSScriptRoot
 
@@ -30,17 +32,19 @@ function New-Triangle([single]$x, [single]$y, [single]$w, [single]$h, [single]$r
     , @($pts, $pen)
 }
 
-function New-Master([int]$S) {
+function New-Master([int]$S, [switch]$MarkOnly) {
     $bmp = New-Object Drawing.Bitmap $S, $S
     $g = [Drawing.Graphics]::FromImage($bmp)
     $g.SmoothingMode = 'AntiAlias'
     $g.Clear([Drawing.Color]::Transparent)
 
     # Чёрный скруглённый квадрат с едва заметной рамкой (чтобы не терялся на тёмной панели задач).
-    $m = $S * 0.04
-    $bg = New-RoundRect $m $m ($S - 2 * $m) ($S - 2 * $m) ($S * 0.24)
-    $g.FillPath((New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 12, 12, 14))), $bg)
-    $g.DrawPath((New-Object Drawing.Pen ([Drawing.Color]::FromArgb(255, 44, 44, 50)), ([single]($S * 0.012))), $bg)
+    if (-not $MarkOnly) {
+        $m = $S * 0.04
+        $bg = New-RoundRect $m $m ($S - 2 * $m) ($S - 2 * $m) ($S * 0.24)
+        $g.FillPath((New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 12, 12, 14))), $bg)
+        $g.DrawPath((New-Object Drawing.Pen ([Drawing.Color]::FromArgb(255, 44, 44, 50)), ([single]($S * 0.012))), $bg)
+    }
 
     # Знак: два треугольника, у второго выемка под кончик первого.
     $W = $S * 0.50; $H = $W * 0.72; $r = $H * 0.12
@@ -76,6 +80,18 @@ function Resize($master, [int]$s) {
     $g.DrawImage($master, 0, 0, $s, $s)
     $g.Dispose()
     $b
+}
+
+if ($InstallerMarkOnly) {
+    # Тот же знак, что у приложения: меняется только подложка и прозрачные поля.
+    $master = New-Master 1024 -MarkOnly
+    $bounds = [Drawing.Rectangle]::new(275, 337, 515, 371)
+    $mark = $master.Clone($bounds, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $mark.Save((Join-Path $root 'installer\brand-mark.png'), [Drawing.Imaging.ImageFormat]::Png)
+    $mark.Dispose()
+    $master.Dispose()
+    Write-Host 'Знак установщика обновлён: installer\brand-mark.png'
+    return
 }
 
 $master = New-Master 1024

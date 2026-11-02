@@ -25,23 +25,7 @@ try {
     flutter build windows --release --no-tree-shake-icons --build-name $numeric --dart-define "APP_VERSION=$Version"
     if ($LASTEXITCODE -ne 0) { throw 'flutter build завершился с ошибкой' }
 
-    $iscc = @(
-        (Get-Command iscc -ErrorAction SilentlyContinue).Source,
-        'D:\tools\InnoSetup\ISCC.exe',
-        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
-        "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 7\ISCC.exe"
-    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-    if (-not $iscc) { throw 'Не найден Inno Setup (ISCC.exe). Установите его: https://jrsoftware.org/isdl.php' }
-
-    & $iscc "/DAppVersion=$Version" 'installer\skipit.iss'
-    if ($LASTEXITCODE -ne 0) { throw 'Сборка установщика завершилась с ошибкой' }
-    # Контрольная сумма рядом с установщиком: по ней программа проверяет скачанное обновление.
-    $installer = "build\installer\SkipIt-Setup-Windows-$Version.exe"
-    $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
-    [IO.File]::WriteAllText((Join-Path $root "$installer.sha256"), "$hash  SkipIt-Setup-Windows-$Version.exe`n")
-    Write-Host "Готово: $installer" -ForegroundColor Green
+    & (Join-Path $PSScriptRoot 'build-installer.ps1') -Version $Version
 } finally {
     Pop-Location
 }

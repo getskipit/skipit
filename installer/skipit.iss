@@ -3,7 +3,7 @@
 ;   ISCC.exe /DAppVersion=1.1.6 installer\skipit.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.1.8a-3"
+  #define AppVersion "1.1.8a-4"
 #endif
 #define AppName "SkipIt"
 #define AppExe "SkipIt.exe"
@@ -36,7 +36,16 @@ UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 Compression=lzma2/ultra64
 SolidCompression=yes
-WizardStyle=modern
+; Тёмное оформление доступно с Inno Setup 6.6.
+WizardStyle=modern dark
+WizardImageFile=wizard-side.png
+WizardSmallImageFile=wizard-mark.png
+WizardImageStretch=yes
+WizardImageBackColor=$0A0909
+; Язык интерфейса Windows: русский для русской Windows, иначе английский.
+ShowLanguageDialog=no
+LanguageDetectionMethod=uilanguage
+UsePreviousLanguage=no
 ; Лицензия показывается на отдельном шаге мастера установки: тот же текст, что в LICENSE, но без
 ; приложения-образца в конце («Copyright [yyyy] [name of copyright owner]»). В папку программы
 ; ставится полный LICENSE.
@@ -46,8 +55,8 @@ CloseApplications=force
 RestartApplications=no
 
 [Languages]
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
