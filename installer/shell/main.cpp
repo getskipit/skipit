@@ -45,8 +45,16 @@ int scrollGrab = 0;
 
 int S(int n) { return MulDiv(n, static_cast<int>(dpi), 96); }
 const wchar_t* T(const wchar_t* r, const wchar_t* e) { return russian ? r : e; }
-void Text(HWND control, const wchar_t* text) { SetWindowTextW(control, text); }
-void Show(HWND control, bool visible) { ShowWindow(control, visible ? SW_SHOW : SW_HIDE); }
+void Text(HWND control, const wchar_t* text) {
+  const int length = GetWindowTextLengthW(control);
+  std::wstring current(static_cast<size_t>(length) + 1, L'\0');
+  current.resize(static_cast<size_t>(GetWindowTextW(control, current.data(), length + 1)));
+  if (current != text) SetWindowTextW(control, text);
+}
+void Show(HWND control, bool visible) {
+  if (((GetWindowLongPtrW(control, GWL_STYLE) & WS_VISIBLE) != 0) != visible)
+    ShowWindow(control, visible ? SW_SHOW : SW_HIDE);
+}
 bool Checked(HWND control) { return SendMessageW(control, BM_GETCHECK, 0, 0) == BST_CHECKED; }
 
 Gdiplus::Color Color(COLORREF value) {
@@ -107,6 +115,9 @@ void ExcludeChildren(HWND hwnd, Gdiplus::Graphics& graphics) {
 // Retain the native checkbox state, mouse/keyboard behavior and accessibility;
 // replace only its painting.
 LRESULT CALLBACK CheckboxProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR) {
+  if (message == WM_SETCURSOR && LOWORD(lp) == HTCLIENT && IsWindowEnabled(hwnd)) {
+    SetCursor(LoadCursorW(nullptr, IDC_HAND)); return TRUE;
+  }
   if (message == WM_ERASEBKGND) return 1;
   if (message == BM_CLICK) { ToggleCheckbox(hwnd); return 0; }
   if (message == WM_LBUTTONDOWN || message == WM_LBUTTONDBLCLK) {
@@ -358,6 +369,9 @@ LRESULT CALLBACK PathEditProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp, UIN
 }
 
 LRESULT CALLBACK ButtonProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR) {
+  if (message == WM_SETCURSOR && LOWORD(lp) == HTCLIENT && IsWindowEnabled(hwnd)) {
+    SetCursor(LoadCursorW(nullptr, IDC_HAND)); return TRUE;
+  }
   if (message == WM_MOUSEMOVE && !GetPropW(hwnd, L"SkipItHover")) {
     SetPropW(hwnd, L"SkipItHover", reinterpret_cast<HANDLE>(1));
     TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd, 0}; TrackMouseEvent(&track);
@@ -472,6 +486,8 @@ DWORD RunPayload(const std::wstring& arguments, DWORD& error) {
 #endif
 
 void Update() {
+  const bool visible = IsWindowVisible(window) != FALSE;
+  if (visible) SendMessageW(window, WM_SETREDRAW, FALSE, 0);
   Text(window, T(L"Установка SkipIt", L"SkipIt Setup"));
   const wchar_t* titlesRu[] = {L"Лицензионное соглашение", L"Всё готово к установке", L"Устанавливаем SkipIt", L"SkipIt установлен", L"Не удалось установить SkipIt"};
   const wchar_t* titlesEn[] = {L"License agreement", L"Ready to install", L"Installing SkipIt", L"SkipIt is installed", L"Could not install SkipIt"};
@@ -505,8 +521,8 @@ void Update() {
 #ifdef SKIPIT_PREVIEW
   if (page == 1) { EnableWindow(next, FALSE); Text(description, T(L"Предпросмотр: установка отключена.", L"Preview: installation is disabled.")); }
 #endif
-  InvalidateRect(window, nullptr, FALSE);
-  InvalidateRect(en, nullptr, TRUE); InvalidateRect(ru, nullptr, TRUE);
+  if (visible) SendMessageW(window, WM_SETREDRAW, TRUE, 0);
+  RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
 }
 
 HWND Control(const wchar_t* cls, const wchar_t* text, DWORD style, int id, int x, int y, int w, int h, HWND parent = nullptr) {
@@ -556,6 +572,16 @@ void Install() {
 #endif
 }
 
+void DrawHeaderGlow(Gdiplus::Graphics& g) {
+  Gdiplus::GraphicsPath path; path.AddEllipse(S(400), -S(100), S(300), S(230));
+  Gdiplus::PathGradientBrush glow(&path);
+  glow.SetCenterColor(Gdiplus::Color(24, 255, 95, 26));
+  Gdiplus::Color edge(0, 255, 95, 26); INT count = 1; glow.SetSurroundColors(&edge, &count);
+  const auto saved = g.Save();
+  g.SetClip(Gdiplus::Rect(S(2), S(2), S(708), S(77)), Gdiplus::CombineModeIntersect);
+  g.FillPath(&glow, &path); g.Restore(saved);
+}
+
 void DrawButton(const DRAWITEMSTRUCT* item) {
   Gdiplus::Graphics g(item->hDC);
   g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
@@ -564,8 +590,15 @@ void DrawButton(const DRAWITEMSTRUCT* item) {
   const bool selected = (item->CtlID == kRu && russian) || (item->CtlID == kEn && !russian);
   const bool hovered = !disabled && GetPropW(item->hwndItem, L"SkipItHover");
   const float w = static_cast<float>(item->rcItem.right), h = static_cast<float>(item->rcItem.bottom);
+  FillRect(item->hDC, &item->rcItem, bgBrush);
+  if (language || item->CtlID == kClose) {
+    POINT origin{}; MapWindowPoints(item->hwndItem, window, &origin, 1);
+    const auto saved = g.Save();
+    g.TranslateTransform(static_cast<float>(-origin.x), static_cast<float>(-origin.y));
+    DrawHeaderGlow(g);
+    g.Restore(saved);
+  }
   if (item->CtlID == kClose) {
-    FillRect(item->hDC, &item->rcItem, bgBrush);
     if (hovered) Rounded(g, Gdiplus::RectF(0.5f, 0.5f, w - 1, h - 1), static_cast<float>(S(5)), kHover, kHover);
     Gdiplus::Pen pen(Color(hovered ? kText : kMuted), 1.3f * dpi / 96);
     pen.SetStartCap(Gdiplus::LineCapRound); pen.SetEndCap(Gdiplus::LineCapRound);
@@ -579,7 +612,6 @@ void DrawButton(const DRAWITEMSTRUCT* item) {
   if (selected) fill = RGB(58, 38, 30);
   if (item->itemState & ODS_SELECTED) fill = RGB(90, 45, 25);
   const COLORREF border = selected || (item->itemState & ODS_FOCUS) ? kAccent : kBorder;
-  FillRect(item->hDC, &item->rcItem, bgBrush);
   Rounded(g, Gdiplus::RectF(0.5f, 0.5f, w - 1, h - 1), static_cast<float>(S(language ? 6 : 10)), fill, border);
   SetBkMode(item->hDC, TRANSPARENT);
   SetTextColor(item->hDC, disabled ? kMuted : (language && selected ? kAccent : kText));
@@ -601,13 +633,7 @@ void PaintShell(HWND hwnd, HDC dc) {
     Rounded(g, Gdiplus::RectF(0.5f, 0.5f, static_cast<float>(bounds.right - 1), static_cast<float>(bounds.bottom - 1)),
         static_cast<float>(S(10)), kBg, kBorder);
     // The same restrained accent glow as the notification card.
-    Gdiplus::GraphicsPath glowPath; glowPath.AddEllipse(S(400), -S(100), S(300), S(230));
-    Gdiplus::PathGradientBrush glow(&glowPath);
-    glow.SetCenterColor(Gdiplus::Color(24, 255, 95, 26));
-    Gdiplus::Color edge(0, 255, 95, 26); INT count = 1; glow.SetSurroundColors(&edge, &count);
-    const Gdiplus::GraphicsState beforeGlow = g.Save();
-    g.SetClip(Gdiplus::Rect(S(2), S(2), S(708), S(77)), Gdiplus::CombineModeIntersect);
-    g.FillPath(&glow, &glowPath); g.Restore(beforeGlow);
+    DrawHeaderGlow(g);
     if (mark) {
       g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
       const int width = S(52), height = static_cast<int>(std::lround(width * static_cast<double>(mark->GetHeight()) / mark->GetWidth()));
