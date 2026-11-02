@@ -430,6 +430,42 @@ std::wstring DefaultDirectory() {
 }
 
 #ifndef SKIPIT_PREVIEW
+// Previous SkipIt versions launch updates with CreateProcess. Start without
+// elevation, then ask Windows to run this same executable as administrator.
+DWORD EnsureElevated(const wchar_t* arguments, bool& relaunched) {
+  relaunched = false;
+  HANDLE token = nullptr;
+  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return GetLastError();
+  TOKEN_ELEVATION elevation{};
+  DWORD returned = 0;
+  const BOOL queried = GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &returned);
+  const DWORD error = queried ? ERROR_SUCCESS : GetLastError();
+  CloseHandle(token);
+  if (!queried) return error;
+  if (elevation.TokenIsElevated) return ERROR_SUCCESS;
+
+  std::wstring executable(32768, L'\0');
+  const DWORD length = GetModuleFileNameW(nullptr, executable.data(), static_cast<DWORD>(executable.size()));
+  if (!length) return GetLastError();
+  if (length >= executable.size()) return ERROR_INSUFFICIENT_BUFFER;
+  executable.resize(length);
+  SHELLEXECUTEINFOW info{};
+  info.cbSize = sizeof(info);
+  info.fMask = SEE_MASK_NOCLOSEPROCESS;
+  info.lpVerb = L"runas";
+  info.lpFile = executable.c_str();
+  info.lpParameters = arguments;
+  info.nShow = SW_SHOWNORMAL;
+  if (!ShellExecuteExW(&info)) return GetLastError();
+  relaunched = true;
+  if (!info.hProcess) return ERROR_SUCCESS;
+  WaitForSingleObject(info.hProcess, INFINITE);
+  DWORD exitCode = ERROR_GEN_FAILURE;
+  GetExitCodeProcess(info.hProcess, &exitCode);
+  CloseHandle(info.hProcess);
+  return exitCode;
+}
+
 // Keep the elevated payload in a directory writable only by administrators/SYSTEM.
 // It is removed after the inner installer has completely exited.
 struct Payload {
@@ -800,6 +836,9 @@ int RunUiTests(HWND hwnd);
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR arguments, int show) {
 #ifndef SKIPIT_PREVIEW
+  bool relaunched = false;
+  const DWORD elevationResult = EnsureElevated(arguments, relaunched);
+  if (relaunched || elevationResult != ERROR_SUCCESS) return static_cast<int>(elevationResult);
   int count = 0; LPWSTR* args = CommandLineToArgvW(GetCommandLineW(), &count);
   bool passThrough = false;
   for (int i = 1; args && i < count; ++i)
