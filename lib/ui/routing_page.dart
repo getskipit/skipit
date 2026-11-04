@@ -11,6 +11,8 @@ import 'app_menu.dart';
 import 'flag_text.dart';
 import 'shell.dart';
 import 'smooth_scroll.dart';
+import 'routing_compare.dart';
+import 'screen_privacy.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import '../l10n/l10n.dart';
@@ -101,7 +103,7 @@ class RoutingPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
           children: [
             if (provider != null)
-              _ProviderRulesCard(serverName: server!.name, config: provider)
+              _ProviderRulesCard(serverName: state.screenText(server!.name), config: provider)
             else if (state.selectedRouting.id == RoutingProfile.globalPresetId)
               Panel(
                 child: Row(children: [
@@ -127,9 +129,16 @@ class RoutingPage extends StatelessWidget {
                   style: TextStyle(color: C.orange, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4),
                 ),
               ),
+              if (own.length >= 2)
+                Padding(padding: const EdgeInsets.only(bottom: 10), child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: GhostButton(label: tr('Сравнить профили'), icon: Icons.compare_arrows_rounded,
+                      onPressed: () => showDialog<void>(context: context,
+                          builder: (_) => RoutingCompareDialog(profiles: own))),
+                )),
               for (final r in own)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
+                  padding: EdgeInsets.only(bottom: state.settings.compactRuleRows ? 3 : 10),
                   child: _ProfileTile(profile: r, onEdit: () => _edit(context, state, r)),
                 ),
             ],
@@ -169,7 +178,7 @@ class _ProviderRulesCard extends StatelessWidget {
             Icon(icon, size: 18, color: color),
             const SizedBox(width: 10),
             SizedBox(width: 120, child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-            Expanded(child: Text(text, style: TextStyle(color: C.muted, fontSize: 13))),
+            Expanded(child: Text(AppScope.of(context).screenText(text), style: TextStyle(color: C.muted, fontSize: 13))),
           ]),
         );
 
@@ -219,8 +228,8 @@ class _DnsCard extends StatefulWidget {
 }
 
 class _DnsCardState extends State<_DnsCard> {
-  late final _remote = TextEditingController(text: widget.state.settings.ownDnsRemote);
-  late final _domestic = TextEditingController(text: widget.state.settings.ownDnsDomestic);
+  late final _remote = ScreenPrivacyController(text: widget.state.settings.ownDnsRemote, hidden: () => widget.state.screenPrivacy);
+  late final _domestic = ScreenPrivacyController(text: widget.state.settings.ownDnsDomestic, hidden: () => widget.state.screenPrivacy);
 
   @override
   void dispose() {
@@ -256,14 +265,14 @@ class _DnsCardState extends State<_DnsCard> {
               onSubmitted: (_) => apply(),
               decoration: InputDecoration(
                 labelText: label,
-                hintText: hint,
+                hintText: state.screenText(hint),
                 // Значок «i»: подсказка показывается и по наведению, и по клику.
                 suffixIcon: Tooltip(
-                  message: tr('Какие адреса можно вводить:\n'
+                  message: state.screenText(tr('Какие адреса можно вводить:\n'
                       '1.1.1.1 или udp://1.1.1.1 — обычный DNS\n'
                       'tcp://1.1.1.1 — DNS по TCP\n'
                       'https://dns.google/dns-query — DoH\n'
-                      'tls://1.1.1.1 — DoT'),
+                      'tls://1.1.1.1 — DoT')),
                   triggerMode: TooltipTriggerMode.tap,
                   child: Icon(Icons.info_rounded, size: 18, color: C.orange),
                 ),
@@ -301,10 +310,10 @@ class _DnsCardState extends State<_DnsCard> {
           ]),
           const SizedBox(height: 8),
           Text(
-            tr('Можно указать несколько адресов через запятую: если первый не ответил, спросим следующий. '
+            state.screenText(tr('Можно указать несколько адресов через запятую: если первый не ответил, спросим следующий. '
             'Например: https://dns.google/dns-query, 8.8.8.8\n'
             'Удалённые — для сайтов через VPN, локальные — для сайтов напрямую. Сохраняется по Enter или когда '
-            'вы уходите из поля.'),
+            'вы уходите из поля.')),
             style: TextStyle(color: C.muted, fontSize: 12),
           ),
           if (skipped != null) ...[
@@ -348,7 +357,7 @@ class _ProfileTile extends StatelessWidget {
       glow: selected,
       // Повторный клик по включённому профилю выключает его.
       onTap: () => state.setRouting(selected ? RoutingProfile.globalPresetId : profile.id),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: state.settings.compactRuleRows ? 3 : 12),
       child: Row(children: [
           Icon(selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
               color: selected ? C.orange : C.muted),
@@ -356,7 +365,7 @@ class _ProfileTile extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Text(profile.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                Text(state.screenText(profile.name), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 if (preset) ...[const SizedBox(width: 8), Tag(tr('по умолчанию'))],
                 if (profile.subscriptionId != null) ...[const SizedBox(width: 8), Tag(tr('от провайдера'), color: C.cyan)],
               ]),
@@ -372,6 +381,19 @@ class _ProfileTile extends StatelessWidget {
               state.toast(tr('Ссылка на профиль скопирована'));
             },
           ),
+          if (!preset)
+            IconButton(
+              tooltip: tr('Дублировать профиль'),
+              icon: const Icon(Icons.content_copy_rounded, size: 20),
+              onPressed: () async {
+                final copy = await state.duplicateRoutingProfile(profile);
+                if (copy.ruleLists.any((source) => source.updatedAt == null)) {
+                  state.toast(tr('Профиль скопирован. Не все списки доступны — откройте копию и нажмите «Обновить».'));
+                } else {
+                  state.toast(tr('Профиль скопирован'));
+                }
+              },
+            ),
           if (!preset)
             IconButton(tooltip: tr('Изменить'), icon: const Icon(Icons.edit_rounded, size: 20), onPressed: onEdit),
           if (!preset)
@@ -413,19 +435,21 @@ class _RoutingEditorState extends State<_RoutingEditor> {
   }
 
   late final p = RoutingProfile.fromJson(widget.profile.toJson());
-  late final _name = TextEditingController(text: p.name);
-  late final _remoteDns = TextEditingController(text: p.remoteDnsAddress);
-  late final _domesticDns = TextEditingController(text: p.domesticDnsAddress);
+  ScreenPrivacyController _privateField(String value) => ScreenPrivacyController(
+      text: value, hidden: () => AppScope.read(context).screenPrivacy);
+  late final _name = _privateField(p.name);
+  late final _remoteDns = _privateField(p.remoteDnsAddress);
+  late final _domesticDns = _privateField(p.domesticDnsAddress);
   late final _lists = {
-    'proxySites': TextEditingController(text: p.proxySites.join('\n')),
-    'proxyIp': TextEditingController(text: p.proxyIp.join('\n')),
-    'directSites': TextEditingController(text: p.directSites.join('\n')),
-    'directIp': TextEditingController(text: p.directIp.join('\n')),
-    'blockSites': TextEditingController(text: p.blockSites.join('\n')),
-    'blockIp': TextEditingController(text: p.blockIp.join('\n')),
+    'proxySites': _privateField(p.proxySites.join('\n')),
+    'proxyIp': _privateField(p.proxyIp.join('\n')),
+    'directSites': _privateField(p.directSites.join('\n')),
+    'directIp': _privateField(p.directIp.join('\n')),
+    'blockSites': _privateField(p.blockSites.join('\n')),
+    'blockIp': _privateField(p.blockIp.join('\n')),
   };
   late final _hosts =
-      TextEditingController(text: p.dnsHosts.entries.map((e) => '${e.key} = ${e.value}').join('\n'));
+      _privateField(p.dnsHosts.entries.map((e) => '${e.key} = ${e.value}').join('\n'));
 
   List<String> _lines(String key) =>
       _lists[key]!.text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
@@ -449,10 +473,11 @@ class _RoutingEditorState extends State<_RoutingEditor> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(
                 controller: url,
+                obscureText: AppScope.read(context).screenPrivacy,
                 autofocus: true,
                 decoration: InputDecoration(
                   labelText: tr('Адрес списка'),
-                  hintText: 'https://rules.example/list.txt',
+                  hintText: AppScope.read(context).screenText('https://rules.example/list.txt'),
                   errorText: invalid ? tr('Некорректный адрес') : null,
                 ),
               ),
@@ -515,7 +540,7 @@ class _RoutingEditorState extends State<_RoutingEditor> {
             decoration: BoxDecoration(border: Border.all(color: C.muted.withValues(alpha: 0.25)),
                 borderRadius: BorderRadius.circular(12)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Tooltip(message: source.url, child: Text(source.url, maxLines: 2, overflow: TextOverflow.ellipsis,
+              Tooltip(message: AppScope.read(context).screenText(source.url), child: Text(AppScope.read(context).screenText(source.url), maxLines: 2, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13))),
               const SizedBox(height: 8),
               Text(_loading.contains(source) ? tr('Загрузка…') : _failed.contains(source)
@@ -525,6 +550,8 @@ class _RoutingEditorState extends State<_RoutingEditor> {
                   style: TextStyle(color: _failed.contains(source) ? C.warn : C.muted, fontSize: 12)),
               const SizedBox(height: 8),
               Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                Tag(source.action == 'proxy' ? tr('через VPN') : source.action == 'direct' ? tr('напрямую') : tr('Блокировать'),
+                    color: source.action == 'proxy' ? C.orange : source.action == 'direct' ? C.green : C.red),
                 AppDropdown<String>(value: source.action,
                     items: {'proxy': tr('через VPN'), 'direct': tr('напрямую'), 'block': tr('Блокировать')},
                     onChanged: (v) => setState(() => source.action = v)),
@@ -563,10 +590,10 @@ class _RoutingEditorState extends State<_RoutingEditor> {
           maxLines: 6,
           minLines: 6,
           style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-          // Примеры видны в пустом поле сразу, а не только когда в него щёлкнули.
           decoration: InputDecoration(
             labelText: label,
-            hintText: hint,
+            labelStyle: TextStyle(color: key.startsWith('proxy') ? C.orange : key.startsWith('direct') ? C.green : C.red),
+            hintText: AppScope.read(context).screenText(hint),
             alignLabelWithHint: true,
             floatingLabelBehavior: FloatingLabelBehavior.always,
           ),
@@ -606,14 +633,14 @@ class _RoutingEditorState extends State<_RoutingEditor> {
                 Expanded(
                   child: TextField(
                     controller: _remoteDns,
-                    decoration: InputDecoration(labelText: tr('Удалённый DNS (через VPN)'), hintText: 'https://1.1.1.1/dns-query'),
+                    decoration: InputDecoration(labelText: tr('Удалённый DNS (через VPN)'), hintText: AppScope.read(context).screenText('https://1.1.1.1/dns-query')),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
                     controller: _domesticDns,
-                    decoration: InputDecoration(labelText: tr('Локальный DNS (напрямую)'), hintText: '77.88.8.8'),
+                    decoration: InputDecoration(labelText: tr('Локальный DNS (напрямую)'), hintText: AppScope.read(context).screenText('77.88.8.8')),
                   ),
                 ),
               ]),
@@ -621,10 +648,10 @@ class _RoutingEditorState extends State<_RoutingEditor> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  tr('В списках — по одной записи в строке.\n'
+                  AppScope.read(context).screenText(tr('В списках — по одной записи в строке.\n'
                   'Сайты: example.com — сайт со всеми поддоменами; full:example.com — только этот адрес; '
                   'geosite:youtube — готовый список сайтов.\n'
-                  'IP: 1.2.3.4 — один адрес; 10.0.0.0/8 — диапазон адресов; geoip:ru — готовый список адресов.'),
+                  'IP: 1.2.3.4 — один адрес; 10.0.0.0/8 — диапазон адресов; geoip:ru — готовый список адресов.')),
                   style: TextStyle(color: C.muted, fontSize: 12, height: 1.4),
                 ),
               ),
@@ -653,7 +680,7 @@ class _RoutingEditorState extends State<_RoutingEditor> {
                 style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
                 decoration: InputDecoration(
                   labelText: tr('DNS hosts (домен = IP)'),
-                  hintText: 'router.home = 192.168.1.1',
+                  hintText: AppScope.read(context).screenText('router.home = 192.168.1.1'),
                   alignLabelWithHint: true,
                   floatingLabelBehavior: FloatingLabelBehavior.always,
                 ),

@@ -94,6 +94,10 @@ Future<({Uint8List gray, int w, int h})> _grayFromBytes(Uint8List bytes) async {
 /// (её ссылка открывает все серверы), иначе — одного сервера.
 Future<void> showQrDialog(BuildContext context, {required String title, required String text, bool subscription = false}) async {
   final state = AppScope.read(context);
+  if (state.screenPrivacy) {
+    state.toast(tr('QR-код скрыт: включено скрытие адресов'));
+    return;
+  }
   final qr = QrCode.encode(text);
   if (qr == null) {
     state.toast(tr('Ссылка слишком длинная для QR-кода'));

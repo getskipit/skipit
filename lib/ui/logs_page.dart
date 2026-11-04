@@ -17,6 +17,7 @@ import 'groups.dart';
 import 'mouse_back.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
+import 'screen_privacy.dart';
 import 'widgets.dart';
 import '../l10n/l10n.dart';
 
@@ -99,7 +100,7 @@ class _LogsPageState extends State<LogsPage> {
   final _open = <String>{};
 
   /// Поиск по строкам журнала и по соединениям (без учёта регистра); пустой — поиска нет.
-  final _search = TextEditingController();
+  late final _search = ScreenPrivacyController(text: '', hidden: () => AppScope.read(context).screenPrivacy);
   String _query = '';
 
   /// Журнал, к которому относится поиск: в другом журнале поиск начинается заново.
@@ -705,7 +706,7 @@ class _SessionTile extends StatelessWidget {
                   ],
                   Flexible(
                     child: Text(
-                      [time, if (s.detail.isNotEmpty) s.detail].join(' · '),
+                      AppScope.of(context).screenText([time, if (s.detail.isNotEmpty) s.detail].join(' · ')),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: C.muted, fontSize: 11.5, fontFeatures: const [FontFeature.tabularFigures()]),
@@ -845,7 +846,7 @@ class _SessionView extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 3),
-              Text(when, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 12)),
+              Text(AppScope.of(context).screenText(when), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 12)),
             ]),
           ),
           search,
@@ -992,7 +993,7 @@ class _SessionView extends StatelessWidget {
                 child: Spinner(size: 24))
             : lines.isEmpty
                 ? Center(
-                    child: Text(q.isNotEmpty ? tr('Ничего не найдено по «{0}»', [query.trim()]) : tr('В этом журнале таких записей нет'),
+                    child: Text(q.isNotEmpty ? tr('Ничего не найдено по «{0}»', [AppScope.of(context).screenText(query.trim())]) : tr('В этом журнале таких записей нет'),
                         style: TextStyle(color: C.muted)))
                 : _HoldWhileReading<LogLine>(
                     key: ValueKey('${s.id}-${tab.name}-$level-$q'),
@@ -1171,7 +1172,7 @@ class _LineTextState extends State<_LineText> {
   /// выпадала из него: выделенное шло полосами с пропусками.
   @override
   Widget build(BuildContext context) {
-    final key = (widget.line, widget.line.repeats, _open, C.palette);
+    final key = (widget.line, widget.line.repeats, _open, C.palette, AppScope.of(context).screenPrivacy);
     if (key != _builtFor) {
       _built = _content();
       _builtFor = key;
@@ -1200,7 +1201,7 @@ class _LineTextState extends State<_LineText> {
         if (level != null)
           TextSpan(text: '$level ', style: TextStyle(color: _levelColor(level, line.level), fontWeight: FontWeight.w700)),
         if (conn != null) TextSpan(text: conn, style: TextStyle(color: C.muted)),
-        TextSpan(text: tag == null ? line.text : line.text.substring(tag.end), style: TextStyle(color: color)),
+        TextSpan(text: AppScope.of(context).screenText(tag == null ? line.text : line.text.substring(tag.end)), style: TextStyle(color: color)),
         // Одинаковые строки ядра не повторяются в журнале — у первой растёт счётчик.
         if (line.repeats > 1) ...[
           const TextSpan(text: '  '),
@@ -1208,7 +1209,7 @@ class _LineTextState extends State<_LineText> {
         ],
         if (hint != null)
           TextSpan(
-            text: '\n         ↳ $hint',
+            text: '\n         ↳ ${AppScope.of(context).screenText(hint)}',
             style: TextStyle(color: C.muted, fontFamily: 'Segoe UI', fontSize: 12),
           ),
       ]),
@@ -1372,10 +1373,10 @@ class _ConnGroupText extends StatelessWidget {
     final head = Text.rich(
       TextSpan(children: [
         TextSpan(text: _time(c.time), style: TextStyle(color: C.muted)),
-        TextSpan(text: _target(c), style: TextStyle(color: C.text)),
+        TextSpan(text: AppScope.of(context).screenText(_target(c)), style: TextStyle(color: C.text)),
         if (c.network == 'udp') TextSpan(text: ' udp', style: TextStyle(color: C.muted)),
         TextSpan(text: ' → ${_routeLabel(c.route)}', style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-        if (!many) TextSpan(text: _via(c), style: TextStyle(color: C.muted)),
+        if (!many) TextSpan(text: AppScope.of(context).screenText(_via(c)), style: TextStyle(color: C.muted)),
         // Правило по приложениям к соединению не применилось: ядро не узнало программу.
         if (group.items.any((e) => e.unknownProcess))
           TextSpan(text: tr(' · программа не определена'), style: TextStyle(color: C.warnText)),
@@ -1429,7 +1430,7 @@ class _ConnGroupText extends StatelessWidget {
             child: Text.rich(
               TextSpan(children: [
                 TextSpan(text: _time(e.time), style: TextStyle(color: C.muted)),
-                TextSpan(text: _via(e).trimLeft(), style: TextStyle(color: C.muted)),
+                TextSpan(text: AppScope.of(context).screenText(_via(e).trimLeft()), style: TextStyle(color: C.muted)),
               ]),
               style: _style,
             ),

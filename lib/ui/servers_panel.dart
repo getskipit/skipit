@@ -19,6 +19,7 @@ import 'qr_ui.dart';
 import 'shell.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
+import 'screen_privacy.dart';
 import 'widgets.dart';
 import 'subscription_settings_dialog.dart';
 import '../l10n/l10n.dart';
@@ -43,7 +44,7 @@ const scrollGutter = 14.0;
 
 class _ServersPanelState extends State<ServersPanel> {
   String _query = '';
-  final _search = TextEditingController();
+  late final _search = ScreenPrivacyController(text: '', hidden: () => AppScope.read(context).screenPrivacy);
 
   @override
   void dispose() {
@@ -236,7 +237,7 @@ class _ServersPanelState extends State<ServersPanel> {
             child: Text(
                 _query.isEmpty
                     ? tr('Все подписки и серверы скрыты. Вернуть их можно в разделе «Серверы»')
-                    : tr('По запросу «{0}» ничего не найдено', [_query]),
+                    : tr('По запросу «{0}» ничего не найдено', [state.screenText(_query)]),
                 style: TextStyle(color: C.muted)),
           ),
         )
@@ -450,7 +451,7 @@ class _GroupCardState extends State<_GroupCard> {
     final selected = state.settings.selectedServerId == s.id;
     final udpTesting = state.udpPending.contains(s.id);
     final shown = (s.name, s.hidden, s.warning, s.delayMs, s.udpMs, udpTesting, s.protocolLabel, s.transportLabel,
-        s.isJson, selected, state.pinging, C.palette);
+        s.isJson, selected, state.pinging, C.palette, state.screenPrivacy);
     final cached = _rows[s.id];
     // Тот же объект сервера: после обновления подписки сервер с тем же id — уже новый объект, и строка со
     // старым действовала бы из меню на устаревший (проверка задержки, скрытие, «Показать JSON»).
@@ -502,8 +503,8 @@ class _GroupCardState extends State<_GroupCard> {
   }
 
   Future<void> _edit(AppState state, Subscription sub) async {
-    final name = TextEditingController(text: sub.name);
-    final url = TextEditingController(text: sub.url);
+    final name = ScreenPrivacyController(text: sub.name, hidden: () => state.screenPrivacy);
+    final url = ScreenPrivacyController(text: sub.url, hidden: () => state.screenPrivacy);
     final interval = TextEditingController(text: '${sub.effectiveUpdateIntervalHours}');
     final ok = await showDialog<bool>(
       context: context,
@@ -592,7 +593,7 @@ class _GroupCardState extends State<_GroupCard> {
                   borderRadius: BorderRadius.circular(C.r(11)),
                   border: Border.all(color: C.orange),
                 ),
-                child: FlagText(sub.displayName,
+                child: FlagText(state.screenText(sub.displayName),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
@@ -636,7 +637,7 @@ class _GroupCardState extends State<_GroupCard> {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Row(children: [
                           Flexible(
-                            child: FlagText(sub?.displayName ?? tr('Мои серверы'),
+                            child: FlagText(state.screenText(sub?.displayName ?? tr('Мои серверы')),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
@@ -730,7 +731,7 @@ class _GroupCardState extends State<_GroupCard> {
         if (sub?.error != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: Text(sub!.error!, style: TextStyle(color: C.red, fontSize: 12)),
+            child: Text(state.screenText(sub!.error!), style: TextStyle(color: C.red, fontSize: 12)),
           ),
         Reveal(
           open: expanded,
@@ -813,7 +814,7 @@ class _SubscriptionBar extends StatelessWidget {
           if (hasTraffic || expire != null || sub.supportUrl != null)
             Padding(padding: const EdgeInsets.only(top: 4, bottom: 6), child: Divider(height: 1, color: C.border)),
           Tooltip(
-            message: announce,
+            message: AppScope.of(context).screenText(announce),
             waitDuration: const Duration(milliseconds: 500),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Padding(
@@ -822,7 +823,7 @@ class _SubscriptionBar extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: FlagText(announce, maxLines: 2, overflow: TextOverflow.ellipsis, style: small.copyWith(height: 1.35)),
+                child: FlagText(AppScope.of(context).screenText(announce), maxLines: 2, overflow: TextOverflow.ellipsis, style: small.copyWith(height: 1.35)),
               ),
             ]),
           ),
@@ -949,7 +950,7 @@ class _SubscriptionDetails extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: FlagText(announce, maxLines: 8, overflow: TextOverflow.ellipsis,
+                child: FlagText(AppScope.of(context).screenText(announce), maxLines: 8, overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12.5, color: C.text, height: 1.4)),
               ),
             ]),
@@ -1006,6 +1007,10 @@ class _ServerRow extends StatelessWidget {
 
   /// Конфиг Xray, с которым программа подключается к этому серверу (с текущими настройками и маршрутизацией).
   Future<void> _showJson(BuildContext context, AppState state) async {
+    if (state.screenPrivacy) {
+      state.toast(tr('Конфигурация скрыта: включено скрытие адресов'));
+      return;
+    }
     final String json;
     try {
       json = const JsonEncoder.withIndent('  ')
@@ -1071,7 +1076,7 @@ class _ServerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.read(context);
-    final (country, name) = Flags.leading(server.name);
+    final (country, name) = Flags.leading(state.screenText(server.name));
     return Hover(
       builder: (context, hovered) => GestureDetector(
         onTap: () => state.selectServer(server.id),
@@ -1117,7 +1122,7 @@ class _ServerRow extends StatelessWidget {
             ),
             if (server.warning != null)
               Tooltip(
-                message: server.warning!,
+                message: state.screenText(server.warning!),
                 child: Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: Icon(Icons.warning_amber_rounded, size: 16, color: C.warnText),

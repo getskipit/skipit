@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../core/icons.dart';
+import '../core/app_rule_path.dart';
 import '../core/windows.dart';
 import '../models/app_rules.dart';
 import '../models/settings.dart';
@@ -25,6 +26,28 @@ class AppsPage extends StatefulWidget {
 
 class _AppsPageState extends State<AppsPage> {
   String _iconsFor = '';
+  final Map<String, Future<bool?>> _pathChecks = {};
+  bool _checkingPaths = false;
+
+  Future<void> _refreshPaths(List<AppEntry> entries) async {
+    if (_checkingPaths) return;
+    final paths = entries.where((entry) => entry.isPath).toList();
+    setState(() {
+      _checkingPaths = true;
+      _pathChecks.clear();
+      for (final entry in paths) {
+        _pathChecks[entry.match] = appRulePathExists(entry);
+      }
+    });
+    await Future.wait<void>([
+      Future.wait(_pathChecks.values).then((_) {}),
+      Future<void>.delayed(const Duration(milliseconds: 500)),
+    ]);
+    if (mounted) setState(() { _checkingPaths = false; });
+  }
+
+  Future<bool?> _checkPath(AppEntry entry) =>
+      _pathChecks.putIfAbsent(entry.match, () => appRulePathExists(entry));
 
   /// Иконки подгружаются при каждом изменении списка, а не один раз при открытии окна: в этот момент
   /// сохранённый список ещё не прочитан с диска, и на новом компьютере иконок не было бы вовсе.
@@ -193,6 +216,14 @@ class _AppsPageState extends State<AppsPage> {
             Text(hint,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: C.text.withValues(alpha: 0.85), fontSize: 13.5, fontWeight: FontWeight.w600)),
+            if (rules.entries.any((e) => e.isPath)) ...[
+              const SizedBox(height: 8),
+              Align(alignment: Alignment.centerRight, child: GhostButton(
+                label: tr('Проверить пути'), icon: Icons.refresh_rounded,
+                busy: _checkingPaths,
+                onPressed: () => _refreshPaths(rules.entries),
+              )),
+            ],
             const SizedBox(height: 16),
             // Заметная плашка: правила меняются только после переподключения, это легко пропустить.
             if (state.appRulesPending)
@@ -237,9 +268,9 @@ class _AppsPageState extends State<AppsPage> {
               child: Column(children: [
                 for (final e in rules.entries)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
+                    padding: EdgeInsets.only(bottom: state.settings.compactRuleRows ? 3 : 8),
                     child: Panel(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: state.settings.compactRuleRows ? 2 : 10),
                       child: Row(children: [
                         Opacity(
                           opacity: e.enabled ? 1 : 0.4,
@@ -248,12 +279,27 @@ class _AppsPageState extends State<AppsPage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(e.label,
+                            Text(state.screenText(e.label),
                                 style: TextStyle(fontWeight: FontWeight.w600, color: e.enabled ? C.text : C.muted)),
-                            Text(e.match.replaceAll('/', '\\'),
+                            Text(state.screenText(e.match.replaceAll('/', '\\')),
                                 maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 12)),
                           ]),
                         ),
+                        if (e.isPath)
+                          FutureBuilder<bool?>(
+                            future: _checkPath(e),
+                            builder: (context, snapshot) => snapshot.data == false
+                                ? Tooltip(
+                                    message: e.isFolder
+                                        ? tr('Папка не найдена или недоступна. Нажмите, чтобы проверить снова.')
+                                        : tr('Файл не найден или недоступен. Нажмите, чтобы проверить снова.'),
+                                    child: IconButton(
+                                      icon: Icon(Icons.warning_amber_rounded, color: C.warn),
+                                      onPressed: () => setState(() { _pathChecks.remove(e.match); }),
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
                         Tooltip(
                           message: e.enabled ? tr('Правило включено') : tr('Правило выключено'),
                           child: AppSwitch(
@@ -268,8 +314,7 @@ class _AppsPageState extends State<AppsPage> {
                           tooltip: tr('Убрать из списка'),
                           icon: Icon(Icons.close_rounded, color: C.muted),
                           onPressed: () {
-                            rules.entries.remove(e);
-                            _touch(state);
+                            state.deleteAppRule(e);
                           },
                         ),
                       ]),
@@ -384,8 +429,8 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                            Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                            Text(a.path,
+                                            Text(AppScope.of(context).screenText(a.name), style: const TextStyle(fontWeight: FontWeight.w600)),
+                                            Text(AppScope.of(context).screenText(a.path),
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(color: C.muted, fontSize: 12)),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'theme.dart';
+import 'screen_privacy.dart';
 import '../l10n/l10n.dart';
 
 /// Windows не умеет рисовать эмодзи-флаги (🇩🇪 превращается в «DE»),
@@ -169,9 +170,10 @@ class FlagText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final parts = Flags.split(text);
+    final shown = screenTextOf(context, text);
+    final parts = Flags.split(shown);
     if (parts.every((p) => p.country == null)) {
-      return Text(text, style: style, maxLines: maxLines, overflow: overflow, textAlign: textAlign);
+      return Text(shown, style: style, maxLines: maxLines, overflow: overflow, textAlign: textAlign);
     }
     final fontSize = style?.fontSize ?? DefaultTextStyle.of(context).style.fontSize ?? 14;
     return Text.rich(

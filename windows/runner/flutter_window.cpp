@@ -478,6 +478,16 @@ void FlutterWindow::HandleTrayCall(
       }
     }
     result->Success();
+  } else if (method == "clearNotification") {
+    CloseNotifyPopup();
+    if (tray_added_) {
+      NOTIFYICONDATAW data = tray_icon_;
+      data.uFlags = NIF_INFO;
+      data.szInfo[0] = L'\0';
+      data.szInfoTitle[0] = L'\0';
+      Shell_NotifyIconW(NIM_MODIFY, &data);
+    }
+    result->Success();
   } else if (method == "notify") {
     // Уведомление Windows у значка. Только когда окно спрятано или свёрнуто: иначе всё видно в нём самом.
     HWND hwnd = GetHandle();

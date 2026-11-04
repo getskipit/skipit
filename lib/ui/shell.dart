@@ -244,6 +244,47 @@ class _ShellState extends State<Shell> {
     super.didChangeDependencies();
     _sub ??= AppScope.read(context).messages.listen((msg) {
       if (!mounted) return;
+      if (msg.undo != null) {
+        final key = GlobalKey<_ToastState>();
+        _undoMessages.add((message: msg, key: key));
+        final insertUndoEntry = _undoEntry == null;
+        _undoEntry ??= OverlayEntry(builder: (context) => Positioned(
+          left: 16,
+          right: 16,
+          bottom: _toastEntry == null ? 14 : 90,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
+            child: SingleChildScrollView(
+              reverse: true,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                for (final item in _undoMessages)
+                  _Toast(
+                    key: item.key,
+                    text: item.message.text,
+                    detail: item.message.detail,
+                    kind: item.message.kind,
+                    undo: item.message.undo,
+                    inList: true,
+                    onGone: () {
+                      _undoMessages.removeWhere((entry) => identical(entry.key, item.key));
+                      if (_undoMessages.isEmpty) {
+                        _undoEntry?.remove();
+                        _undoEntry = null;
+                      } else {
+                        _undoEntry?.markNeedsBuild();
+                      }
+                    },
+                  ),
+              ]),
+            ),
+          ),
+        ));
+        if (insertUndoEntry) {
+          Overlay.of(context, rootOverlay: true).insert(_undoEntry!);
+        }
+        _undoEntry?.markNeedsBuild();
+        return;
+      }
       // Новое уведомление вытесняет прежнее: то плавно уходит, это всплывает на его место.
       // Если прежнее ещё не успело появиться (два сообщения подряд), оно убирается сразу —
       // иначе оба остались бы на экране одно поверх другого.
@@ -261,17 +302,24 @@ class _ShellState extends State<Shell> {
               text: msg.text,
               detail: msg.detail,
               kind: msg.kind,
+              undo: msg.undo,
               onGone: () {
-                if (identical(_toastEntry, entry)) _toastEntry = null;
+                if (identical(_toastEntry, entry)) {
+                  _toastEntry = null;
+                  _undoEntry?.markNeedsBuild();
+                }
                 entry.remove();
               }));
       _toastEntry = entry;
       Overlay.of(context, rootOverlay: true).insert(entry);
+      _undoEntry?.markNeedsBuild();
     });
   }
 
   GlobalKey<_ToastState>? _toast;
   OverlayEntry? _toastEntry;
+  OverlayEntry? _undoEntry;
+  final _undoMessages = <({ToastMessage message, GlobalKey<_ToastState> key})>[];
 
   @override
   void initState() {
@@ -411,7 +459,7 @@ class _ShellState extends State<Shell> {
 /// Всплывающее уведомление внизу окна: плавно поднимается и проявляется, через 4 секунды так же
 /// плавно уходит вниз. Закрывается кликом по нему или по крестику; пока на нём курсор — не исчезает.
 class _Toast extends StatefulWidget {
-  const _Toast({super.key, required this.text, this.detail, required this.kind, required this.onGone});
+  const _Toast({super.key, required this.text, this.detail, required this.kind, this.undo, this.inList = false, required this.onGone});
   final String text;
 
   /// Вторая строка мельче; с ней первая становится заголовком.
@@ -419,6 +467,8 @@ class _Toast extends StatefulWidget {
 
   /// Успех, ошибка или просто сведение: значок слева и время показа.
   final ToastKind kind;
+  final VoidCallback? undo;
+  final bool inList;
 
   /// Уведомление полностью ушло с экрана — его можно убирать.
   final VoidCallback onGone;
@@ -427,20 +477,23 @@ class _Toast extends StatefulWidget {
   State<_Toast> createState() => _ToastState();
 }
 
-class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
+class _ToastState extends State<_Toast> with TickerProviderStateMixin {
   late final _anim = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 320),
     reverseDuration: const Duration(milliseconds: 220),
   );
   late final _move = CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+  late final _countdown = AnimationController(vsync: this, duration: const Duration(seconds: 8));
   Timer? _timer;
+  Timer? _undoTicker;
+  int _undoSeconds = 8;
   bool _leaving = false;
 
   void _arm() {
     _timer?.cancel();
     // Ошибку и новость о новой версии нужно успеть прочитать — они держатся вдвое дольше.
-    final long = widget.kind == ToastKind.error || widget.kind == ToastKind.update;
+    final long = widget.undo != null || widget.kind == ToastKind.error || widget.kind == ToastKind.update;
     _timer = Timer(Duration(seconds: long ? 8 : 4), dismiss);
   }
 
@@ -456,6 +509,8 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
     if (_leaving || !mounted) return;
     _leaving = true;
     _timer?.cancel();
+    _undoTicker?.cancel();
+    _countdown.stop();
     _anim.reverse().whenComplete(widget.onGone);
   }
 
@@ -464,22 +519,31 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
     super.initState();
     _anim.forward();
     _arm();
+    if (widget.undo != null) {
+      _countdown.reverse(from: 1);
+      _undoTicker = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (timer.tick >= 8) {
+          timer.cancel();
+        } else {
+          setState(() => _undoSeconds = 8 - timer.tick);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _undoTicker?.cancel();
     _move.dispose();
     _anim.dispose();
+    _countdown.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => Positioned(
-        left: 16,
-        right: 16,
-        bottom: 14,
-        child: Center(
+  Widget build(BuildContext context) {
+    final content = Center(
           child: AnimatedBuilder(
             animation: _move,
             builder: (context, child) => Opacity(
@@ -491,9 +555,9 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
             ),
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
-              onEnter: (_) => _timer?.cancel(),
+              onEnter: (_) { if (widget.undo == null) _timer?.cancel(); },
               onExit: (_) {
-                if (!_leaving) _arm();
+                if (!_leaving && widget.undo == null) _arm();
               },
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -523,23 +587,44 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
                             color: color.withValues(alpha: 0.14),
                             borderRadius: BorderRadius.circular(C.r(9)),
                           ),
-                          child: Icon(icon, size: 18, color: color),
+                          child: widget.undo == null
+                              ? Icon(icon, size: 18, color: color)
+                              : Center(child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: Stack(alignment: Alignment.center, children: [
+                                    AnimatedBuilder(
+                                      animation: _countdown,
+                                      builder: (context, _) => CircularProgressIndicator(
+                                        value: _countdown.value,
+                                        strokeWidth: 2,
+                                        backgroundColor: color.withValues(alpha: 0.2),
+                                        valueColor: AlwaysStoppedAnimation(color),
+                                      ),
+                                    ),
+                                    Text('$_undoSeconds', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+                                  ]),
+                                )),
                         ),
                         const SizedBox(width: 11),
                       ],
                       Flexible(
                         child: widget.detail == null
-                            ? Text(widget.text, style: TextStyle(color: C.text, fontSize: 14))
+                            ? Text(AppScope.of(context).screenText(widget.text), style: TextStyle(color: C.text, fontSize: 14))
                             : Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(widget.text,
+                                  Text(AppScope.of(context).screenText(widget.text),
                                       style: TextStyle(color: C.text, fontSize: 14, fontWeight: FontWeight.w600)),
-                                  Text(widget.detail!, style: TextStyle(color: C.muted, fontSize: 12.5)),
+                                  Text(AppScope.of(context).screenText(widget.detail!), style: TextStyle(color: C.muted, fontSize: 12.5)),
                                 ],
                               ),
                       ),
+                      if (widget.undo != null) ...[
+                        const SizedBox(width: 8),
+                        TextButton(onPressed: () { widget.undo!(); dismiss(); }, child: Text(tr('Отменить'))),
+                      ],
                       const SizedBox(width: 12),
                       Hover(
                         builder: (context, hovered) =>
@@ -551,8 +636,10 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
               ),
             ),
           ),
-        ),
-      );
+        );
+    if (widget.inList) return Padding(padding: const EdgeInsets.only(bottom: 8), child: content);
+    return Positioned(left: 16, right: 16, bottom: 14, child: content);
+  }
 }
 
 /// Меню разделов вдоль верхнего края окна (Настройки → Внешний вид → «Расположение меню»). Узкое окно —
@@ -588,7 +675,7 @@ class _TopBar extends StatelessWidget {
           Tooltip(
             richMessage: TextSpan(children: [
               TextSpan(text: '$statusText\n'),
-              Flags.span(state.selectedServer?.name ?? tr('Сервер не выбран'), size: 12),
+              Flags.span(state.screenText(state.selectedServer?.name ?? tr('Сервер не выбран')), size: 12),
             ]),
             child: Container(
               height: 42,
@@ -971,7 +1058,7 @@ class _Sidebar extends StatelessWidget {
               richMessage: collapsed
                   ? TextSpan(children: [
                       TextSpan(text: '$statusText\n'),
-                      Flags.span(state.selectedServer?.name ?? tr('Сервер не выбран'), size: 12),
+                      Flags.span(state.screenText(state.selectedServer?.name ?? tr('Сервер не выбран')), size: 12),
                     ])
                   : null,
               child: Container(
@@ -999,7 +1086,7 @@ class _Sidebar extends StatelessWidget {
                             SizedBox(
                               width: 150,
                               child: FlagText(
-                                state.selectedServer?.name ?? tr('Сервер не выбран'),
+                                state.screenText(state.selectedServer?.name ?? tr('Сервер не выбран')),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(color: C.muted, fontSize: 11),

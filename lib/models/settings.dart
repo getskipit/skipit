@@ -135,6 +135,8 @@ class AppSettings {
   bool updateSubsOnStart = true;
   bool updateViaProxy = true;
   bool sidebarCollapsed = false;
+  /// Компактные строки профилей маршрутизации и правил программ.
+  bool compactRuleRows = false;
   bool closeToTray = true;
 
   /// Уведомления Windows о сбоях VPN, пока окно спрятано.
@@ -268,6 +270,7 @@ class AppSettings {
         'updateSubsOnStart': updateSubsOnStart,
         'updateViaProxy': updateViaProxy,
         'sidebarCollapsed': sidebarCollapsed,
+        'compactRuleRows': compactRuleRows,
         'closeToTray': closeToTray,
         'notifications': notifications,
         'reduceMotion': reduceMotion,
@@ -358,6 +361,7 @@ class AppSettings {
     s.updateSubsOnStart = parseBool(j['updateSubsOnStart'], s.updateSubsOnStart);
     s.updateViaProxy = parseBool(j['updateViaProxy'], s.updateViaProxy);
     s.sidebarCollapsed = parseBool(j['sidebarCollapsed'], s.sidebarCollapsed);
+    s.compactRuleRows = parseBool(j['compactRuleRows'], s.compactRuleRows);
     s.closeToTray = parseBool(j['closeToTray'], s.closeToTray);
     s.notifications = parseBool(j['notifications'], s.notifications);
     s.reduceMotion = parseBool(j['reduceMotion'], s.reduceMotion);

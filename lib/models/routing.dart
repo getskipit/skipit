@@ -272,6 +272,9 @@ class RoutingProfile {
 
   Map<String, dynamic> toJson() => {...toHapp(), 'id': id, 'subscriptionId': subscriptionId};
 
+  /// Отдельный пользовательский профиль, не связанный с подпиской оригинала.
+  RoutingProfile duplicate({required String name}) => RoutingProfile.fromHapp(toHapp())..name = name;
+
   factory RoutingProfile.fromJson(Map<String, dynamic> j) =>
       RoutingProfile.fromHapp(j, id: j['id'] as String?)..subscriptionId = j['subscriptionId'] as String?;
 

@@ -6,6 +6,10 @@
 #include <shobjidl.h>
 #include <shlobj.h>
 #include <shlwapi.h>
+#include <exdisp.h>
+#include <shldisp.h>
+#include <shlguid.h>
+#include <wrl/client.h>
 #include <sddl.h>
 #include <bcrypt.h>
 #include <richedit.h>
@@ -56,6 +60,53 @@ void Show(HWND control, bool visible) {
     ShowWindow(control, visible ? SW_SHOW : SW_HIDE);
 }
 bool Checked(HWND control) { return SendMessageW(control, BM_GETCHECK, 0, 0) == BST_CHECKED; }
+
+// Ask the desktop shell to launch the executable as the interactive user.
+// Passing an executable to explorer.exe can open Documents instead.
+HRESULT LaunchInstalledApp() {
+  using Microsoft::WRL::ComPtr;
+  ComPtr<IShellWindows> windows;
+  HRESULT hr = CoCreateInstance(CLSID_ShellWindows, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&windows));
+  if (FAILED(hr)) return hr;
+  VARIANT empty{};
+  long desktopWindow = 0;
+  ComPtr<IDispatch> desktopDispatch;
+  hr = windows->FindWindowSW(&empty, &empty, SWC_DESKTOP, &desktopWindow, SWFO_NEEDDISPATCH, &desktopDispatch);
+  if (FAILED(hr)) return hr;
+  ComPtr<IServiceProvider> provider;
+  hr = desktopDispatch.As(&provider);
+  if (FAILED(hr)) return hr;
+  ComPtr<IShellBrowser> browser;
+  hr = provider->QueryService(SID_STopLevelBrowser, IID_PPV_ARGS(&browser));
+  if (FAILED(hr)) return hr;
+  ComPtr<IShellView> view;
+  hr = browser->QueryActiveShellView(&view);
+  if (FAILED(hr)) return hr;
+  ComPtr<IShellFolderViewDual> folder;
+  ComPtr<IDispatch> viewDispatch;
+  hr = view->GetItemObject(SVGIO_BACKGROUND, IID_PPV_ARGS(&viewDispatch));
+  if (FAILED(hr)) return hr;
+  hr = viewDispatch.As(&folder);
+  if (FAILED(hr)) return hr;
+  ComPtr<IDispatch> application;
+  hr = folder->get_Application(&application);
+  if (FAILED(hr)) return hr;
+  ComPtr<IShellDispatch2> shell;
+  hr = application.As(&shell);
+  if (FAILED(hr)) return hr;
+  BSTR executable = SysAllocString((installDirectory + L"\\SkipIt.exe").c_str());
+  VARIANT directory{};
+  directory.vt = VT_BSTR;
+  directory.bstrVal = SysAllocString(installDirectory.c_str());
+  VARIANT show{};
+  show.vt = VT_I4;
+  show.lVal = SW_SHOWNORMAL;
+  hr = executable && directory.bstrVal
+      ? shell->ShellExecute(executable, empty, directory, empty, show) : E_OUTOFMEMORY;
+  SysFreeString(executable);
+  VariantClear(&directory);
+  return hr;
+}
 
 Gdiplus::Color Color(COLORREF value) {
   return Gdiplus::Color(255, GetRValue(value), GetGValue(value), GetBValue(value));
@@ -811,7 +862,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp) {
           else if (page == 1) Install();
           else if (page >= 3) {
 #ifndef SKIPIT_PREVIEW
-            if (success && Checked(launch)) ShellExecuteW(nullptr, L"open", L"explorer.exe", Quote(installDirectory + L"\\SkipIt.exe").c_str(), nullptr, SW_SHOWNORMAL);
+            if (success && Checked(launch) && FAILED(LaunchInstalledApp())) {
+              MessageBoxW(hwnd,
+                  T(L"Не удалось запустить SkipIt. Откройте программу через ярлык в меню «Пуск».",
+                    L"Could not launch SkipIt. Open it using the Start menu shortcut."),
+                  L"SkipIt", MB_OK | MB_ICONWARNING);
+            }
 #endif
             DestroyWindow(hwnd);
           }

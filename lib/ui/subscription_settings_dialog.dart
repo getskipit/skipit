@@ -7,6 +7,7 @@ import '../l10n/l10n.dart';
 import '../models/subscription.dart';
 import '../state/app_state.dart';
 import 'theme.dart';
+import 'screen_privacy.dart';
 import 'widgets.dart';
 
 class SubscriptionSettingsDialog extends StatefulWidget {
@@ -109,7 +110,7 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
                         Checkbox(value: selected, onChanged: (_) => _toggle(sub.id),
                             visualDensity: VisualDensity.compact),
                         const SizedBox(width: 4),
-                        Expanded(child: Text(sub.displayName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        Expanded(child: Text(screenTextOf(context, sub.displayName), maxLines: 1, overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
                         const SizedBox(width: 14),
                       ]),

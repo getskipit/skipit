@@ -13,6 +13,8 @@ import '../models/server.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
 import 'flag_text.dart';
+import 'smooth_scroll.dart';
+import 'screen_privacy.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import '../l10n/l10n.dart';
@@ -80,7 +82,7 @@ String _ms(int? value) => value == null ? '—' : tr('{0} мс', [value]);
 /// Вывод проверки — плашкой своего цвета.
 Widget _note(SiteNote note) {
   final (icon, color) = _look(note.kind);
-  return Container(
+  return Builder(builder: (context) => Container(
     margin: const EdgeInsets.only(top: 8),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
     decoration: BoxDecoration(
@@ -90,14 +92,14 @@ Widget _note(SiteNote note) {
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 16, color: color)),
       const SizedBox(width: 10),
-      Expanded(child: Text(note.text, style: const TextStyle(fontSize: 12.5))),
+      Expanded(child: Text(AppScope.of(context).screenText(note.text), style: const TextStyle(fontSize: 12.5))),
     ]),
-  );
+  ));
 }
 
 /// Плитка с одним замером: подпись, значение и пояснение под ним ([mono] — это адрес). Плитки одного
 /// размера: три строки в каждой.
-Widget _metric(String name, String value, String note, {bool mono = false, Color? color}) => Container(
+Widget _metric(String name, String value, String note, {bool mono = false, Color? color}) => Builder(builder: (context) => Container(
       width: 172,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
@@ -112,12 +114,12 @@ Widget _metric(String name, String value, String note, {bool mono = false, Color
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
-        Text(note,
+        Text(AppScope.of(context).screenText(note),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: C.muted, fontSize: 11, fontFamily: mono ? 'Consolas' : null)),
       ]),
-    );
+    ));
 
 /// Когда и на каком сервере сделана проверка — одной строкой.
 String _stampText(CheckStamp? stamp) => stamp == null
@@ -176,7 +178,7 @@ class _SiteCard extends StatefulWidget {
 }
 
 class _SiteCardState extends State<_SiteCard> {
-  final _site = TextEditingController();
+  late final _site = ScreenPrivacyController(text: '', hidden: () => widget.state.screenPrivacy);
   bool _wrong = false;
 
   /// Какие сайты из нескольких развёрнуты до подробного вида.
@@ -199,7 +201,7 @@ class _SiteCardState extends State<_SiteCard> {
 
   Widget _name(SiteReport r, double size) => Row(children: [
         Flexible(
-          child: Text(r.shown,
+          child: Text(widget.state.screenText(r.shown),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontFamily: 'Consolas', fontSize: size, fontWeight: FontWeight.w700)),
@@ -288,7 +290,7 @@ class _SiteCardState extends State<_SiteCard> {
                             style: TextStyle(color: C.muted, fontSize: 12)),
                       ],
                       if (note != null && (note.kind != SiteNoteKind.ok || r.firstMs == null))
-                        Text(note.text, style: TextStyle(color: color, fontSize: 12)),
+                        Text(widget.state.screenText(note.text), style: TextStyle(color: color, fontSize: 12)),
                     ]),
                     ),
                   ),
@@ -637,7 +639,7 @@ class _SpeedCard extends StatelessWidget {
                 ? tr('идёт замер…')
                 : waiting
                     ? tr('ждёт очереди')
-                    : (result != null ? tr('скачивание') : (error ?? '—')),
+                    : (result != null ? tr('скачивание') : state.screenText(error ?? '—')),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: C.muted, fontSize: 11)),
@@ -666,10 +668,10 @@ class _SpeedCard extends StatelessWidget {
               _blocked(state, state.checkingSpeed, tr('замерить скорость')) != null
                   ? _blocked(state, state.checkingSpeed, tr('замерить скорость'))!
                   : state.checkingSpeed
-                      ? (r?.status ?? tr('Идёт замер'))
+                      ? state.screenText(r?.status ?? tr('Идёт замер'))
                       : tr('Замер идёт в четыре соединения и тратит трафик подписки: до 400 МБ за раз. Файл берётся с {0} и не сохраняется'
                           '{1}', [
-                        r?.vpnHost ?? r?.directHost ?? SpeedTest.servers.first.host,
+                        state.screenText(r?.vpnHost ?? r?.directHost ?? SpeedTest.servers.first.host),
                         state.killSwitchOn ? tr('. Включён Kill Switch: замер пойдёт только через VPN') : '',
                       ]),
               style: TextStyle(color: C.muted, fontSize: 12),
@@ -753,12 +755,12 @@ class _DnsCheckCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(p.label, style: const TextStyle(fontFamily: 'Consolas', fontSize: 12.5)),
+              Text(state.screenText(p.label), style: const TextStyle(fontFamily: 'Consolas', fontSize: 12.5)),
               Text(
                 [
                   _kind(p),
                   if (p.done) ...[p.path, p.result] else tr('проверяется…'),
-                ].join(' · '),
+                ].map(state.screenText).join(' · '),
                 style: TextStyle(color: C.muted, fontSize: 12),
               ),
               if (p.done && p.reachMs != null)
@@ -767,7 +769,7 @@ class _DnsCheckCard extends StatelessWidget {
               if (p.done && p.far)
                 Text(
                     tr('Это заметно дальше, чем у {0} ({1} мс): сайтам и программам, '
-                    'которые идут напрямую, с такими адресами дольше ждать ответа', [p.nearerLabel, p.nearerMs]),
+                    'которые идут напрямую, с такими адресами дольше ждать ответа', [state.screenText(p.nearerLabel ?? ''), p.nearerMs]),
                     style: TextStyle(color: C.warn, fontSize: 12)),
               if (p.done && p.slow)
                 Text(tr('Дольше, чем ядро ждёт этот сервер ({0} мс): оно успевает уйти к следующему DNS', [p.limitMs]),
@@ -935,16 +937,69 @@ Future<void> makeReportWithDialog(BuildContext context, AppState state) async {
           'в отчёт не попадают. Пока VPN подключён, записываются адреса DNS-серверов, к которым '
           'ходит программа: по ним можно примерно понять, из какой вы страны. '
           'Отправляйте файл только тому, кому доверяете.'),
-      ok: tr('Собрать'));
+      ok: tr('Собрать'), maxWidth: 560);
   if (!ok) return;
+  if (!context.mounted) return;
+  final reportFuture = state.buildReport();
+  final report = await showDialog<String>(
+    context: context, builder: (_) => ReportPreviewDialog(report: reportFuture),
+  );
+  if (report == null) return;
   final dir = await WinSys.pickFolder();
   if (dir == null) return;
   try {
-    final path = await state.makeReport(dir);
+    final path = await state.saveReport(dir, report);
     state.toast(tr('Отчёт сохранён'), kind: ToastKind.success, detail: path.split(r'\').last);
   } catch (e) {
     state.toast(tr('Не удалось сохранить отчёт: {0}', [describeNetError(e)]));
   }
+}
+
+class ReportPreviewDialog extends StatefulWidget {
+  const ReportPreviewDialog({super.key, required this.report});
+  final Future<String> report;
+  @override
+  State<ReportPreviewDialog> createState() => _ReportPreviewDialogState();
+}
+
+class _ReportPreviewDialogState extends State<ReportPreviewDialog> {
+  final _scroll = SmoothScrollController();
+  @override
+  void dispose() { _scroll.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String>(
+    future: widget.report,
+    builder: (context, snapshot) {
+      final lines = snapshot.data?.split('\n');
+      return AlertDialog(
+      title: Text(tr('Предпросмотр отчёта')),
+      content: SizedBox(width: 760, height: 430, child: snapshot.hasError
+          ? Center(child: Text(tr('Не удалось собрать отчёт: {0}', [screenTextOf(context, describeNetError(snapshot.error!))])))
+          : !snapshot.hasData
+              ? const Center(child: CircularProgressIndicator())
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (screenPrivacyOf(context)) ...[
+                    Text(tr('IP и ссылки скрыты только на экране; в файле сохранятся исходные данные.'),
+                        style: TextStyle(color: C.muted, fontSize: 12)),
+                    const SizedBox(height: 8),
+                  ],
+                  Expanded(child: Scrollbar(controller: _scroll, thumbVisibility: true, child: ListView.builder(
+                    controller: _scroll, padding: const EdgeInsets.only(right: 16),
+                    itemCount: lines!.length, itemBuilder: (_, i) => SelectableText(
+                      lines[i].isEmpty ? ' ' : screenTextOf(context, lines[i]),
+                      style: TextStyle(color: C.text, fontFamily: 'Consolas', fontSize: 12),
+                    ),
+                  ))),
+                ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Отмена'))),
+        GradientButton(label: tr('Сохранить'), onPressed: snapshot.hasData
+            ? () => Navigator.pop(context, snapshot.data!) : null),
+      ],
+    );
+    },
+  );
 }
 
 /// Отчёт для разбора: версия, настройки и журнал последнего подключения одним файлом.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'theme.dart';
+import 'screen_privacy.dart';
 import 'widgets.dart';
 import '../l10n/l10n.dart';
 
@@ -230,14 +231,14 @@ class _MenuRow<T> extends StatelessWidget {
                 const SizedBox(width: 10),
               ],
               Expanded(
-                child: Text(item.label,
+                child: Text(screenTextOf(context, item.label),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: color)),
               ),
               if (item.hint != null) ...[
                 const SizedBox(width: 18),
-                Text(item.hint!, style: TextStyle(fontSize: 11.5, color: C.muted)),
+                Text(screenTextOf(context, item.hint!), style: TextStyle(fontSize: 11.5, color: C.muted)),
               ],
               if (item.checked) ...[
                 const SizedBox(width: 14),

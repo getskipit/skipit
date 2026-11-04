@@ -169,7 +169,7 @@ Future<void> main(List<String> rawArgs) async {
   final flagsDir = '${File(Platform.resolvedExecutable).parent.path}\\data\\flutter_assets\\assets\\flags';
   void syncTray() {
     final name = state.selectedServer?.name;
-    final server = name == null ? null : Flags.forTray(name);
+    final server = name == null ? null : Flags.forTray(state.screenText(name));
     final status = switch (state.status) {
       ConnStatus.connected => tr('Подключено'),
       ConnStatus.connecting => tr('Подключение…'),
@@ -190,14 +190,14 @@ Future<void> main(List<String> rawArgs) async {
     // Провайдер каждого сервера — для заголовков в списке. Если провайдер один, заголовки не нужны.
     String groupOf(ServerProfile s) {
       final sub = state.subscriptionById(s.subscriptionId);
-      return sub == null ? tr('Свои серверы') : Flags.forTray(sub.displayName);
+      return sub == null ? tr('Свои серверы') : Flags.forTray(state.screenText(sub.displayName));
     }
 
     final groups = [for (final s in servers) groupOf(s)];
     final grouped = groups.toSet().length > 1;
     final key = '$tooltip|${state.status.name}|${state.settings.closeToTray}|${state.settings.notifications}|$dark|${accent.name}|${state.settings.mode.name}|'
         '${state.usesTun ? '${state.settings.tunCore.name}|${state.settings.killSwitch}' : ''}|${grouped ? groups.join(',') : ''}|'
-        '${state.settings.selectedServerId}|${servers.map((s) => '${s.id}:${s.name}').join(',')}|${state.settings.uiScale}';
+        '${state.settings.selectedServerId}|${servers.map((s) => '${s.id}:${state.screenText(s.name)}').join(',')}|${state.settings.uiScale}|${state.screenPrivacy}';
     if (key == lastTray) return;
     lastTray = key;
     trayServers = [for (final s in servers) s.id];
@@ -224,7 +224,7 @@ Future<void> main(List<String> rawArgs) async {
             final (country, rest) = Flags.leading(s.name);
             final flag = country == null ? '' : '$flagsDir\\$country.png';
             return {
-              'name': Flags.forTray(rest),
+              'name': Flags.forTray(state.screenText(rest)),
               'flag': flag.isNotEmpty && File(flag).existsSync() ? flag : '',
               'group': grouped ? groups[i] : '',
             };

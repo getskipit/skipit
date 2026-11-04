@@ -129,6 +129,8 @@ class Tray {
 
   /// Уведомление Windows у значка. Оболочка показывает его, только когда окно спрятано или свёрнуто.
   /// [kind] — цвет отметки на значке уведомления: ok — связь вернулась, warn — сбой, error — ошибка, info — без отметки.
+  static Future<void> clearNotification() => _call('clearNotification');
+
   static Future<void> notify(String text, {String kind = 'info'}) =>
       _call('notify', {'title': AppPaths.appName, 'text': text, 'kind': kind});
 

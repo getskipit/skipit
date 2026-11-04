@@ -16,6 +16,7 @@ import '../core/pac.dart';
 import '../core/paths.dart';
 import '../core/ping.dart';
 import '../core/report.dart';
+import '../core/screen_privacy.dart';
 import '../core/rule_list.dart';
 import '../core/service_client.dart';
 import '../core/site_check.dart';
@@ -40,7 +41,8 @@ enum ConnStatus { disconnected, connecting, connected, disconnecting }
 enum ToastKind { success, error, info, update }
 
 class ToastMessage {
-  ToastMessage(this.text, this.kind, [this.detail]);
+  ToastMessage(this.text, this.kind, [this.detail, this.undo]);
+  final VoidCallback? undo;
   final String text;
   final ToastKind kind;
 
@@ -69,6 +71,15 @@ class NeedAdminException implements Exception {
 
 class AppState extends ChangeNotifier {
   AppSettings settings = AppSettings();
+
+  // Временный режим: не записывается в настройки и не изменяет исходные данные.
+  bool screenPrivacy = false;
+  void toggleScreenPrivacy() {
+    screenPrivacy = !screenPrivacy;
+    if (screenPrivacy) unawaited(Tray.clearNotification());
+    notifyListeners();
+  }
+  String screenText(String text) => screenPrivacy ? hideScreenAddresses(text) : text;
   final subscriptions = <Subscription>[];
   final servers = <ServerProfile>[];
   final routingProfiles = <RoutingProfile>[];
@@ -1095,13 +1106,9 @@ class AppState extends ChangeNotifier {
         tr('Правила по программам'): tr('{0}, в списке {1}', [appRules.mode.name, appRules.enabledMatches.length]),
       };
 
-  /// Собирает отчёт для разбора (см. [DiagReport]) в файл в папке [dir] и возвращает путь к нему.
-  /// В отчёте журнал текущего подключения, а без него — последнего из сохранённых.
-  Future<String> makeReport(String dir) async {
+  /// Собирает отчёт в памяти: показанный текст затем сохраняется без повторной сборки.
+  Future<String> buildReport() async {
     final now = DateTime.now();
-    String two(int n) => n.toString().padLeft(2, '0');
-    final path = tr('{0}\\{1} — отчёт {2}-{3}-{4} '
-        '{5}-{6}.txt', [dir, AppPaths.appName, now.year, two(now.month), two(now.day), two(now.hour), two(now.minute)]);
     var session = log.current;
     if (session?.connection != true) session = log.sessions.where((s) => s.connection).lastOrNull ?? session;
     var journal = await DiagReport.readLog(session?.files ?? const []);
@@ -1186,10 +1193,21 @@ class AppState extends ChangeNotifier {
       logStart: journal.head,
       logCut: journal.cut,
     );
+    return report;
+  }
+
+  /// Сохраняет ранее собранный текст и возвращает путь к файлу.
+  Future<String> saveReport(String dir, String report) async {
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final path = tr('{0}\\{1} — отчёт {2}-{3}-{4} '
+        '{5}-{6}.txt', [dir, AppPaths.appName, now.year, two(now.month), two(now.day), two(now.hour), two(now.minute)]);
     await File(path).writeAsString(report, flush: true);
     log.add('app', tr('Отчёт для разбора сохранён в файл'));
     return path;
   }
+
+  Future<String> makeReport(String dir) async => saveReport(dir, await buildReport());
 
   /// Заменяет настройки, подписки и серверы содержимым файла экспорта (или старого state.json).
   /// Возвращает текст ошибки или null, если всё получилось.
@@ -1410,8 +1428,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// Всплывающее сообщение внизу окна. [kind] не задан — определяется по тексту (см. [ToastMessage.kindOf]).
-  void toast(String msg, {ToastKind? kind, String? detail}) =>
-      _messages.add(ToastMessage(msg, kind ?? ToastMessage.kindOf(msg), detail));
+  void toast(String msg, {ToastKind? kind, String? detail, VoidCallback? undo}) =>
+      _messages.add(ToastMessage(msg, kind ?? ToastMessage.kindOf(msg), detail, undo));
 
   // ---------------------------------------------------------------------------
   // Выборки
@@ -1768,13 +1786,126 @@ class AppState extends ChangeNotifier {
     changed();
   }
 
+  Future<RoutingProfile> duplicateRoutingProfile(RoutingProfile original) async {
+    final copy = original.duplicate(name: tr('Копия: {0}', [original.name]));
+    for (final source in copy.ruleLists) {
+      final oldFile = File(RuleList.path(original.id, source.url));
+      final newFile = File(RuleList.path(copy.id, source.url));
+      try {
+        if (!await oldFile.exists()) throw const FileSystemException('Rule list cache missing');
+        await newFile.parent.create(recursive: true);
+        await oldFile.copy(newFile.path);
+      } on FileSystemException {
+        source.updatedAt = null;
+        source.count = 0;
+      }
+    }
+    final baseName = copy.name;
+    var number = 2;
+    while (routingProfiles.any((p) => p.name == copy.name)) {
+      copy.name = '$baseName ($number)';
+      number++;
+    }
+    final index = routingProfiles.indexOf(original);
+    routingProfiles.insert(index < 0 ? routingProfiles.length : index + 1, copy);
+    changed();
+    return copy;
+  }
+
+  final _undoProtectedProfiles = <RoutingProfile>[];
+  final _undoCleanupTimers = <Timer>[];
+  final _undoRuleOrder = <AppEntry>[];
+  final _pendingDeletedRules = <AppEntry>{};
+
   void deleteSubscription(Subscription sub) {
-    subscriptions.remove(sub);
+    final index = subscriptions.indexOf(sub);
+    if (index < 0) return;
+    final removedServers = <(int, ServerProfile)>[
+      for (var i = 0; i < servers.length; i++)
+        if (servers[i].subscriptionId == sub.id) (i, servers[i]),
+    ];
+    final removedProfiles = <(int, RoutingProfile)>[
+      for (var i = 0; i < routingProfiles.length; i++)
+        if (routingProfiles[i].subscriptionId == sub.id) (i, routingProfiles[i]),
+    ];
+    final selected = settings.selectedServerId;
+    subscriptions.removeAt(index);
     servers.removeWhere((s) => s.subscriptionId == sub.id);
     routingProfiles.removeWhere((r) => r.subscriptionId == sub.id);
-    gcRuleListCache();
+    _undoProtectedProfiles.addAll(removedProfiles.map((p) => p.$2));
     if (selectedServer == null) settings.selectedServerId = servers.firstOrNull?.id;
+    final fallback = settings.selectedServerId;
     changed();
+    late final Timer timer;
+    timer = Timer(const Duration(seconds: 9), () {
+      _undoCleanupTimers.remove(timer);
+      _undoProtectedProfiles.removeWhere((p) => removedProfiles.any((r) => identical(r.$2, p)));
+      gcRuleListCache();
+    });
+    _undoCleanupTimers.add(timer);
+    toast(tr('Подписка удалена'), undo: () {
+      if (subscriptions.any((s) => s.id == sub.id || s.url == sub.url)) return;
+      subscriptions.insert(index.clamp(0, subscriptions.length), sub);
+      for (final (position, server) in removedServers) {
+        if (!servers.any((s) => s.id == server.id)) servers.insert(position.clamp(0, servers.length), server);
+      }
+      for (final (position, profile) in removedProfiles) {
+        if (!routingProfiles.any((p) => p.id == profile.id)) routingProfiles.insert(position.clamp(0, routingProfiles.length), profile);
+      }
+      if (settings.selectedServerId == fallback && removedServers.any((s) => s.$2.id == selected)) {
+        settings.selectedServerId = selected;
+      }
+      timer.cancel();
+      _undoCleanupTimers.remove(timer);
+      _undoProtectedProfiles.removeWhere((p) => removedProfiles.any((r) => identical(r.$2, p)));
+      changed();
+    });
+  }
+
+  void deleteAppRule(AppEntry entry) {
+    final index = appRules.entries.indexOf(entry);
+    if (index < 0) return;
+    if (_pendingDeletedRules.isEmpty) {
+      _undoRuleOrder
+        ..clear()
+        ..addAll(appRules.entries);
+    } else {
+      // Добавленные после первого удаления строки тоже получают место среди прежних.
+      for (var i = 0; i < appRules.entries.length; i++) {
+        final current = appRules.entries[i];
+        if (_undoRuleOrder.contains(current)) continue;
+        final next = appRules.entries.skip(i + 1).where(_undoRuleOrder.contains).firstOrNull;
+        _undoRuleOrder.insert(next == null ? _undoRuleOrder.length : _undoRuleOrder.indexOf(next), current);
+      }
+    }
+    _pendingDeletedRules.add(entry);
+    appRules.entries.removeAt(index);
+    changed();
+    void release() {
+      _pendingDeletedRules.remove(entry);
+      if (_pendingDeletedRules.isEmpty) _undoRuleOrder.clear();
+    }
+    late final Timer timer;
+    timer = Timer(const Duration(seconds: 9), () {
+      _undoCleanupTimers.remove(timer);
+      release();
+    });
+    _undoCleanupTimers.add(timer);
+    toast(tr('Правило удалено'), undo: () {
+      if (!appRules.entries.any((e) => e.match.toLowerCase() == entry.match.toLowerCase())) {
+        final original = _undoRuleOrder.indexOf(entry);
+        final previous = _undoRuleOrder.take(original).toList().reversed
+            .where(appRules.entries.contains).firstOrNull;
+        final next = _undoRuleOrder.skip(original + 1).where(appRules.entries.contains).firstOrNull;
+        final position = previous != null ? appRules.entries.indexOf(previous) + 1
+            : next != null ? appRules.entries.indexOf(next) : index.clamp(0, appRules.entries.length);
+        appRules.entries.insert(position, entry);
+        changed();
+      }
+      timer.cancel();
+      _undoCleanupTimers.remove(timer);
+      release();
+    });
   }
 
   void deleteServer(ServerProfile s) {
@@ -2256,7 +2387,7 @@ class AppState extends ChangeNotifier {
 
       final routing = routingForConfig;
       // У серверов с JSON-конфигом провайдера действуют его правила, а правила профиля — вместе с ними.
-      await prepareConnectGeoAndLists(routing, XrayConfig.providerConfig(server));
+      final preparedRuleLists = await prepareConnectGeoAndLists(routing, XrayConfig.providerConfig(server));
 
       _checkCancel();
       // Порты проверяются ДО запуска: иначе «порт открыт» мог бы означать чужую программу
@@ -2280,7 +2411,7 @@ class AppState extends ChangeNotifier {
       Net.proxyAuth = session.httpAuth ? '${session.portUser}:${session.portPassword}' : null;
 
       final config = XrayConfig.build(
-          server: server, routing: routing, settings: session, ruleLists: _preparedRuleLists);
+          server: server, routing: routing, settings: session, ruleLists: preparedRuleLists);
       final xrayTun = this.xrayTun;
       // DNS по программам: запрос DNS отправляет не сама программа, а служба Windows «DNS-клиент», и в ядре
       // не видно, чей он. Служба SkipIt узнаёт это по журналу DNS-клиента: программам, которые идут мимо VPN,
@@ -2853,7 +2984,7 @@ class AppState extends ChangeNotifier {
   /// Уведомление Windows о сбое или восстановлении VPN. Показывается, только когда окно спрятано
   /// или свёрнуто (это решает оболочка окна) и уведомления не выключены в настройках.
   void _notify(String text, [String kind = 'info']) {
-    if (settings.notifications) unawaited(Tray.notify(text, kind: kind));
+    if (settings.notifications) unawaited(Tray.notify(screenText(text), kind: kind));
   }
 
   /// Гео-базы и списки по ссылке перед подключением. Гео-базы скачиваются, если они нужны самому
@@ -2861,7 +2992,7 @@ class AppState extends ChangeNotifier {
   /// geosite:/geoip: (без гео-файлов ядро с таким конфигом не запустится). Профиль для фонового
   /// обновления списков — сохранённый ([selectedRouting]), а не копия из [routingForConfig]
   /// при включённом «Мой DNS»: обновлённые число записей и дата должны попасть в настройки.
-  Future<void> prepareConnectGeoAndLists(RoutingProfile routing, Map<String, dynamic>? provider) async {
+  Future<RuleListEntries> prepareConnectGeoAndLists(RoutingProfile routing, Map<String, dynamic>? provider) async {
     // Гео-базы этому подключению могут быть не нужны — тогда профиль прошлого подключения не должен
     // остаться для фонового обновления. То же со списками по ссылке.
     _geoRouting = null;
@@ -2871,18 +3002,19 @@ class AppState extends ChangeNotifier {
         throw CoreException(tr('Сначала загрузите списки в редакторе профиля'));
       }
     }
-    _preparedRuleLists = await RuleList.readEntriesAsync(routing);
+    final preparedRuleLists = await RuleList.readEntriesAsync(routing);
     if (provider != null) {
       final own = XrayConfig.hasOwnRules(routing) &&
-          (XrayConfig.needsGeoFiles(routing) || _preparedRuleLists!.needsGeo);
+          (XrayConfig.needsGeoFiles(routing) || preparedRuleLists.needsGeo);
       if (own || settings.adBlock || XrayConfig.configNeedsGeoFiles(provider)) {
         await _ensureGeoFiles(routing, force: true);
       }
     } else {
-      await _ensureGeoFiles(routing, force: settings.adBlock || _preparedRuleLists!.needsGeo);
+      await _ensureGeoFiles(routing, force: settings.adBlock || preparedRuleLists.needsGeo);
     }
     final stored = selectedRouting;
     if (stored.ruleLists.isNotEmpty) _ruleListRouting = stored;
+    return preparedRuleLists;
   }
 
   Future<void> _ensureGeoFiles(RoutingProfile routing, {bool force = false}) async {
@@ -2953,7 +3085,6 @@ class AppState extends ChangeNotifier {
   /// Скачать список [s] в кэш. Успех — записи посчитаны и дата обновления свежая; неудача — в журнале
   /// предупреждение, старая копия в кэше не тронута, адрес помнится в [_ruleListTriedAt] на 6 часов.
   final Map<String, Future<bool>> _ruleListDownloads = {};
-  RuleListEntries? _preparedRuleLists;
 
   Future<bool> downloadRuleListSource(String profileId, RuleListSource source) async {
     final key = RuleList.cacheFile(profileId, source.url);
@@ -3025,7 +3156,7 @@ class AppState extends ChangeNotifier {
 
   /// Кэш списков профилей, которых больше нет, — на диске не держим.
   void gcRuleListCache() {
-    if (_ruleListDownloads.isEmpty) RuleList.cleanOrphans(routingProfiles);
+    if (_ruleListDownloads.isEmpty) RuleList.cleanOrphans([...routingProfiles, ..._undoProtectedProfiles]);
   }
 
   /// [staged] — файлы ложатся рядом (*.new) и встают на место перед следующим подключением: работающее
@@ -3201,6 +3332,7 @@ class AppState extends ChangeNotifier {
     _subsTimer?.cancel();
     _updateTimer?.cancel();
     _statsTimer?.cancel();
+    for (final timer in _undoCleanupTimers) { timer.cancel(); }
     _messages.close();
     super.dispose();
   }

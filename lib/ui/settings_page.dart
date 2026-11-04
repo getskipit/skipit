@@ -20,6 +20,7 @@ import 'groups.dart';
 import 'mouse_back.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
+import 'screen_privacy.dart';
 import 'widgets.dart';
 import '../l10n/l10n.dart';
 
@@ -74,7 +75,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   /// Поиск по настройкам: остаются строки, в названии или подписи которых есть введённый текст.
-  final _search = TextEditingController();
+  late final _search = ScreenPrivacyController(text: '', hidden: () => AppScope.read(context).screenPrivacy);
   String _query = '';
 
   /// Открытая группа настроек; null — плитки всех групп.
@@ -188,6 +189,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: TextFormField(
               key: ValueKey(title),
               initialValue: value,
+              obscureText: state.screenPrivacy && title == tr('Исключения системного прокси'),
               onChanged: (v) {
                 set(v.trim());
                 state.changed();
@@ -425,6 +427,13 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
+          _Row(
+            title: tr('Скрыть IP и ссылки'),
+            subtitle: tr('Для демонстрации экрана: IP и ссылки скрываются в окне и трее. QR-коды и конфигурации временно недоступны'),
+            trailing: AppSwitch(value: state.screenPrivacy, onChanged: (_) => state.toggleScreenPrivacy()),
+          ),
+          toggle(tr('Компактные строки правил'), tr('Уменьшить отступы в списках профилей маршрутизации и программ'),
+              s.compactRuleRows, (v) => s.compactRuleRows = v),
           toggle(tr('Меньше анимаций'), tr('Списки, меню и переходы срабатывают сразу, без плавного движения. Для слабых компьютеров'),
               s.reduceMotion, (v) => s.reduceMotion = v),
         ]),
@@ -603,8 +612,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   // Новый ключ при каждом открытии: поле берёт текущий адрес, а не прежний.
                   key: ValueKey(tr('Свой адрес проверки {0}', [s.testUrlOwn])),
                   initialValue: s.testUrl,
+                  obscureText: state.screenPrivacy,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
-                  validator: (v) => _testUrlOk(v!.trim()) ? null : tr('Нужен адрес вида https://example.com/…'),
+                  validator: (v) => _testUrlOk(v!.trim()) ? null : state.screenText(tr('Нужен адрес вида https://example.com/…')),
                   onChanged: (v) {
                     if (!_testUrlOk(v.trim())) return;
                     s.testUrl = v.trim();
@@ -815,7 +825,7 @@ class _SettingsPageState extends State<SettingsPage> {
               s.proxyBypass.isEmpty ? WinSys.defaultProxyBypass : s.proxyBypass,
               // Стандартный список не сохраняем: если он изменится в новой версии, человек получит новый.
               (v) => s.proxyBypass = v == WinSys.defaultProxyBypass ? '' : v),
-          toggle(tr('Разрешить подключения из локальной сети'), tr('Раздавать прокси другим устройствам (0.0.0.0)'), s.allowLan,
+          toggle(tr('Разрешить подключения из локальной сети'), state.screenText(tr('Раздавать прокси другим устройствам (0.0.0.0)')), s.allowLan,
               (v) => s.allowLan = v),
         ]),
         _Section(tr('Соединение с сервером'), [
@@ -1324,7 +1334,7 @@ class _UserAgentField extends StatefulWidget {
 }
 
 class _UserAgentFieldState extends State<_UserAgentField> {
-  late final _text = TextEditingController(text: widget.value);
+  late final _text = ScreenPrivacyController(text: widget.value, hidden: () => AppScope.read(context).screenPrivacy);
 
   @override
   void dispose() {

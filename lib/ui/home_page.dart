@@ -137,7 +137,7 @@ class _HomePageState extends State<HomePage> {
         child: connected
             ? _ExitInfo(
                 country: state.linkDown ? null : state.exitCountry,
-                ip: state.linkDown ? null : state.exitIp,
+                ip: state.linkDown || state.screenPrivacy ? null : state.exitIp,
                 killSwitch: state.killSwitchOn,
                 onCopyIp: (ip) async {
                   await Clipboard.setData(ClipboardData(text: ip));
@@ -497,11 +497,11 @@ class _NoticeBox extends StatelessWidget {
             Icon(icon, size: 18, color: color),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(title, style: TextStyle(color: C.text, fontSize: 13, fontWeight: FontWeight.w700)),
+              child: Text(AppScope.of(context).screenText(title), style: TextStyle(color: C.text, fontSize: 13, fontWeight: FontWeight.w700)),
             ),
           ]),
           const SizedBox(height: 6),
-          Text(text, style: TextStyle(color: C.muted, fontSize: 12.5)),
+          Text(AppScope.of(context).screenText(text), style: TextStyle(color: C.muted, fontSize: 12.5)),
           const SizedBox(height: 10),
           GhostButton(label: actionLabel, icon: actionIcon, onPressed: onAction),
         ]),
@@ -610,7 +610,7 @@ class _ErrorBoxState extends State<_ErrorBox> {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                SelectableText(widget.text, style: TextStyle(color: C.red, fontSize: 13)),
+                SelectableText(AppScope.of(context).screenText(widget.text), style: TextStyle(color: C.red, fontSize: 13)),
                 if (widget.actionLabel != null) ...[
                   const SizedBox(height: 10),
                   GhostButton(label: widget.actionLabel!, icon: Icons.bolt_rounded, onPressed: widget.onAction),

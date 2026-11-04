@@ -5,6 +5,7 @@ import '../state/app_scope.dart';
 import 'app_icon.dart';
 import 'app_menu.dart';
 import 'theme.dart';
+import 'screen_privacy.dart';
 import '../l10n/l10n.dart';
 
 /// Настройка «Меньше анимаций» (для слабых компьютеров): время всех анимаций окна ускоряется в
@@ -200,7 +201,7 @@ class AppDropdown<T> extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       children: [...previous, if (current != null) current],
                     ),
-                    child: Text(items[value] ?? '$value',
+                    child: Text(screenTextOf(context, items[value] ?? '$value'),
                         key: ValueKey(value),
                         maxLines: 1,
                         softWrap: false,
@@ -508,7 +509,7 @@ class PageHeader extends StatelessWidget {
   }
 }
 
-/// Кнопка с оранжевым градиентом; при наведении светится ярче.
+/// Кнопка с градиентом акцента; при наведении светится ярче.
 class GradientButton extends StatelessWidget {
   const GradientButton({super.key, required this.label, this.icon, this.onPressed});
   final String label;
@@ -526,7 +527,7 @@ class GradientButton extends StatelessWidget {
           duration: const Duration(milliseconds: 160),
           decoration: BoxDecoration(
             gradient: hovered
-                ? const LinearGradient(colors: [Color(0xFFFFAE5C), Color(0xFFFF7033)])
+                ? LinearGradient(colors: [Color.lerp(C.orangeLight, Colors.white, 0.16)!, Color.lerp(C.orange, Colors.white, 0.12)!])
                 : C.gradient,
             borderRadius: BorderRadius.circular(C.r(12)),
             boxShadow: enabled
@@ -850,7 +851,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
                             fontWeight: FontWeight.w600,
                             color: selected ? Colors.white : (hovered ? C.text : C.muted),
                           ),
-                          child: Text(e.value),
+                          child: Text(screenTextOf(context, e.value)),
                         ),
                       ),
                     );
@@ -872,7 +873,8 @@ Future<String?> promptText(
   int maxLines = 1,
   String ok = 'Готово',
 }) {
-  final ctrl = TextEditingController(text: initial);
+  final hidden = screenPrivacyOf(context);
+  final ctrl = ScreenPrivacyController(text: initial, hidden: () => hidden);
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -896,12 +898,15 @@ Future<String?> promptText(
   );
 }
 
-Future<bool> confirm(BuildContext context, String title, String text, {String ok = 'Удалить'}) async =>
+Future<bool> confirm(BuildContext context, String title, String text, {String ok = 'Удалить', double? maxWidth}) async =>
     await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(text),
+        title: Text(screenTextOf(context, title)),
+        content: maxWidth == null ? Text(screenTextOf(context, text)) : ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Text(screenTextOf(context, text)),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
           GradientButton(label: tr(ok), onPressed: () => Navigator.pop(ctx, true)),

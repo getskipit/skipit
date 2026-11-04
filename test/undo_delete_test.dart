@@ -1,0 +1,233 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
+import 'package:skipit/core/paths.dart';
+import 'package:skipit/models/app_rules.dart';
+import 'package:skipit/models/routing.dart';
+import 'package:skipit/models/server.dart';
+import 'package:skipit/models/subscription.dart';
+import 'package:skipit/state/app_state.dart';
+import 'package:skipit/state/app_scope.dart';
+import 'package:skipit/ui/shell.dart';
+import 'package:skipit/ui/theme.dart';
+
+class TestState extends AppState {
+  @override
+  void save() {}
+}
+
+void main() {
+  setUpAll(AppPaths.init);
+  testWidgets('many undo notifications stay scrollable and ordinary notifications remain visible', (tester) async {
+    tester.view.physicalSize = const Size(944, 561);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    C.use(Palette.dark);
+    final state = TestState()..routingProfiles.add(RoutingProfile.global());
+    final entries = List.generate(8, (i) => AppEntry(match: 'app$i', label: 'App $i'));
+    state.appRules.entries.addAll(entries);
+    await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: buildTheme(), home: const Shell())));
+    await tester.pump();
+    for (final entry in entries) { state.deleteAppRule(entry); }
+    state.toast('Другое уведомление');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.getRect(find.text('Другое уведомление')).top, greaterThanOrEqualTo(0));
+    expect(find.text('Отменить'), findsNWidgets(8));
+    await tester.ensureVisible(find.text('Отменить').first);
+    await tester.pump();
+    await tester.tap(find.text('Отменить').first);
+    await tester.pump();
+    expect(state.appRules.entries, [entries.first]);
+    await tester.pumpWidget(const SizedBox());
+    state.dispose();
+  });
+  test('rule order is preserved when several deletions are undone in either order', () async {
+    for (final reverse in [false, true]) {
+      final state = TestState();
+      final entries = List.generate(4, (i) => AppEntry(match: 'app$i', label: 'App $i'));
+      state.appRules.entries.addAll(entries);
+      var next = state.messages.first;
+      state.deleteAppRule(entries[1]);
+      final first = await next;
+      next = state.messages.first;
+      state.deleteAppRule(entries[2]);
+      final second = await next;
+      for (final message in reverse ? [second, first] : [first, second]) { message.undo!(); }
+      expect(state.appRules.entries, entries);
+      state.dispose();
+    }
+  });
+  testWidgets('other notifications do not interrupt deletion undo', (tester) async {
+    tester.view.physicalSize = const Size(944, 561);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    C.use(Palette.dark);
+    final state = TestState()..routingProfiles.add(RoutingProfile.global());
+    final rule = AppEntry(match: 'app', label: 'App');
+    state.appRules.entries.add(rule);
+    await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: buildTheme(), home: const Shell())));
+    await tester.pump();
+    state.deleteAppRule(rule);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    state.toast('Другое уведомление', kind: ToastKind.error);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Отменить'), findsOneWidget);
+    expect(find.text('Другое уведомление'), findsOneWidget);
+    await tester.tap(find.text('Отменить'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(state.appRules.entries, [rule]);
+    expect(find.text('Другое уведомление'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    state.dispose();
+  });
+  testWidgets('each deletion has its own undo', (tester) async {
+    tester.view.physicalSize = const Size(944, 561);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    C.use(Palette.dark);
+    final state = TestState()..routingProfiles.add(RoutingProfile.global());
+    final first = AppEntry(match: 'first', label: 'First');
+    final second = AppEntry(match: 'second', label: 'Second');
+    state.appRules.entries.addAll([first, second]);
+    await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: buildTheme(), home: const Shell())));
+    await tester.pump();
+    state.deleteAppRule(first);
+    state.deleteAppRule(second);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Отменить'), findsNWidgets(2));
+    await tester.tap(find.text('Отменить').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(state.appRules.entries, [first]);
+    expect(find.text('Отменить'), findsOneWidget);
+    await tester.tap(find.text('Отменить'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(state.appRules.entries, [first, second]);
+    await tester.pumpWidget(const SizedBox());
+    state.dispose();
+  });
+  testWidgets('undo expiry does not dismiss another notification', (tester) async {
+    tester.view.physicalSize = const Size(944, 561);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    C.use(Palette.dark);
+    final state = TestState()..routingProfiles.add(RoutingProfile.global());
+    final rule = AppEntry(match: 'app', label: 'App');
+    state.appRules.entries.add(rule);
+    await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: buildTheme(), home: const Shell())));
+    await tester.pump();
+    state.deleteAppRule(rule);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 7));
+    state.toast('Другое уведомление', kind: ToastKind.error);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Отменить'), findsNothing);
+    expect(find.text('Другое уведомление'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    state.dispose();
+  });
+  testWidgets('undo button restores a deleted rule', (tester) async {
+    tester.view.physicalSize = const Size(944, 561);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    C.use(Palette.dark);
+    final state = TestState()..routingProfiles.add(RoutingProfile.global());
+    final rule = AppEntry(match: 'app', label: 'App');
+    state.appRules.entries.add(rule);
+    await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: buildTheme(), home: const Shell())));
+    await tester.pump();
+    state.deleteAppRule(rule);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Правило удалено'), findsOneWidget);
+    expect(find.text('8'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('6'), findsOneWidget);
+    expect(tester.widget<CircularProgressIndicator>(find.byType(CircularProgressIndicator)).value, closeTo(0.7, 0.02));
+    await tester.tap(find.text('Отменить'));
+    await tester.pump();
+    expect(state.appRules.entries, [rule]);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpWidget(const SizedBox());
+    state.dispose();
+  });
+  testWidgets('undo countdown expires without affecting a later notification', (tester) async {
+    tester.view.physicalSize = const Size(944, 561);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    C.use(Palette.dark);
+    final state = TestState()..routingProfiles.add(RoutingProfile.global());
+    final rule = AppEntry(match: 'app', label: 'App');
+    state.appRules.entries.add(rule);
+    await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: buildTheme(), home: const Shell())));
+    await tester.pump();
+    state.deleteAppRule(rule);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 7));
+    expect(find.text('1'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Правило удалено'), findsNothing);
+    state.toast('Другое уведомление');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('Другое уведомление'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Другое уведомление'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    state.dispose();
+  });
+  test('undo restores subscription, servers, profile and selected server', () async {
+    final state = TestState();
+    final sub = Subscription(id: 'sub', url: 'https://example.com/sub');
+    final other = Subscription(id: 'other', url: 'https://example.org/sub');
+    final server = ServerProfile(id: 'server', name: 'Test', protocol: 'vless', address: '203.0.113.1', port: 443, link: '', outbound: {}, subscriptionId: sub.id);
+    final fallback = ServerProfile(id: 'fallback', name: 'Other', protocol: 'vless', address: '203.0.113.2', port: 443, link: '', outbound: {});
+    final profile = RoutingProfile(id: 'profile', name: 'Test', subscriptionId: sub.id);
+    state.subscriptions.addAll([other, sub]);
+    state.servers.addAll([server, fallback]);
+    state.routingProfiles.add(profile);
+    state.settings.selectedServerId = server.id;
+    final message = state.messages.first;
+    state.deleteSubscription(sub);
+    expect(state.subscriptions, [other]);
+    expect(state.servers, [fallback]);
+    final toast = await message;
+    toast.undo!();
+    expect(state.subscriptions, [other, sub]);
+    expect(state.servers, [server, fallback]);
+    expect(state.routingProfiles, [profile]);
+    expect(state.settings.selectedServerId, server.id);
+    state.dispose();
+  });
+
+  test('undo rule keeps ordering and does not duplicate an added rule', () async {
+    final state = TestState();
+    final first = AppEntry(match: 'first', label: 'First');
+    final removed = AppEntry(match: 'app', label: 'App', action: AppAction.direct, enabled: false);
+    state.appRules.entries.addAll([first, removed]);
+    var message = state.messages.first;
+    state.deleteAppRule(removed);
+    (await message).undo!();
+    expect(state.appRules.entries, [first, removed]);
+    expect(removed.action, AppAction.direct);
+    expect(removed.enabled, false);
+    message = state.messages.first;
+    state.deleteAppRule(removed);
+    final replacement = AppEntry(match: 'APP', label: 'New');
+    state.appRules.entries.add(replacement);
+    (await message).undo!();
+    expect(state.appRules.entries, [first, replacement]);
+    state.dispose();
+  });
+}
