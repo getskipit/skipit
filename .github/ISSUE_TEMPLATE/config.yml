@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Сообщить об уязвимости приватно
+    url: https://github.com/getskipit/skipit/security/advisories/new
+    about: Не публикуйте сведения об уязвимости в обычных Issues. Порядок описан в SECURITY.md.

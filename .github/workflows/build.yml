@@ -1,106 +1,136 @@
-# Сборка SkipIt на серверах GitHub.
-#
-# Как выпустить версию: Releases → Draft a new release → тег (например v1.1.6) →
-# при необходимости галочка «Set as a pre-release» (увидят только пользователи канала «Бета») → Publish.
-# Сценарий соберёт программу этой версии и прикрепит к релизу SkipIt-Setup-Windows-<версия>.exe —
-# SkipIt у пользователей найдёт его через «Проверить обновления».
-#
-# Push в main — просто проверочная сборка (архив в Actions → Artifacts), без релиза.
+# Проверки pull request и main; публикация только по событию release.
 name: Build
 
 on:
-  release:
-    types: [published]
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.47.5'
 
 jobs:
   windows:
-    runs-on: windows-latest
+    name: Windows checks and build
+    runs-on: windows-2022
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       - name: Версия
         id: ver
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          $tag = '${{ github.event.release.tag_name }}'
-          $v = if ($tag) { $tag -replace '^v', '' } else { '' }
+          $v = ''
+          if ($env:RELEASE_TAG) {
+            if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+([A-Za-z](-\d+)?)?$') { throw 'Некорректный тег версии' }
+            $v = $env:RELEASE_TAG -replace '^v', ''
+          }
           "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Зависимости Flutter
+        run: flutter pub get --enforce-lockfile
+
+      - name: Анализатор
+        run: flutter analyze --no-pub
 
       - name: Inno Setup
         shell: pwsh
         run: choco install innosetup -y --no-progress
 
-      # Версии ядер заданы в tools/cores.json — их выбирает разработчик, программа ядра сама не обновляет.
+      - name: Проверка загрузчика ядер без сети
+        shell: pwsh
+        run: ./tools/test-setup.ps1
+
       - name: Ядра Xray и sing-box
         shell: pwsh
         run: ./tools/setup.ps1
 
       - name: Тесты
-        run: flutter test
+        run: flutter test --no-pub
 
       - name: Сборка программы и установщика
         shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          $v = '${{ steps.ver.outputs.version }}'
-          if ($v) { ./tools/build.ps1 -Version $v } else { ./tools/build.ps1 }
+          if ($env:APP_VERSION) { ./tools/build.ps1 -Version $env:APP_VERSION } else { ./tools/build.ps1 }
+
+      # Исходники той версии sing-box, которая включена в установщик (GPL-3.0).
+      - name: Исходники sing-box для релиза
+        if: github.event_name == 'release'
+        shell: pwsh
+        run: |
+          $v = (Get-Content tools/cores.json -Raw | ConvertFrom-Json).'sing-box'.version
+          $file = "build/installer/sing-box-$($v -replace '^v', '')-source.zip"
+          Invoke-WebRequest "https://github.com/SagerNet/sing-box/archive/refs/tags/$v.zip" -OutFile $file
 
       - uses: actions/upload-artifact@v4
         with:
           name: SkipIt-Setup
+          if-no-files-found: error
           path: |
             build/installer/*.exe
             build/installer/*.sha256
+            build/installer/*-source.zip
 
-      # Сначала контрольная сумма, потом установщик: программа предлагает обновление, когда видит
-      # установщик, и к этому моменту файл с суммой уже должен быть на месте.
-      - name: Прикрепить установщик к релизу
-        if: github.event_name == 'release'
+  publish:
+    name: Publish release assets
+    if: github.event_name == 'release'
+    needs: windows
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: SkipIt-Setup
+          path: build/installer
+
+      - name: Прикрепить файлы к релизу
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          $tag = '${{ github.event.release.tag_name }}'
-          gh release upload $tag (Get-ChildItem build/installer/*.sha256).FullName --clobber
-          gh release upload $tag (Get-ChildItem build/installer/*.exe).FullName --clobber
+          # Контрольная сумма должна появиться раньше установщика.
+          gh release upload $env:RELEASE_TAG (Get-ChildItem build/installer/*.sha256).FullName --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Не удалось прикрепить контрольную сумму' }
+          gh release upload $env:RELEASE_TAG (Get-ChildItem build/installer/*-source.zip).FullName --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Не удалось прикрепить исходники sing-box' }
+          gh release upload $env:RELEASE_TAG (Get-ChildItem build/installer/*.exe).FullName --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Не удалось прикрепить установщик' }
 
-      # GPL-3.0: вместе с sing-box отдаём исходный код именно той версии, что вложена в установщик.
-      - name: Исходники sing-box к релизу
-        if: github.event_name == 'release'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $v = (Get-Content tools/cores.json -Raw | ConvertFrom-Json).'sing-box'.version
-          $file = "sing-box-$($v -replace '^v', '')-source.zip"
-          Invoke-WebRequest "https://github.com/SagerNet/sing-box/archive/refs/tags/$v.zip" -OutFile $file
-          gh release upload '${{ github.event.release.tag_name }}' $file --clobber
-
-      # Флаг pre-release выставляется по номеру версии, а не по галочке в форме —
-      # чтобы его нельзя было забыть: буква в конце, можно с номером сборки (условно X.Y.Za или X.Y.Za-2)
-      # → pre-release, без буквы (1.1.6) → обычный релиз, помеченный как последний.
       - name: Pre-release по номеру версии
-        if: github.event_name == 'release'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          APP_VERSION: ${{ needs.windows.outputs.version }}
         run: |
-          $tag = '${{ github.event.release.tag_name }}'
-          $v = '${{ steps.ver.outputs.version }}'
-          if ($v -match '[A-Za-z](-\d+)?$') {
-            gh release edit $tag --prerelease
-            Write-Host "$v — альфа/бета: отмечен как pre-release"
+          if ($env:APP_VERSION -match '[A-Za-z](-\d+)?$') {
+            gh release edit $env:RELEASE_TAG --prerelease
           } else {
-            gh release edit $tag --prerelease=false --latest
-            Write-Host "$v — стабильная версия: обычный релиз, помечен как последний"
+            gh release edit $env:RELEASE_TAG --prerelease=false --latest
           }
+          if ($LASTEXITCODE -ne 0) { throw 'Не удалось обновить признак pre-release' }

@@ -1,0 +1,24 @@
+name: Feature request
+description: Предложить улучшение SkipIt для Windows
+title: '[Идея]: '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу нужно решить
+      description: Опишите ситуацию, в которой не хватает возможности.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Предлагаемое поведение
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Какие варианты вы пробовали
+  - type: markdown
+    attributes:
+      value: Не добавляйте ссылки подписок, ключи и реальные конфиги. Для примеров используйте условные данные.

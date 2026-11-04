@@ -3,7 +3,7 @@
 #
 # Версии ядер задаёт разработчик в tools\cores.json — программа у пользователей ядра сама не обновляет.
 # Чтобы обновить ядро: поменяйте там "version" (тег релиза) и "sha256" (контрольная сумма zip-архива
-# для Windows x64 со страницы релиза; пустая строка — не проверять), затем запустите этот скрипт.
+# для Windows x64 со страницы релиза), затем запустите этот скрипт. SHA-256 обязателен.
 # Уже скачанное ядро нужной версии повторно не качается.
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +15,11 @@ $core = Join-Path $root 'core'
 $tmp = Join-Path $env:TEMP 'skipit-setup'
 New-Item -ItemType Directory -Force $core, $tmp | Out-Null
 $cores = Get-Content (Join-Path $PSScriptRoot 'cores.json') -Raw | ConvertFrom-Json
+foreach ($name in @('xray', 'sing-box')) {
+    if ($cores.$name.sha256 -notmatch '^[a-fA-F0-9]{64}$') {
+        throw "$name`: в tools/cores.json нужен полный SHA-256 архива (64 шестнадцатеричных знака)"
+    }
+}
 
 # Версия уже лежащего в core\ ядра (пустая строка — ядра нет или оно не запускается).
 function Get-InstalledVersion($exe, $pattern) {
@@ -28,13 +33,12 @@ function Get-InstalledVersion($exe, $pattern) {
 
 # Скачивает архив релиза по прямой ссылке (без API GitHub и его лимитов) и сверяет контрольную сумму.
 function Get-CoreArchive($name, $url, $sha256) {
+    if ($sha256 -notmatch '^[a-fA-F0-9]{64}$') { throw "$name`: некорректный SHA-256 архива" }
     $zip = Join-Path $tmp "$name.zip"
     Write-Host "  $url"
     Invoke-WebRequest $url -OutFile $zip -UseBasicParsing
-    if ($sha256) {
-        $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-        if ($actual -ne $sha256.ToLower()) { throw "$name`: контрольная сумма архива не совпала ($actual)" }
-    }
+    $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+    if ($actual -ne $sha256.ToLower()) { throw "$name`: контрольная сумма архива не совпала ($actual)" }
     $dir = Join-Path $tmp $name
     Expand-Archive $zip -DestinationPath $dir -Force
     return $dir
