@@ -16,9 +16,15 @@ namespace {
 // включена, как и в Dart). Настройки в файле открытым текстом, шифруются только подписки.
 bool RunAsAdminSetting(const wchar_t* app_name) {
   wchar_t appdata[MAX_PATH];
-  const DWORD n = ::GetEnvironmentVariableW(L"APPDATA", appdata, MAX_PATH);
-  if (n == 0 || n >= MAX_PATH) return true;
-  const std::wstring path = std::wstring(appdata) + L"\\" + app_name + L"\\state.json";
+  std::wstring directory;
+  if (IsPortableBuild()) {
+    directory = PortableDataDirectory();
+  } else {
+    const DWORD n = ::GetEnvironmentVariableW(L"APPDATA", appdata, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) return true;
+    directory = std::wstring(appdata) + L"\\" + app_name;
+  }
+  const std::wstring path = directory + L"\\state.json";
   HANDLE file = ::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                               nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (file == INVALID_HANDLE_VALUE) return true;
@@ -62,12 +68,12 @@ bool RelaunchElevatedEarly(std::vector<std::string>& args, int show_command) {
     if (a == "--elevated" || a == "--no-elevate" || a == "--quit") return false;
   }
   if (::IsUserAnAdmin()) return false;
-  const wchar_t* app_name = IsDevBuild() ? L"SkipIt Dev" : L"SkipIt";
+  const wchar_t* app_name = AppName();
   // Программа уже открыта — аргументы ей передаст сама новая копия (main.dart), права не нужны.
   if (::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", app_name)) return false;
   if (!RunAsAdminSetting(app_name)) return false;
   // Есть служба — права не нужны; --no-elevate, чтобы и Dart не просил их (AppState.needsElevation).
-  if (ServiceRunning(IsDevBuild() ? L"SkipItDev" : L"SkipIt")) {
+  if (!IsPortableBuild() && ServiceRunning(IsDevBuild() ? L"SkipItDev" : L"SkipIt")) {
     args.push_back("--no-elevate");
     return false;
   }
@@ -128,7 +134,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(IsDevBuild() ? L"SkipIt Dev" : L"SkipIt", origin, size)) {
+  if (!window.Create(AppName(), origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

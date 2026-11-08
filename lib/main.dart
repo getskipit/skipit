@@ -30,7 +30,7 @@ const trayModes = [ConnectionMode.mixed, ConnectionMode.tun, ConnectionMode.syst
 var trayServers = <String>[];
 
 // У тестовой сборки свой порт: она запускается рядом с установленной программой и не передаёт ей ссылки.
-final _instancePort = AppPaths.isDev ? 47814 : 47813;
+final _instancePort = AppPaths.instancePort;
 
 /// Защита от подмены аргументов через ссылку. Windows запускает программу как `SkipIt.exe "%1"`,
 /// и ссылка с кавычкой внутри (`skipit://x" --quit "`) могла бы добавить свои ключи — например,

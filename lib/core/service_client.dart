@@ -15,7 +15,7 @@ import '../l10n/l10n.dart';
 /// службы и получать то, что программа ей отправляет (в том числе конфиг с ключами серверов).
 class ServiceClient {
   /// Имя службы и её канала; у тестовой сборки — своя служба.
-  static String get name => AppPaths.isDev ? 'SkipItDev' : 'SkipIt';
+  static String get name => AppPaths.layout.serviceName;
 
   /// Версия протокола, с которой умеет работать программа.
   static const protocol = 'skipit-service 5';
@@ -23,6 +23,8 @@ class ServiceClient {
   /// Версия протокола службы («skipit-service 5») или null, если служба не установлена, не запущена
   /// или не отвечает.
   static Future<String?> hello({String? serviceName}) {
+    // Переносная копия не использует службу установленной программы.
+    if (AppPaths.isPortable) return Future.value(null);
     final target = serviceName ?? name;
     return Isolate.run(() => _request(target, 'hello'));
   }

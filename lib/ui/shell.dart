@@ -1422,7 +1422,7 @@ class _VersionRow extends StatelessWidget {
         : state.checkingUpdates
         ? tr('Проверяю обновления…')
         : hasUpdate
-            ? tr('Установить {0}', [state.appUpdate!.version])
+            ? tr(AppPaths.isPortable ? 'Скачать ZIP {0}' : 'Установить {0}', [state.appUpdate!.version])
             : tr('Проверить обновления');
 
     return Tooltip(

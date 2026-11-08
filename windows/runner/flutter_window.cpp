@@ -141,9 +141,15 @@ void FlutterWindow::OnDestroy() {
 void FlutterWindow::RestorePlacement() {
   WINDOWPLACEMENT wp{};
   DWORD size = sizeof(wp);
-  if (RegGetValueW(HKEY_CURRENT_USER, RegKey(), kRegPlacement, RRF_RT_REG_BINARY, nullptr, &wp, &size) !=
-          ERROR_SUCCESS ||
-      size != sizeof(wp)) {
+  if (IsPortableBuild()) {
+    const std::wstring path = PortableDataDirectory() + L"\\window-placement.bin";
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return;
+    const bool read = ReadFile(file, &wp, sizeof(wp), &size, nullptr) != FALSE;
+    CloseHandle(file);
+    if (!read || size != sizeof(wp)) return;
+  } else if (RegGetValueW(HKEY_CURRENT_USER, RegKey(), kRegPlacement, RRF_RT_REG_BINARY, nullptr, &wp, &size) !=
+                 ERROR_SUCCESS || size != sizeof(wp)) {
     return;
   }
   // Монитор, на котором было окно, могли отключить — тогда остаёмся на месте по умолчанию.
@@ -167,6 +173,18 @@ void FlutterWindow::SavePlacement() {
   if (!GetWindowPlacement(hwnd, &wp)) return;
   // Свёрнутое окно запоминаем обычным: открываться свёрнутым оно не должно.
   if (wp.showCmd == SW_SHOWMINIMIZED) wp.showCmd = SW_SHOWNORMAL;
+  if (IsPortableBuild()) {
+    const std::wstring directory = PortableDataDirectory();
+    CreateDirectoryW(directory.c_str(), nullptr);
+    const std::wstring path = directory + L"\\window-placement.bin";
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+      DWORD written = 0;
+      WriteFile(file, &wp, sizeof(wp), &written, nullptr);
+      CloseHandle(file);
+    }
+    return;
+  }
   HKEY key;
   if (RegCreateKeyExW(HKEY_CURRENT_USER, RegKey(), 0, nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr) ==
       ERROR_SUCCESS) {
@@ -186,7 +204,7 @@ void FlutterWindow::AddTrayIcon() {
                                        GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
                                        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
                                        LR_DEFAULTCOLOR | LR_SHARED));
-  if (tray_icon_.szTip[0] == L'\0') wcscpy_s(tray_icon_.szTip, IsDevBuild() ? L"SkipIt Dev" : L"SkipIt");
+  if (tray_icon_.szTip[0] == L'\0') wcscpy_s(tray_icon_.szTip, AppName());
   tray_added_ = Shell_NotifyIconW(NIM_ADD, &tray_icon_) != FALSE;
 }
 
@@ -313,7 +331,7 @@ void FlutterWindow::ShowTrayMenu() {
   // Своё меню в стиле программы (tray_menu.cpp); выбранный пункт придёт сообщением kTrayMenuCommand.
   POINT pt;
   GetCursorPos(&pt);
-  if (tray_menu_.status.empty()) tray_menu_.title = IsDevBuild() ? L"SkipIt Dev" : L"SkipIt";
+  if (tray_menu_.status.empty()) tray_menu_.title = AppName();
   ::ShowTrayMenu(GetHandle(), kTrayMenuCommand, pt, tray_menu_,
                  TrayMenuCommands{kCmdToggle, kCmdOpen, kCmdExit, kCmdKillSwitch, kCmdModeBase, kCmdCoreBase,
                                   kCmdServerBase});

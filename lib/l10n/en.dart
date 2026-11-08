@@ -1314,6 +1314,11 @@ const en = <String, String>{
   'Профиль скопирован. Не все списки доступны — откройте копию и нажмите «Обновить».': 'Profile copied. Some lists are unavailable — open the copy and press “Update”.',
   'Правило удалено': 'Rule deleted',
   'Отменить': 'Undo',
+  'Скачать ZIP': 'Download ZIP',
+  'Скачать ZIP {0}': 'Download ZIP {0}',
+  'Открыть страницу релиза': 'Open release page',
+  'переносная версия, данные в userdata рядом с программой': 'portable version, data in userdata next to the app',
+  'Скачайте переносной ZIP на странице релиза. Закройте SkipIt и распакуйте архив в папку программы с заменой файлов. Папку userdata сохраните.': 'Download the portable ZIP from the release page. Close SkipIt and extract the archive into the app folder, replacing files. Keep the userdata folder.',
   'Компактные строки правил': 'Compact rule rows',
   'Уменьшить отступы в списках профилей маршрутизации и программ': 'Reduce spacing in routing profile and app lists',
 };

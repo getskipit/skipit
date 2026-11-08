@@ -81,6 +81,11 @@ Inno Setup без его мастера после согласия с лице�
 ### Версии ядер
 
 Ядра вложены в установщик, программа у пользователей их сама не обновляет. Версии задаются в
+Переносной ZIP из уже собранной программы: `powershell -ExecutionPolicy Bypass -File tools\build-portable.ps1`.
+Результат — `build\portable\SkipIt-Portable-Windows-<версия>.zip` и `.sha256`; `tools\build.ps1`
+создаёт их вместе с установщиком. Метка `portable` включает `userdata` рядом с EXE, отдельные
+имя окна, адаптер и порт экземпляра. Служба не устанавливается. См. [PORTABLE.md](PORTABLE.md).
+
 `tools\cores.json`:
 
 ```json

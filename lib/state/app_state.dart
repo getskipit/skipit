@@ -3225,7 +3225,7 @@ class AppState extends ChangeNotifier {
           proxyPort: _updateProxy, prerelease: settings.updateChannel == UpdateChannel.beta);
       // Релиз без установщика — значит, GitHub его ещё собирает: не предлагаем, пока не будет готов.
       final newer =
-          Updates.compare(r.version, appVersion) > 0 && await Updates.hasInstaller(r, proxyPort: _updateProxy);
+          Updates.compare(r.version, appVersion) > 0 && await Updates.hasInstaller(r, proxyPort: _updateProxy, portable: AppPaths.isPortable);
       appUpdate = newer ? r : null;
       lastUpdateCheck = DateTime.now();
       if (appUpdate != null) {
@@ -3270,7 +3270,7 @@ class AppState extends ChangeNotifier {
   /// Скачивает установщик новой версии SkipIt из релиза на GitHub и сверяет его контрольную сумму.
   Future<String?> downloadAppUpdate() async {
     final release = appUpdate;
-    if (release == null || downloadingAppUpdate) return null;
+    if (AppPaths.isPortable || release == null || downloadingAppUpdate) return null;
     downloadingAppUpdate = true;
     updateProgress = null;
     notifyListeners();

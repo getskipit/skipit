@@ -19,5 +19,8 @@ std::vector<std::string> GetCommandLineArguments();
 // Тестовая сборка разработчика: рядом с exe лежит файл-метка `dev-build` (см. tools\dev.ps1).
 // У неё своё положение окна и своя подпись, чтобы не пересекаться с установленной программой.
 bool IsDevBuild();
+bool IsPortableBuild();
+const wchar_t* AppName();
+std::wstring PortableDataDirectory();
 
 #endif  // RUNNER_UTILS_H_

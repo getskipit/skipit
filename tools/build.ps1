@@ -1,7 +1,7 @@
 # Сборка SkipIt: программа + установщик SkipIt-Setup-Windows-<версия>.exe.
 #   powershell -ExecutionPolicy Bypass -File tools\build.ps1 [-Version 1.1.6]
 # Без -Version берётся версия по умолчанию из lib\version.dart.
-# Результат: build\installer\SkipIt-Setup-Windows-<версия>.exe и файл .sha256 с его контрольной суммой
+# Результат: установщик в build\installer, переносной ZIP в build\portable и их файлы .sha256.
 
 param([string]$Version)
 
@@ -26,6 +26,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'flutter build завершился с ошибкой' }
 
     & (Join-Path $PSScriptRoot 'build-installer.ps1') -Version $Version
+    & (Join-Path $PSScriptRoot 'build-portable.ps1') -Version $Version
 } finally {
     Pop-Location
 }

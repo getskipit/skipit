@@ -14,6 +14,9 @@ class Release {
   String get pageUrl => 'https://github.com/$repo/releases/tag/$tag';
 
   /// Установщик, который сборка на GitHub прикрепляет к релизу.
+  String get portableName => 'SkipIt-Portable-Windows-$version.zip';
+  String get portableUrl => 'https://github.com/$repo/releases/download/$tag/$portableName';
+
   String get installerName => 'SkipIt-Setup-Windows-$version.exe';
   String get installerUrl => 'https://github.com/$repo/releases/download/$tag/$installerName';
 
@@ -119,9 +122,9 @@ class Updates {
   }
 
   /// Прикреплён ли к релизу установщик. Пока GitHub собирает релиз, его ещё нет.
-  static Future<bool> hasInstaller(Release release, {int? proxyPort}) async {
+  static Future<bool> hasInstaller(Release release, {int? proxyPort, bool portable = false}) async {
     // Существующий файл GitHub отдаёт переходом в хранилище, отсутствующий — ответом 404.
-    final r = await _getOnGithub(release.installerUrl, proxyPort, method: 'HEAD');
+    final r = await _getOnGithub(portable ? release.portableUrl : release.installerUrl, proxyPort, method: 'HEAD');
     return r.status == 200 || (r.status >= 300 && r.status < 400);
   }
 

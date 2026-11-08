@@ -30,6 +30,13 @@ Future<void> installAppUpdate(BuildContext context) async {
   final release = state.appUpdate;
   if (release == null) return;
   if (state.downloadingAppUpdate) return;
+  if (AppPaths.isPortable) {
+    final ok = await confirm(context, tr('Обновить SkipIt до {0}?', [release.version]),
+        tr('Скачайте переносной ZIP на странице релиза. Закройте SkipIt и распакуйте архив в папку программы с заменой файлов. Папку userdata сохраните.'),
+        ok: tr('Открыть страницу релиза'));
+    if (ok) await WinSys.openUrl(release.pageUrl);
+    return;
+  }
   // Сначала вопрос, потом скачивание: так нажатие сразу даёт ответ, а не десять секунд тишины.
   final ok = await confirm(context, tr('Обновить SkipIt до {0}?', [release.version]),
       tr('Программа скачает установщик, затем VPN отключится, программа закроется и откроется установщик новой версии.'),
@@ -974,6 +981,7 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: [
               appVersion,
               if (AppPaths.isDev) tr('тестовая сборка, данные отдельно от установленной программы'),
+              if (AppPaths.isPortable) tr('переносная версия, данные в userdata рядом с программой'),
               if (state.appUpdate != null) tr('доступна {0}', [state.appUpdate!.version]),
               if (state.lastUpdateCheck != null) tr('проверено {0}', [formatDateTime(state.lastUpdateCheck!)]),
             ].join(' · '),
@@ -986,7 +994,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         Text(state.updateProgressLabel, style: TextStyle(color: C.muted, fontSize: 12.5)),
                       ])
                     : GradientButton(
-                        label: tr('Обновить'),
+                        label: AppPaths.isPortable ? tr('Скачать ZIP') : tr('Обновить'),
                         icon: Icons.download_rounded,
                         onPressed: () => installAppUpdate(context),
                       ),

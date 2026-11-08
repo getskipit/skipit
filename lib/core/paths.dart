@@ -1,7 +1,23 @@
 import 'dart:convert';
 import 'dart:io';
 
+/// Расположение данных и системные имена определяются по метке рядом с EXE.
+class AppLayout {
+  AppLayout(String executable) : directory = File(executable).parent;
+  final Directory directory;
+  late final bool isDev = File('${directory.path}\\dev-build').existsSync();
+  late final bool isPortable = !isDev && File('${directory.path}\\portable').existsSync();
+  String get appName => isDev ? 'SkipIt Dev' : isPortable ? 'SkipIt Portable' : 'SkipIt';
+  int get instancePort => isDev ? 47814 : isPortable ? 47815 : 47813;
+  String get serviceName => isDev ? 'SkipItDev' : isPortable ? 'SkipItPortable' : 'SkipIt';
+  Directory dataDirectory(String appData) =>
+      Directory(isPortable ? '${directory.path}\\userdata' : '$appData\\$appName');
+}
+
 class AppPaths {
+  static AppLayout layout = AppLayout(Platform.resolvedExecutable);
+  static bool get isPortable => layout.isPortable;
+  static int get instancePort => layout.instancePort;
   static late Directory dataDir;
   static late Directory coreDir;
   static late Directory geoDir;
@@ -9,15 +25,15 @@ class AppPaths {
   /// Тестовая сборка разработчика: рядом с exe лежит файл-метка `dev-build` (его кладёт tools\dev.ps1).
   /// У такой копии всё своё — папка данных, автозапуск, положение окна, имя TUN-адаптера, —
   /// поэтому она не задевает SkipIt, установленный из релиза.
-  static final bool isDev = File('${File(Platform.resolvedExecutable).parent.path}\\dev-build').existsSync();
+  static bool get isDev => layout.isDev;
 
   /// Имя программы в системе: папка данных, ключи реестра, TUN-адаптер.
-  static String get appName => isDev ? 'SkipIt Dev' : 'SkipIt';
+  static String get appName => layout.appName;
 
   static Future<void> init() async {
     final appData =
         Platform.environment['APPDATA'] ?? Directory.systemTemp.path;
-    dataDir = Directory('$appData\\$appName');
+    dataDir = layout.dataDirectory(appData);
     await dataDir.create(recursive: true);
     geoDir = Directory('${dataDir.path}\\geo');
     await geoDir.create(recursive: true);

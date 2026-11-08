@@ -56,6 +56,31 @@ bool IsDevBuild() {
   return dev;
 }
 
+std::wstring PortableDataDirectory() {
+  wchar_t path[MAX_PATH];
+  const DWORD n = ::GetModuleFileNameW(nullptr, path, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) return {};
+  const std::wstring exe(path, n);
+  const size_t slash = exe.find_last_of(L'\\');
+  return slash == std::wstring::npos ? std::wstring() : exe.substr(0, slash) + L"\\userdata";
+}
+
+bool IsPortableBuild() {
+  static const bool portable = [] {
+    if (IsDevBuild()) return false;
+    const std::wstring data = PortableDataDirectory();
+    if (data.empty()) return false;
+    const std::wstring marker = data.substr(0, data.find_last_of(L'\\') + 1) + L"portable";
+    const DWORD attrs = ::GetFileAttributesW(marker.c_str());
+    return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+  }();
+  return portable;
+}
+
+const wchar_t* AppName() {
+  return IsDevBuild() ? L"SkipIt Dev" : IsPortableBuild() ? L"SkipIt Portable" : L"SkipIt";
+}
+
 std::string Utf8FromUtf16(const wchar_t* utf16_string) {
   if (utf16_string == nullptr) {
     return std::string();

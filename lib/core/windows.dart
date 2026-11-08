@@ -183,7 +183,7 @@ class WinSys {
   /// Регистрирует `skipit://` — ссылки вида skipit://add/<url подписки> откроются в приложении.
   static Future<void> registerUrlScheme() async {
     // Тестовая сборка ссылки на себя не переключает — они остаются за установленной программой.
-    if (AppPaths.isDev) return;
+    if (AppPaths.isDev || AppPaths.isPortable) return;
     final base = 'HKCU\\Software\\Classes\\$urlScheme';
     await _regSet(base, '', 'REG_SZ', 'URL:SkipIt');
     await _regSet(base, 'URL Protocol', 'REG_SZ', '');
@@ -606,7 +606,7 @@ class WinSys {
         // Команду выхода шлём сами по локальному порту второй копии. Чужой SkipIt.exe не запускаем:
         // мы работаем с правами администратора, а файл с таким именем мог подложить кто угодно.
         // 47813 — установленная программа, 47814 — тестовая копия; себе команду не шлём.
-        for (final port in [47813, 47814].where((p) => p != (AppPaths.isDev ? 47814 : 47813))) {
+        for (final port in [47813, 47814, 47815].where((p) => p != AppPaths.instancePort)) {
           try {
             final s = await Socket.connect(InternetAddress.loopbackIPv4, port, timeout: const Duration(seconds: 1));
             s.write(jsonEncode(['--quit']));
