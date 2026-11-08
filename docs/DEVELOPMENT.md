@@ -84,7 +84,7 @@ Inno Setup без его мастера после согласия с лице�
 `tools\cores.json`:
 
 ```json
-{ "xray": { "version": "v26.10.21", "sha256": "…" }, "sing-box": { "version": "v1.14.3", "sha256": "…" } }
+{ "xray": { "version": "v26.10.31", "sha256": "…" }, "sing-box": { "version": "v1.14.3", "sha256": "…" } }
 ```
 
 `version` — тег релиза ядра на GitHub, `sha256` — обязательная контрольная сумма zip-архива для Windows x64 со страницы
