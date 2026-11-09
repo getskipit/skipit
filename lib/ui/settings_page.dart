@@ -673,7 +673,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () async {
                   final ok = await confirm(context, tr('Сохранить настройки в файл?'),
                       tr('В файле будут ссылки подписок и ключи серверов открытым текстом. '
-                          'Храните его как пароль и удалите после переноса.'));
+                          'Храните его как пароль и удалите после переноса.'), ok: 'Сохранить');
                   if (!ok) return;
                   final dir = await WinSys.pickFolder();
                   if (dir == null) return;
