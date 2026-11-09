@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -72,7 +73,11 @@ void main() {
       expect(find.textContaining('PRIVATE-TOKEN'), findsNothing);
       expect(tester.takeException(), isNull);
       if (shots.isNotEmpty) {
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        await mouse.addPointer(location: tester.getCenter(find.text(tr('Подписки и серверы'))));
+        await tester.pumpAndSettle();
         await expectLater(find.byKey(frame), matchesGoldenFile(Uri.file('$shots\\import-${language.name}.png')));
+        await mouse.removePointer();
       }
 
       for (final label in ['Подписки и серверы', 'Профили маршрутизации', 'Настройки программы']) {

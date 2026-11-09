@@ -49,7 +49,9 @@ Future<Set<SettingsImportSection>?> showSettingsImportDialog(BuildContext contex
             const SizedBox(height: 12),
             for (final section in SettingsImportSection.values)
               CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(12))),
+                checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(4))),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
                 controlAffinity: ListTileControlAffinity.leading,
                 title: Text(summaries[section]!.title),
                 subtitle: Text(
