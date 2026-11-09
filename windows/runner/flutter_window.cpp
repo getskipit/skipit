@@ -323,8 +323,14 @@ void FlutterWindow::SetCustomIcon(const std::vector<std::pair<int, std::vector<u
 void FlutterWindow::ShowFromTray() {
   CloseNotifyPopup();
   HWND hwnd = GetHandle();
-  ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);
+  const bool minimized = IsIconic(hwnd);
+  const bool reopening = minimized || !IsWindowVisible(hwnd);
+  ShowWindow(hwnd, minimized ? SW_RESTORE : SW_SHOW);
   SetForegroundWindow(hwnd);
+  // После возвращения из трея размер может не измениться. Просим Flutter нарисовать свежий кадр.
+  if (reopening && flutter_controller_) {
+    flutter_controller_->ForceRedraw();
+  }
 }
 
 void FlutterWindow::ShowTrayMenu() {
