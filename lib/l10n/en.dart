@@ -350,6 +350,8 @@ const en = <String, String>{
   'Починка сети': 'Network repair',
   'Починка сети закончена': 'Network repair finished',
   'Не удалось сохранить данные: {0}': 'Failed to save data: {0}',
+  'Windows не удалось зашифровать подписки и серверы. Изменения не сохранены на диск.': 'Windows could not encrypt subscriptions and servers. Changes were not saved to disk.',
+  'Файл данных недоступен. Перезапустите SkipIt перед сохранением.': 'The data file is unavailable. Restart SkipIt before saving.',
   'Выбранный сервер скрыт': 'The selected server is hidden',
   'Теперь выбран «{0}»': 'Now “{0}” is selected',
   'серверов: {0}': 'servers: {0}',

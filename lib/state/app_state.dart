@@ -1057,21 +1057,16 @@ class AppState extends ChangeNotifier {
   /// Окно предлагает импортировать файл экспорта.
   bool protectedUnreadable = false;
 
-  /// Что записывается в файл данных. [encrypt] false — всё открытым текстом (файл экспорта).
-  Map<String, dynamic> _dataForFile({required bool encrypt}) {
-    final secret = {
-      'subscriptions': subscriptions.map((e) => e.toJson()).toList(),
-      'servers': servers.map((e) => e.toJson()).toList(),
-    };
-    final blob = encrypt ? WinSys.protect(utf8.encode(jsonEncode(secret))) : null;
-    return {
-      'settings': settings.toJson(),
-      // Зашифровать не удалось — пишем открыто: потерять подписки хуже, чем хранить их как раньше.
-      if (blob != null) 'protected': base64Encode(blob) else ...secret,
-      'routing': routingProfiles.map((e) => e.toJson()).toList(),
-      'apps': appRules.toJson(),
-    };
-  }
+  @visibleForTesting
+  Uint8List? Function(Uint8List) protectState = WinSys.protect;
+
+  Map<String, dynamic> _dataForFile() => {
+        'settings': settings.toJson(),
+        'subscriptions': subscriptions.map((e) => e.toJson()).toList(),
+        'servers': servers.map((e) => e.toJson()).toList(),
+        'routing': routingProfiles.map((e) => e.toJson()).toList(),
+        'apps': appRules.toJson(),
+      };
 
   /// Сохраняет все настройки, подписки и серверы в файл в папке [dir] — открытым текстом, чтобы его
   /// можно было перенести на другой компьютер. Возвращает путь к файлу.
@@ -1079,7 +1074,7 @@ class AppState extends ChangeNotifier {
     final now = DateTime.now();
     String two(int n) => n.toString().padLeft(2, '0');
     final path = tr('{0}\\{1} — настройки {2}-{3}-{4}.json', [dir, AppPaths.appName, now.year, two(now.month), two(now.day)]);
-    final data = _dataForFile(encrypt: false);
+    final data = _dataForFile();
     // Состояние текущего подключения в перенос не идёт.
     (data['settings'] as Map<String, dynamic>)
       ..['systemProxyActive'] = false
@@ -1282,10 +1277,12 @@ class AppState extends ChangeNotifier {
       }
     }
     _stateUnreadable = false;
-    log.add('app', tr('Настройки загружены из файла: подписок — {0}, серверов — {1}', [subscriptions.length, servers.length]));
-    await saveNow();
+    final error = await saveNow(showError: false);
+    if (error == null) {
+      log.add('app', tr('Настройки загружены из файла: подписок — {0}, серверов — {1}', [subscriptions.length, servers.length]));
+    }
     notifyListeners();
-    return null;
+    return error;
   }
 
   /// «Сбросить настройки» (Настройки → Программа → Сброс): настройки — к стандартным. Подписки, серверы, профили
@@ -1300,8 +1297,7 @@ class AppState extends ChangeNotifier {
       ..selectedServerId = old.selectedServerId
       ..selectedRoutingId = old.selectedRoutingId
       ..updateNotified = old.updateNotified;
-    await _afterReset(tr('Настройки сброшены к стандартным'));
-    return null;
+    return _afterReset(tr('Настройки сброшены к стандартным'));
   }
 
   /// «Удалить все данные» (Настройки → Программа → Сброс): подписки, серверы, профили, правила программ и настройки —
@@ -1321,8 +1317,7 @@ class AppState extends ChangeNotifier {
     appRules = AppRules();
     settings = _resetKeeping(settings)..selectedRoutingId = RoutingProfile.globalPresetId;
     protectedUnreadable = false;
-    await _afterReset(tr('Все данные удалены: подписки, серверы, профили, правила программ и настройки'));
-    return null;
+    return _afterReset(tr('Все данные удалены: подписки, серверы, профили, правила программ и настройки'));
   }
 
   /// Стандартные настройки, в которых осталось то, что не сбрасывается никогда: HWID (с новым провайдер
@@ -1332,12 +1327,13 @@ class AppState extends ChangeNotifier {
     ..systemProxyActive = old.systemProxyActive
     ..previousProxy = old.previousProxy;
 
-  Future<void> _afterReset(String what) async {
+  Future<String?> _afterReset(String what) async {
     // Kill Switch по умолчанию выключен: если он держал интернет закрытым, открываем.
     await KillSwitch.release();
-    log.add('app', what);
-    await saveNow();
+    final error = await saveNow(showError: false);
+    if (error == null) log.add('app', what);
     notifyListeners();
+    return error;
   }
 
   /// Идёт «Починить сеть».
@@ -1380,10 +1376,26 @@ class AppState extends ChangeNotifier {
     _saveTimer = Timer(const Duration(milliseconds: 400), saveNow);
   }
 
-  Future<void> saveNow() async {
+  /// Возвращает ошибку сохранения или null, если данные записаны.
+  Future<String?> saveNow({bool showError = true}) async {
     _saveTimer?.cancel();
-    if (_stateUnreadable) return;
-    final data = _dataForFile(encrypt: true);
+    if (_stateUnreadable) return tr('Файл данных недоступен. Перезапустите SkipIt перед сохранением.');
+    String fail(String error) {
+      log.add('app', error);
+      if (showError && !_messages.isClosed) toast(error, kind: ToastKind.error);
+      return error;
+    }
+
+    final data = _dataForFile();
+    final secret = {
+      'subscriptions': data.remove('subscriptions'),
+      'servers': data.remove('servers'),
+    };
+    final blob = protectState(utf8.encode(jsonEncode(secret)));
+    if (blob == null || blob.isEmpty) {
+      return fail(tr('Windows не удалось зашифровать подписки и серверы. Изменения не сохранены на диск.'));
+    }
+    data['protected'] = base64Encode(blob);
     final text = const JsonEncoder.withIndent('  ').convert(data);
     // Пишем во временный файл и подменяем; если файл занят — несколько попыток, потом прямая запись.
     for (var attempt = 1; attempt <= 10; attempt++) {
@@ -1391,19 +1403,20 @@ class AppState extends ChangeNotifier {
         final tmp = File('${AppPaths.stateFile}.tmp');
         await tmp.writeAsString(text, flush: true);
         await tmp.rename(AppPaths.stateFile);
-        return;
+        return null;
       } on FileSystemException catch (e) {
         if (attempt == 10) {
           try {
             await File(AppPaths.stateFile).writeAsString(text, flush: true);
+            return null;
           } catch (_) {
-            log.add('app', tr('Не удалось сохранить данные: {0}', [e]));
+            return fail(tr('Не удалось сохранить данные: {0}', [e]));
           }
-          return;
         }
         await Future.delayed(const Duration(milliseconds: 150));
       }
     }
+    return null;
   }
 
   void changed() {
@@ -2719,8 +2732,15 @@ class AppState extends ChangeNotifier {
           final ours = WinSys.localProxyPort(now) == session.httpPort || PacServer.isOwn(now.autoConfig ?? '');
           settings.previousProxy = ours ? null : now;
         }
-        // Отмечаем до записи в реестр: если она сорвётся на полпути, отключение всё равно вернёт прежний прокси.
+        // Сохраняем прежний прокси до записи в реестр, чтобы его можно было вернуть после сбоя.
+        final wasProxyActive = settings.systemProxyActive;
         settings.systemProxyActive = true;
+        final saveError = await saveNow(showError: false);
+        if (saveError != null) {
+          settings.systemProxyActive = wasProxyActive;
+          throw CoreException(saveError);
+        }
+        _checkCancel();
         if (settings.mode == ConnectionMode.mixed) {
           // Через файл автонастройки: его понимают браузеры, а программы, которые знают только «ручной» прокси
           // (игры на Python вроде Мира танков ломаются, увидев его), идут через адаптер (см. PacServer).
@@ -2729,8 +2749,9 @@ class AppState extends ChangeNotifier {
         } else {
           await WinSys.setProxy('127.0.0.1:${session.httpPort}', bypass: settings.proxyBypass);
         }
+      } else {
+        await saveNow();
       }
-      await saveNow();
 
       status = ConnStatus.connected;
       connectedAt = DateTime.now();

@@ -68,6 +68,30 @@ void main() {
     expect(again.protectedUnreadable, isFalse);
   });
 
+  test('отказ DPAPI не записывает открытые ключи и сохраняет прежний файл', () async {
+    final state = filled()..protectState = (_) => null;
+    final stateFile = File(AppPaths.stateFile);
+    final pending = File('${stateFile.path}.tmp');
+    final toast = state.messages.first;
+    final failure = await state.saveNow();
+    expect(failure, contains('Windows не удалось зашифровать'));
+    expect((await toast).kind, ToastKind.error);
+    expect(stateFile.existsSync(), isFalse);
+    expect(pending.existsSync(), isFalse);
+
+    state.protectState = WinSys.protect;
+    expect(await state.saveNow(), isNull);
+    final previous = await stateFile.readAsBytes();
+    final exported = await state.exportData(tmp.path);
+
+    state.protectState = (_) => null;
+    state.subscriptions.single.url = 'https://panel.example/sub/NEW-SECRET';
+    expect(await state.importData(exported), failure);
+    expect(await stateFile.readAsBytes(), previous);
+    expect(pending.existsSync(), isFalse);
+    state.dispose();
+  });
+
   test('файл от прежней версии (без шифрования) читается и шифруется при первом сохранении', () async {
     await File(AppPaths.stateFile).writeAsString('{"subscriptions":[{"id":"s1","url":"$url","name":"Test"}],'
         '"servers":[{"id":"a","name":"A","protocol":"vless","address":"1.1.1.1","port":443,"link":"vless://x",'

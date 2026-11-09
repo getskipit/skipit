@@ -1022,13 +1022,20 @@ bool InstallerNameOk(const std::wstring& name) {
   return name.find(L"..") == std::wstring::npos;
 }
 
-// Удаляет файлы папки, кроме [keep].
-void ClearDir(const std::wstring& dir, const std::wstring& keep) {
+// Свежие копии могут быть нужны другому запросу. Убираем только файлы старше суток.
+void RemoveOldUpdateFiles(const std::wstring& dir) {
+  FILETIME time{};
+  ::GetSystemTimeAsFileTime(&time);
+  const ULONGLONG now = (static_cast<ULONGLONG>(time.dwHighDateTime) << 32) | time.dwLowDateTime;
+  constexpr ULONGLONG kDay = 24ull * 60 * 60 * 10000000;
   WIN32_FIND_DATAW fd;
-  HANDLE find = ::FindFirstFileW((dir + L"\\*").c_str(), &fd);
+  HANDLE find = ::FindFirstFileW((dir + L"\\SkipIt-Setup-Windows-*").c_str(), &fd);
   if (find == INVALID_HANDLE_VALUE) return;
   do {
-    if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && _wcsicmp(fd.cFileName, keep.c_str()) != 0) {
+    const auto written = (static_cast<ULONGLONG>(fd.ftLastWriteTime.dwHighDateTime) << 32) |
+                         fd.ftLastWriteTime.dwLowDateTime;
+    if (!(fd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) &&
+        now > written && now - written > kDay) {
       ::DeleteFileW((dir + L"\\" + fd.cFileName).c_str());
     }
   } while (::FindNextFileW(find, &fd));
@@ -1112,6 +1119,41 @@ std::wstring UserUpdateDir(const std::wstring& sid) {
   return ok ? dir : L"";
 }
 
+struct InstallerCopy {
+  std::wstring path;
+  const char* error;
+};
+
+InstallerCopy CopyVerifiedInstaller(HANDLE in, const std::wstring& dir, const std::wstring& name,
+                                    const std::string& expected) {
+  // У каждого запроса свой файл до и после сверки. Путь, уже возвращённый клиенту, не переиспользуется.
+  unsigned char nonce[16];
+  if (!BCRYPT_SUCCESS(::BCryptGenRandom(nullptr, nonce, sizeof(nonce), BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
+    return {L"", "не удалось записать копию"};
+  }
+  std::wstring base = dir + L"\\" + name.substr(0, name.size() - 4) + L"-";
+  constexpr wchar_t hex[] = L"0123456789abcdef";
+  for (unsigned char byte : nonce) {
+    base += hex[byte >> 4];
+    base += hex[byte & 15];
+  }
+  const std::wstring part = base + L".part", dst = base + L".exe";
+  HANDLE out = ::CreateFileW(part.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (out == INVALID_HANDLE_VALUE) return {L"", "не удалось записать копию"};
+  const std::string actual = CopyWithSha256(in, out);
+  ::CloseHandle(out);
+  if (actual != expected) {
+    ::DeleteFileW(part.c_str());
+    return {L"", actual.empty() ? "не удалось скопировать файл" : "контрольная сумма не совпала"};
+  }
+  // Не подменяем готовый файл даже в случае совпадения случайных имён.
+  if (!::MoveFileExW(part.c_str(), dst.c_str(), 0)) {
+    ::DeleteFileW(part.c_str());
+    return {L"", "не удалось записать копию"};
+  }
+  return {dst, nullptr};
+}
+
 void StageUpdate(HANDLE pipe, const std::string& request) {
   // «update stage\n<путь>\n<sha256>»
   const size_t a = request.find('\n');
@@ -1152,29 +1194,10 @@ void StageUpdate(HANDLE pipe, const std::string& request) {
     PipeWrite(pipe, "error не удалось записать копию");
     return;
   }
-  // Копия пишется во временный файл: прежняя сверенная копия удаляется, только когда новая сошлась.
-  const std::wstring dst = dir + L"\\" + name, part_name = name + L".part", part = dir + L"\\" + part_name;
-  HANDLE out = ::CreateFileW(part.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (out == INVALID_HANDLE_VALUE) {
-    ::CloseHandle(in);
-    PipeWrite(pipe, "error не удалось записать копию");
-    return;
-  }
-  const std::string actual = CopyWithSha256(in, out);
+  RemoveOldUpdateFiles(dir);
+  const auto copy = CopyVerifiedInstaller(in, dir, name, expected);
   ::CloseHandle(in);
-  ::CloseHandle(out);
-  if (actual != expected) {
-    ::DeleteFileW(part.c_str());
-    PipeWrite(pipe, actual.empty() ? "error не удалось скопировать файл" : "error контрольная сумма не совпала");
-    return;
-  }
-  ClearDir(dir, part_name);
-  if (!::MoveFileExW(part.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING)) {
-    ::DeleteFileW(part.c_str());
-    PipeWrite(pipe, "error не удалось записать копию");
-    return;
-  }
-  PipeWrite(pipe, "ok " + Utf8(dst));
+  PipeWrite(pipe, copy.error ? std::string("error ") + copy.error : "ok " + Utf8(copy.path));
 }
 
 void Serve(HANDLE pipe) {
