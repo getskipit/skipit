@@ -78,15 +78,15 @@ Inno Setup без его мастера после согласия с лице�
 **SkipItDev**: `tools\dev-service.ps1` ставит или обновляет её (с ключом `-Uninstall` — снимает), окно UAC
 скрипт покажет сам. Файл службы при этом копируется в `Program Files\SkipIt Dev Service`.
 
+### Переносная сборка для локальной проверки
+
+ZIP из уже собранной программы: `powershell -ExecutionPolicy Bypass -File tools\build-portable.ps1`.
+Результат — `build\portable\SkipIt-Portable-Windows-<версия>.zip` и `.sha256`. Публичная сборка выпускается
+установщиком. О переносном режиме см. [PORTABLE.md](PORTABLE.md).
+
 ### Версии ядер
 
-Ядра вложены в установщик, программа у пользователей их сама не обновляет. Версии задаются в
-Переносной ZIP из уже собранной программы: `powershell -ExecutionPolicy Bypass -File tools\build-portable.ps1`.
-Результат — `build\portable\SkipIt-Portable-Windows-<версия>.zip` и `.sha256`; `tools\build.ps1`
-создаёт их вместе с установщиком. Метка `portable` включает `userdata` рядом с EXE, отдельные
-имя окна, адаптер и порт экземпляра. Служба не устанавливается. См. [PORTABLE.md](PORTABLE.md).
-
-`tools\cores.json`:
+Ядра вложены в установщик, программа у пользователей их сама не обновляет. Версии задаются в `tools\cores.json`:
 
 ```json
 { "xray": { "version": "v26.10.31", "sha256": "…" }, "sing-box": { "version": "v1.14.3", "sha256": "…" } }

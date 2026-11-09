@@ -64,10 +64,6 @@ jobs:
         shell: pwsh
         run: ./tools/setup.ps1
 
-      - name: Проверка переносного ZIP без сети
-        shell: pwsh
-        run: ./tools/test-portable.ps1
-
       - name: Тесты
         run: flutter test --no-pub
 
@@ -95,8 +91,6 @@ jobs:
             build/installer/*.exe
             build/installer/*.sha256
             build/installer/*-source.zip
-            build/portable/*.zip
-            build/portable/*.sha256
 
   publish:
     name: Publish release assets
@@ -109,7 +103,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: SkipIt-Setup
-          path: build
+          path: build/installer
 
       - name: Прикрепить файлы к релизу
         shell: pwsh
@@ -119,14 +113,12 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           # Контрольная сумма должна появиться раньше установщика.
-          gh release upload $env:RELEASE_TAG (Get-ChildItem build/installer/*.sha256, build/portable/*.sha256).FullName --clobber
+          gh release upload $env:RELEASE_TAG (Get-ChildItem build/installer/*.sha256).FullName --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Не удалось прикрепить контрольную сумму' }
           gh release upload $env:RELEASE_TAG (Get-ChildItem build/installer/*-source.zip).FullName --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Не удалось прикрепить исходники sing-box' }
           gh release upload $env:RELEASE_TAG (Get-ChildItem build/installer/*.exe).FullName --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Не удалось прикрепить установщик' }
-          gh release upload $env:RELEASE_TAG (Get-ChildItem build/portable/*.zip).FullName --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'Не удалось прикрепить переносную версию' }
 
       - name: Pre-release по номеру версии
         shell: pwsh
