@@ -13,6 +13,7 @@ import '../core/xray_config.dart';
 import '../models/settings.dart';
 import '../state/app_scope.dart';
 import '../state/app_state.dart';
+import '../state/settings_import.dart';
 import '../version.dart';
 import 'app_icon.dart';
 import 'appearance_previews.dart';
@@ -21,6 +22,7 @@ import 'mouse_back.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'screen_privacy.dart';
+import 'settings_import_dialog.dart';
 import 'widgets.dart';
 import '../l10n/l10n.dart';
 
@@ -690,10 +692,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () async {
                   final path = await WinSys.pickFile(filter: tr('Настройки SkipIt (*.json)|*.json'));
                   if (path == null || !context.mounted) return;
-                  final ok = await confirm(context, tr('Заменить настройки?'),
-                      tr('Текущие подписки, серверы и настройки будут заменены содержимым файла.'));
-                  if (!ok) return;
-                  final error = await state.importData(path);
+                  final result = await SettingsImport.read(path);
+                  if (!context.mounted) return;
+                  final preview = result.data;
+                  if (preview == null) {
+                    state.toast(result.error!, kind: ToastKind.error);
+                    return;
+                  }
+                  final sections = await showSettingsImportDialog(context, preview);
+                  if (sections == null || !context.mounted) return;
+                  final error = await state.applyImport(preview, sections);
                   state.toast(error ?? tr('Настройки загружены из файла'),
                       kind: error == null ? ToastKind.success : ToastKind.error);
                 },

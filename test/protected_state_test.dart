@@ -7,8 +7,11 @@ import 'package:skipit/core/core_manager.dart';
 import 'package:skipit/core/link_parser.dart';
 import 'package:skipit/core/paths.dart';
 import 'package:skipit/core/windows.dart';
+import 'package:skipit/models/app_rules.dart';
+import 'package:skipit/models/routing.dart';
 import 'package:skipit/models/subscription.dart';
 import 'package:skipit/state/app_state.dart';
+import 'package:skipit/state/settings_import.dart';
 
 /// Подписки и серверы на диске зашифрованы ключом учётной записи Windows; перенос — через экспорт.
 void main() {
@@ -109,6 +112,72 @@ void main() {
     expect(await other.importData(broken.path), isNotNull);
     expect(other.subscriptions.single.url, url);
     expect(other.servers.single.name, 'Germany');
+  });
+
+  for (final section in SettingsImportSection.values) {
+    test('частичный импорт: ${section.name}', () async {
+      final source = filled();
+      final sourceProfile = RoutingProfile(name: 'Source', subscriptionId: source.subscriptions.single.id);
+      source.routingProfiles.add(sourceProfile);
+      source.settings.selectedRoutingId = sourceProfile.id;
+      source.appRules.entries.add(AppEntry(match: 'source.exe', label: 'Source'));
+      final path = await source.exportData(tmp.path);
+
+      final target = AppState();
+      final targetSub = Subscription(url: 'https://other.example/sub', name: 'Target');
+      final targetServer = LinkParser.parseText('trojan://PASSWORD@other.example:443#Target').servers.single
+        ..subscriptionId = targetSub.id;
+      final targetProfile = RoutingProfile(name: 'Target', subscriptionId: targetSub.id);
+      target.subscriptions.add(targetSub);
+      target.servers.add(targetServer);
+      target.routingProfiles.addAll([RoutingProfile.global(), targetProfile]);
+      target.appRules.entries.add(AppEntry(match: 'target.exe', label: 'Target'));
+      target.settings
+        ..selectedServerId = targetServer.id
+        ..selectedRoutingId = targetProfile.id
+        ..lastXrayPid = 1234;
+
+      final preview = (await SettingsImport.read(path)).data!;
+      expect(target.subscriptions.single, same(targetSub));
+      expect(target.routingProfiles.last, same(targetProfile));
+      // После предпросмотра файл мог измениться. Применяется прочитанный снимок.
+      await File(path).writeAsString('{}');
+      expect(await target.applyImport(preview, {section}), isNull);
+
+      final importedSubs = section == SettingsImportSection.subscriptions;
+      final importedRoutes = section == SettingsImportSection.routing;
+      final importedSettings = section == SettingsImportSection.settings;
+      expect(target.subscriptions.single.id, importedSubs ? source.subscriptions.single.id : targetSub.id);
+      expect(target.servers.single.id, importedSubs ? source.servers.single.id : targetServer.id);
+      expect(target.settings.selectedServerId, target.servers.single.id);
+      expect(target.routingProfiles.last.id, importedRoutes ? sourceProfile.id : targetProfile.id);
+      expect(target.settings.selectedRoutingId, target.routingProfiles.last.id);
+      expect(target.routingProfiles.last.subscriptionId, importedSubs || importedRoutes ? null : targetSub.id);
+      expect(target.settings.killSwitch, importedSettings);
+      expect(target.settings.lastXrayPid, 1234);
+      expect(target.appRules.entries.single.match, importedSettings ? 'source.exe' : 'target.exe');
+
+      final reloaded = AppState();
+      await reloaded.loadForTest();
+      expect(reloaded.subscriptions.single.id, target.subscriptions.single.id);
+      expect(reloaded.routingProfiles.last.id, target.routingProfiles.last.id);
+      expect(reloaded.appRules.entries.single.match, target.appRules.entries.single.match);
+      source.dispose();
+      target.dispose();
+      reloaded.dispose();
+    });
+  }
+
+  test('старый файл без профилей и повреждённая зашифрованная часть', () async {
+    final file = File('${tmp.path}\\legacy.json');
+    await file.writeAsString('{"settings":{},"subscriptions":[],"servers":[]}');
+    final preview = (await SettingsImport.read(file.path)).data!;
+    expect(preview.sections, isNot(contains(SettingsImportSection.routing)));
+
+    await file.writeAsString('{"settings":{},"protected":"!not-base64!"}');
+    final broken = await SettingsImport.read(file.path);
+    expect(broken.data, isNull);
+    expect(broken.error, 'Файл настроек повреждён');
   });
 
   test('ядро получает конфиг напрямую, без файла на диске', () async {

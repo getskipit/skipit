@@ -34,6 +34,7 @@ import '../models/settings.dart';
 import '../models/subscription.dart';
 import '../version.dart';
 import '../l10n/l10n.dart';
+import 'settings_import.dart';
 
 enum ConnStatus { disconnected, connecting, connected, disconnecting }
 
@@ -1209,63 +1210,77 @@ class AppState extends ChangeNotifier {
 
   Future<String> makeReport(String dir) async => saveReport(dir, await buildReport());
 
-  /// Заменяет настройки, подписки и серверы содержимым файла экспорта (или старого state.json).
-  /// Возвращает текст ошибки или null, если всё получилось.
+  /// Импорт всех разделов, присутствующих в файле.
   Future<String?> importData(String path) async {
     if (status != ConnStatus.disconnected) return tr('Сначала отключите VPN');
-    final Map<String, dynamic> j;
-    try {
-      j = jsonDecode(await File(path).readAsString()) as Map<String, dynamic>;
-    } catch (_) {
-      return tr('Это не файл настроек SkipIt');
+    final result = await SettingsImport.read(path);
+    final data = result.data;
+    return data == null ? result.error : applyImport(data, data.sections);
+  }
+
+  /// Заменяет выбранные разделы снимком, показанным в предпросмотре.
+  Future<String?> applyImport(SettingsImport data, Set<SettingsImportSection> sections) async {
+    if (status != ConnStatus.disconnected) return tr('Сначала отключите VPN');
+    if (sections.isEmpty || !data.sections.containsAll(sections)) return tr('Выберите разделы для импорта');
+    if (_stateUnreadable && sections.length != SettingsImportSection.values.length) {
+      return tr('Не удалось прочитать текущие данные. Перезапустите SkipIt перед частичным импортом.');
     }
-    if (j['settings'] is! Map || (j['subscriptions'] is! List && j['protected'] is! String)) {
-      return tr('Это не файл настроек SkipIt');
-    }
-    final Map<String, dynamic> secret;
-    if (j['protected'] is String) {
-      final plain = WinSys.unprotect(base64Decode(j['protected'] as String));
-      if (plain == null) {
-        return tr('Файл зашифрован для другой учётной записи Windows. Нужен файл, сохранённый кнопкой «Экспорт»');
-      }
-      secret = jsonDecode(utf8.decode(plain)) as Map<String, dynamic>;
-    } else {
-      secret = j;
-    }
-    // Прежние данные держим до конца разбора: если файл окажется повреждённым, всё вернётся как было.
-    final before = (settings, List.of(subscriptions), List.of(servers), List.of(routingProfiles), appRules);
-    subscriptions.clear();
-    servers.clear();
-    routingProfiles.clear();
-    try {
-      _applyData(j, secret: secret);
-    } catch (_) {
-      settings = before.$1;
+    final old = settings;
+    final importSubscriptions = sections.contains(SettingsImportSection.subscriptions);
+    final importRouting = sections.contains(SettingsImportSection.routing);
+    if (importSubscriptions) {
       subscriptions
         ..clear()
-        ..addAll(before.$2);
+        ..addAll(data.subscriptions);
       servers
         ..clear()
-        ..addAll(before.$3);
+        ..addAll(data.servers);
+      _subsNetworkErrors.clear();
+      _subsRefused.clear();
+      _subRetryAfter.clear();
+      protectedUnreadable = false;
+    }
+    if (importRouting) {
       routingProfiles
         ..clear()
-        ..addAll(before.$4);
-      appRules = before.$5;
-      return tr('Файл настроек повреждён');
+        ..addAll(data.profiles!);
+      if (!routingProfiles.any((p) => p.id == RoutingProfile.globalPresetId)) {
+        routingProfiles.insert(0, RoutingProfile.global());
+      }
     }
-    // Состояние системы — от этого компьютера, а не из файла.
-    settings
-      ..systemProxyActive = before.$1.systemProxyActive
-      ..previousProxy = before.$1.previousProxy
-      ..lastXrayPid = null
-      ..lastSingboxPid = null;
-    if (!routingProfiles.any((r) => r.id == RoutingProfile.globalPresetId)) {
-      routingProfiles.insert(0, RoutingProfile.global());
+    if (importSubscriptions || importRouting) {
+      // Профиль можно перенести отдельно от подписки. Тогда его правила остаются самостоятельными.
+      final subscriptionIds = subscriptions.map((s) => s.id).toSet();
+      for (final profile in routingProfiles) {
+        if (!subscriptionIds.contains(profile.subscriptionId)) profile.subscriptionId = null;
+      }
     }
-    if (!routingProfiles.any((r) => r.id == settings.selectedRoutingId)) {
-      settings.selectedRoutingId = RoutingProfile.globalPresetId;
+    if (sections.contains(SettingsImportSection.settings)) {
+      settings = AppSettings.fromJson(data.settings.toJson())
+        ..systemProxyActive = old.systemProxyActive
+        ..previousProxy = old.previousProxy
+        ..lastXrayPid = old.lastXrayPid
+        ..lastSingboxPid = old.lastSingboxPid;
+      appRules = data.appRules ?? appRules;
     }
-    protectedUnreadable = false;
+    settings.selectedServerId = old.selectedServerId;
+    settings.selectedRoutingId = old.selectedRoutingId;
+    if (importSubscriptions) {
+      final wanted = data.settings.selectedServerId;
+      if (servers.any((s) => s.id == wanted)) {
+        settings.selectedServerId = wanted;
+      } else if (!servers.any((s) => s.id == old.selectedServerId)) {
+        settings.selectedServerId = servers.firstOrNull?.id;
+      }
+    }
+    if (importRouting) {
+      final wanted = data.settings.selectedRoutingId;
+      if (routingProfiles.any((p) => p.id == wanted)) {
+        settings.selectedRoutingId = wanted;
+      } else if (!routingProfiles.any((p) => p.id == old.selectedRoutingId)) {
+        settings.selectedRoutingId = RoutingProfile.globalPresetId;
+      }
+    }
     _stateUnreadable = false;
     log.add('app', tr('Настройки загружены из файла: подписок — {0}, серверов — {1}', [subscriptions.length, servers.length]));
     await saveNow();
