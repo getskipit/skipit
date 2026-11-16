@@ -94,7 +94,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 80));
       expect(tester.takeException(), isNull);
     }
-    expect(find.text('СЕТЬ'), findsOneWidget);
+    expect(find.text('Сеть'), findsOneWidget);
     // При первом заходе — предупреждение; «Понятно» его убирает навсегда.
     expect(find.text('Понятно'), findsOneWidget);
     await tester.tap(find.text('Понятно'));

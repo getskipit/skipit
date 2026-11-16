@@ -1319,8 +1319,8 @@ class _Section extends StatelessWidget {
         if (title.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(title.toUpperCase(),
-              style: TextStyle(color: C.orange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
+          child: Text(title,
+              style: TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w600)),
         ),
         Panel(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),

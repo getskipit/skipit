@@ -125,8 +125,8 @@ class RoutingPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 8),
                 child: Text(
-                  provider != null ? tr('СВОИ ПРОФИЛИ — РАБОТАЮТ ВМЕСТЕ С ПРАВИЛАМИ ПРОВАЙДЕРА') : tr('СВОИ ПРОФИЛИ'),
-                  style: TextStyle(color: C.orange, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4),
+                  provider != null ? tr('Свои профили — работают вместе с правилами провайдера') : tr('Свои профили'),
+                  style: TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
               if (own.length >= 2)
@@ -190,7 +190,7 @@ class _ProviderRulesCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(tr('Правила провайдера'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              Text(tr('Правила провайдера'), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
               const SizedBox(height: 2),
               Row(children: [
                 Text(tr('Из JSON-конфига сервера '), style: TextStyle(color: C.muted, fontSize: 12)),
@@ -288,7 +288,7 @@ class _DnsCardState extends State<_DnsCard> {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('DNS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              const Text('DNS', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
               const SizedBox(height: 2),
               Text(own ? tr('Работают свои серверы — вместо DNS {0}', [other]) : tr('Работает DNS {0}', [other]),
                   style: TextStyle(color: C.muted, fontSize: 12)),

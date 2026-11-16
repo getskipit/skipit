@@ -5,6 +5,7 @@ import 'package:skipit/models/routing.dart';
 import 'package:skipit/state/app_scope.dart';
 import 'package:skipit/state/app_state.dart';
 import 'package:skipit/ui/shell.dart';
+import 'package:skipit/ui/groups.dart';
 import 'package:skipit/ui/theme.dart';
 
 /// Поиск по настройкам: по названию строки, по подписи и по ключевым словам.
@@ -53,7 +54,7 @@ void main() {
     // подписан названием группы.
     await search('бэкап');
     expect(find.text('Перенос настроек').hitTestable(), findsOneWidget);
-    expect(find.text('ПРОГРАММА · ДАННЫЕ'), findsOneWidget);
+    expect(find.text('Программа · Данные'), findsOneWidget);
     expect(find.text('Тема'), findsNothing);
 
     // По названию; строки из «Для опытных» находятся тоже.
@@ -105,8 +106,8 @@ void main() {
     await search('ъъъ');
     await tester.tap(find.byTooltip('Очистить'));
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.text('Программа'), findsOneWidget);
-    expect(find.text('О программе'), findsOneWidget);
+    expect(find.descendant(of: find.byType(GroupTile), matching: find.text('Программа')), findsOneWidget);
+    expect(find.descendant(of: find.byType(GroupTile), matching: find.text('О программе')), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
   });
 }

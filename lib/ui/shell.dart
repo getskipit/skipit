@@ -669,7 +669,7 @@ class _TopBar extends StatelessWidget {
         return Row(children: [
           const AppBadge(size: 34),
           const SizedBox(width: 10),
-          Text(AppPaths.appName, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+          Text(AppPaths.appName, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
           const SizedBox(width: 18),
           Expanded(child: _TopNav(index: index, items: items, hidden: hidden, wide: wide, onSelect: onSelect)),
           Tooltip(
@@ -798,7 +798,7 @@ class _TopNavState extends State<_TopNav> with TickerProviderStateMixin {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(C.r(12)),
-                  color: C.orange.withValues(alpha: 0.14),
+                  color: C.surface2,
                 ),
               ),
             ),
@@ -1037,7 +1037,7 @@ class _Sidebar extends StatelessWidget {
                             child: Text(AppPaths.appName,
                                 maxLines: 1,
                                 softWrap: false,
-                                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+                                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w600)),
                           ),
                         ),
                       ),
@@ -1137,7 +1137,7 @@ class _MenuBadge extends StatelessWidget {
                       ? Container(
                           key: ValueKey(arrows),
                           decoration: BoxDecoration(
-                            color: C.orange.withValues(alpha: 0.14),
+                            color: C.surface2,
                             borderRadius: BorderRadius.circular(C.r(10)),
                             border: Border.all(color: C.orange.withValues(alpha: 0.5)),
                           ),
@@ -1247,7 +1247,7 @@ class _NavColumnState extends State<_NavColumn> with TickerProviderStateMixin {
                       alignment: Alignment.centerLeft,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(C.r(12)),
-                        color: C.orange.withValues(alpha: 0.14),
+                        color: C.surface2,
                       ),
                       // Оранжевая метка слева у выбранного пункта.
                       child: Container(

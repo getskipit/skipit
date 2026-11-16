@@ -62,7 +62,7 @@ Widget _cardTitle(IconData icon, String title, String subtitle) => Row(children:
       const SizedBox(width: 10),
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
           const SizedBox(height: 2),
           Text(subtitle, style: TextStyle(color: C.muted, fontSize: 12)),
         ]),
@@ -113,7 +113,7 @@ Widget _metric(String name, String value, String note, {bool mono = false, Color
         Text(value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: color)),
         Text(AppScope.of(context).screenText(note),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -424,7 +424,7 @@ class _LineCard extends StatelessWidget {
               maxLines: 1,
               style: TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: off ? C.muted : (p.silent && r.done ? C.orange : null),
                   fontFeatures: const [FontFeature.tabularFigures()])),
           if (caption != null) ...[
@@ -611,7 +611,7 @@ class _SpeedCard extends StatelessWidget {
             maxLines: 1,
             style: TextStyle(
                 fontSize: 20,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: failed && index == 0 ? C.red : (waiting ? C.muted : null),
                 fontFeatures: const [FontFeature.tabularFigures()])),
         const SizedBox(height: 8),
@@ -904,7 +904,7 @@ class _UdpCard extends StatelessWidget {
                 child: FlagText(title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               ),
               Text(_count(group), style: TextStyle(color: C.muted, fontSize: 12)),
             ]),

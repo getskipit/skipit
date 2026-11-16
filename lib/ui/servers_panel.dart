@@ -339,7 +339,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(children: [
           const AppBadge(size: 56),
           const SizedBox(height: 16),
-          Text(tr('Пока нет серверов'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(tr('Пока нет серверов'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           Text(tr('Скопируйте ссылку на подписку и нажмите Ctrl+V'),
               textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
@@ -596,7 +596,7 @@ class _GroupCardState extends State<_GroupCard> {
                 child: FlagText(state.screenText(sub.displayName),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               ),
             ),
             child: Listener(onPointerDown: (e) => _pressedAt = e.position.dy, child: header),
@@ -640,7 +640,7 @@ class _GroupCardState extends State<_GroupCard> {
                             child: FlagText(state.screenText(sub?.displayName ?? tr('Мои серверы')),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                           ),
                           // Значок закреплённой подписки.
                           if (sub?.pinned ?? false) ...[
@@ -867,7 +867,7 @@ class _SubscriptionDetails extends StatelessWidget {
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(caption,
-                  style: TextStyle(color: C.muted, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+                  style: TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w500)),
               const SizedBox(height: 6),
               ...children,
             ]),
@@ -881,7 +881,7 @@ class _SubscriptionDetails extends StatelessWidget {
           IntrinsicHeight(
             child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if (hasTraffic)
-                tile(tr('ТРАФИК'), [
+                tile(tr('Трафик'), [
                   Text.rich(TextSpan(children: [
                     TextSpan(text: formatBytes(sub.used), style: big),
                     TextSpan(text: total > 0 ? tr('  из {0}', [formatBytes(total)]) : tr('  без лимита'), style: small),
@@ -908,7 +908,7 @@ class _SubscriptionDetails extends StatelessWidget {
                 ]),
               if (hasTraffic && expire != null) const SizedBox(width: 10),
               if (expire != null)
-                tile(tr('СРОК'), [
+                tile(tr('Срок'), [
                   Text(
                     daysLeft == null || daysLeft < 0
                         ? tr('истёк')

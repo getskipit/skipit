@@ -139,9 +139,9 @@ class GroupGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(28, 4, 28, 18),
+        padding: const EdgeInsets.fromLTRB(28, 4, 28, 20),
         child: LayoutBuilder(builder: (context, c) {
-          const gap = 14.0;
+          const gap = 16.0;
           final columns = c.maxWidth >= 720 ? 3 : 2;
           final width = ((c.maxWidth - gap * (columns - 1)) / columns).floorToDouble();
           return Wrap(spacing: gap, runSpacing: gap, children: [
@@ -164,7 +164,7 @@ class GroupTile extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             height: 172,
-            padding: const EdgeInsets.fromLTRB(18, 18, 14, 16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: hovered ? Color.alphaBlend(C.hover, C.surface) : C.surface,
               borderRadius: BorderRadius.circular(C.r(18)),
@@ -173,13 +173,13 @@ class GroupTile extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: C.orange.withValues(alpha: 0.14),
+                    color: C.surface2,
                     borderRadius: BorderRadius.circular(C.r(12)),
                   ),
-                  child: Icon(group.icon, size: 22, color: C.orange),
+                  child: Icon(group.icon, size: 20, color: C.muted),
                 ),
                 const Spacer(),
                 if (group.alert != null)
@@ -192,19 +192,19 @@ class GroupTile extends StatelessWidget {
                 Icon(Icons.chevron_right_rounded, color: hovered ? C.orange : C.muted),
               ]),
               const Spacer(),
-              Text(group.title, maxLines: 1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              Text(group.title, maxLines: 1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               Text(group.description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: C.muted, fontSize: 12.5, height: 1.3)),
               const SizedBox(height: 8),
-              // Что сейчас выбрано — одной строкой, акцентным цветом.
+              // Что сейчас выбрано — спокойной подписью; важное отмечено отдельно.
               Text(group.summary,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      color: C.isDark ? C.orangeLight : C.orange, fontSize: 12, fontWeight: FontWeight.w600)),
+                      color: C.muted, fontSize: 12, fontWeight: FontWeight.w400)),
             ]),
           ),
         ),
@@ -256,7 +256,7 @@ class GroupHeader extends StatelessWidget {
         ),
       ),
     );
-    const big = TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, height: 1.2);
+    const big = TextStyle(fontSize: 28, fontWeight: FontWeight.w500, height: 1.2);
     // Название раздела плавно уменьшается из заголовка в надпись над группой (и обратно), а строка под ним —
     // подпись страницы или название группы — выезжает снизу и проявляется; высота строк меняется плавно.
     final title = Column(
@@ -346,7 +346,7 @@ class GroupHeader extends StatelessWidget {
       ]),
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 22, 28, 14),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 16),
       child: LayoutBuilder(
         builder: (context, c) => c.maxWidth >= 680
             ? Row(children: [Expanded(child: heading), trailing])

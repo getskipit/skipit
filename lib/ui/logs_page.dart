@@ -598,8 +598,8 @@ class _DayGroupState extends State<_DayGroup> {
                 ),
                 child: Row(children: [
                   Expanded(
-                    child: Text(label.toUpperCase(),
-                        style: TextStyle(color: accent, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
+                    child: Text(label,
+                        style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
                   // Сколько журналов в этом дне.
                   Container(
@@ -844,7 +844,7 @@ class _SessionView extends StatelessWidget {
               FlagText(s.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
               const SizedBox(height: 3),
               Text(AppScope.of(context).screenText(when), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 12)),
             ]),

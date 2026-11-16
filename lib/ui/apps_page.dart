@@ -241,7 +241,7 @@ class _AppsPageState extends State<AppsPage> {
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(tr('Изменения ещё не применены'),
-                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                       const SizedBox(height: 2),
                       Text(tr('Нажмите «Применить» — VPN переподключится на секунду с новыми правилами'),
                           style: TextStyle(color: C.muted, fontSize: 12.5)),
@@ -374,7 +374,7 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               Expanded(
-                child: Text(tr('Запущенные программы'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                child: Text(tr('Запущенные программы'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
               ),
               IconButton(
                 tooltip: tr('Закрыть'),

@@ -284,7 +284,7 @@ void main() {
     // Прошлые дни свёрнуты — разворачиваем все, начиная с нижних: пока верхние свёрнуты, заголовки видны.
     for (final daysAgo in [4, 3, 2, 1]) {
       final day = today.subtract(Duration(days: daysAgo));
-      await tester.tap(daysAgo == 1 ? find.text('ВЧЕРА') : find.textContaining(RegExp('^${day.day} ')).last);
+      await tester.tap(daysAgo == 1 ? find.text('Вчера') : find.textContaining(RegExp('^${day.day} ')).last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pump(const Duration(milliseconds: 400));

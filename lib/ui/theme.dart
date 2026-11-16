@@ -211,6 +211,9 @@ class C {
   static Color get orange => _p.accent.main;
   static Color get orangeLight => _p.accent.light;
 
+  /// Контраст подписи на акценте не ниже 4,5:1 при любом выбранном цвете.
+  static Color get onAccent => orange.computeLuminance() > 0.179 ? Colors.black : Colors.white;
+
   /// Цвет предупреждений (строки журнала, медленный ответ, значок «внимание»): всегда оранжевый,
   /// какой бы ни был акцент. [warnText] — для текста и значков: на тёмном фоне светлее.
   static const warn = Color(0xFFFF5F1A);
@@ -250,7 +253,7 @@ ThemeData buildTheme() {
     fontFamily: 'Segoe UI',
     colorScheme: (dark ? const ColorScheme.dark() : const ColorScheme.light()).copyWith(
       primary: C.orange,
-      onPrimary: Colors.white,
+      onPrimary: C.onAccent,
       secondary: C.cyan,
       surface: C.surface,
       onSurface: C.text,

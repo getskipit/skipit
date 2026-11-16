@@ -96,21 +96,17 @@ class _HomePageState extends State<HomePage> {
     // Части, которые можно спрятать в Настройках → Внешний вид → «На главной».
     final show = state.settings.homeShows;
     final stage = Column(mainAxisSize: MainAxisSize.min, children: [
-      ConnectGlow(
-        active: connected,
-        child: ConnectButton(
-          connected: connected,
-          // Стрелки «летят» только при подключении; отключение мгновенное, для него анимация не нужна.
-          busy: state.status == ConnStatus.connecting || state.closingOtherVpn,
-          onTap: () => connectOrToggle(context),
-        ),
+      ConnectButton(
+        connected: connected,
+        // Стрелки «летят» только при подключении; отключение мгновенное, для него анимация не нужна.
+        busy: state.status == ConnStatus.connecting || state.closingOtherVpn,
+        onTap: () => connectOrToggle(context),
       ),
-      const SizedBox(height: 22),
-      Text(statusText.toUpperCase(),
+      const SizedBox(height: 24),
+      Text(statusText,
           style: TextStyle(
             fontSize: 20,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 2,
+            fontWeight: FontWeight.w500,
             color: connected ? C.text : C.muted,
           )),
       Reveal(open: show('timer'), child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -124,13 +120,13 @@ class _HomePageState extends State<HomePage> {
         style: TextStyle(
           color: connected ? (C.isDark ? C.orangeLight : C.orange) : C.muted,
           fontSize: connected ? 18 : 13,
-          fontWeight: connected ? FontWeight.w700 : FontWeight.w400,
+          fontWeight: connected ? FontWeight.w500 : FontWeight.w400,
           fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
       // Откуда сайты видят компьютер и стоит ли Kill Switch. Высота постоянная: строка появляется
       // через пару секунд после подключения, и всё, что ниже, не должно прыгать.
-      const SizedBox(height: 5),
+      const SizedBox(height: 4),
       SizedBox(
         height: 16,
         // Пока связи нет, последняя известная страна не показывается: сейчас это уже неправда.
@@ -162,7 +158,7 @@ class _HomePageState extends State<HomePage> {
         },
         onChanged: (m) => state.setMode(m),
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: 12),
       // Фиксированная высота: при смене режима колонка не «прыгает».
       SizedBox(
         width: 360,
@@ -201,14 +197,14 @@ class _HomePageState extends State<HomePage> {
           listenable: state.stats,
           builder: (context, _) => Row(children: [
             Expanded(child: _Speed(icon: Icons.arrow_upward_rounded, label: tr('Отдача'), speed: state.stats.upSpeed, vpn: state.stats.vpnUp, direct: state.stats.directUp, active: connected)),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(child: _Speed(icon: Icons.arrow_downward_rounded, label: tr('Загрузка'), speed: state.stats.downSpeed, vpn: state.stats.vpnDown, direct: state.stats.directDown, active: connected)),
           ]),
         ),
       ),
       ])),
       Reveal(open: show('routing'), child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const SizedBox(height: 10),
+      const SizedBox(height: 12),
       SizedBox(width: 360, child: _RoutingInfo(summary: state.routingSummary, onTap: () => state.openPage(AppState.routingPage))),
       ])),
       // Kill Switch держит интернет закрытым без VPN — это видно, пока его не снимут или VPN не вернётся.
@@ -458,7 +454,7 @@ class _KillSwitchBox extends StatelessWidget {
           Text(tr('VPN не подключён, поэтому программы не выпускаются в сеть напрямую. '
               'Подключитесь снова или откройте интернет без VPN.'),
               style: TextStyle(color: C.muted, fontSize: 12.5)),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           GhostButton(label: tr('Открыть интернет без VPN'), icon: Icons.lock_open_rounded, onPressed: onRelease),
         ]),
       );
@@ -502,7 +498,7 @@ class _NoticeBox extends StatelessWidget {
           ]),
           const SizedBox(height: 6),
           Text(AppScope.of(context).screenText(text), style: TextStyle(color: C.muted, fontSize: 12.5)),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           GhostButton(label: actionLabel, icon: actionIcon, onPressed: onAction),
         ]),
       );
@@ -612,7 +608,7 @@ class _ErrorBoxState extends State<_ErrorBox> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 SelectableText(AppScope.of(context).screenText(widget.text), style: TextStyle(color: C.red, fontSize: 13)),
                 if (widget.actionLabel != null) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   GhostButton(label: widget.actionLabel!, icon: Icons.bolt_rounded, onPressed: widget.onAction),
                 ],
               ]),
@@ -668,7 +664,7 @@ class _Speed extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(label, style: TextStyle(color: C.muted, fontSize: 11)),
               Text(active ? formatSpeed(speed) : '—',
-                  maxLines: 1, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                  maxLines: 1, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               if (active) ...[
                 const SizedBox(height: 2),
                 _total('VPN', vpn),

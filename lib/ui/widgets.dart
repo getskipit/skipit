@@ -304,7 +304,6 @@ class AppSwitch extends StatelessWidget {
                 color: value ? C.orange : (hovered ? C.orange.withValues(alpha: 0.6) : C.border),
                 width: 1.5,
               ),
-              boxShadow: [if (value && hovered) BoxShadow(color: C.orange.withValues(alpha: 0.45), blurRadius: 12)],
             ),
             // Кружок переезжает к нужному краю и подрастает во включённом состоянии.
             child: AnimatedAlign(
@@ -442,7 +441,7 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
 
 /// Панель с тонкой рамкой. Если задан onTap — подсвечивается при наведении.
 class Panel extends StatelessWidget {
-  const Panel({super.key, required this.child, this.padding = const EdgeInsets.all(18), this.glow = false, this.onTap});
+  const Panel({super.key, required this.child, this.padding = const EdgeInsets.all(20), this.glow = false, this.onTap});
   final Widget child;
   final EdgeInsets padding;
   final bool glow;
@@ -464,7 +463,6 @@ class Panel extends StatelessWidget {
                     ? C.orange.withValues(alpha: 0.6)
                     : (hovered ? C.orange.withValues(alpha: 0.35) : C.border),
               ),
-              boxShadow: glow ? [BoxShadow(color: C.orange.withValues(alpha: 0.16), blurRadius: 24)] : null,
             ),
             child: child,
           ),
@@ -484,7 +482,7 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heading = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+      Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w500)),
       if (subtitle != null) ...[
         const SizedBox(height: 4),
         Text(subtitle!, style: TextStyle(color: C.muted, fontSize: 13)),
@@ -493,7 +491,7 @@ class PageHeader extends StatelessWidget {
     ]);
     final buttons = Wrap(spacing: 8, runSpacing: 8, children: actions);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 26, 28, 16),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 16),
       child: LayoutBuilder(
         // В узком окне кнопки уходят под заголовок: в одну строку с ним они оставляли заголовку
         // несколько точек ширины, и он выстраивался по букве в строке.
@@ -509,7 +507,7 @@ class PageHeader extends StatelessWidget {
   }
 }
 
-/// Кнопка с градиентом акцента; при наведении светится ярче.
+/// Основная кнопка: ровный акцент и контрастная подпись.
 class GradientButton extends StatelessWidget {
   const GradientButton({super.key, required this.label, this.icon, this.onPressed});
   final String label;
@@ -526,13 +524,8 @@ class GradientButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           decoration: BoxDecoration(
-            gradient: hovered
-                ? LinearGradient(colors: [Color.lerp(C.orangeLight, Colors.white, 0.16)!, Color.lerp(C.orange, Colors.white, 0.12)!])
-                : C.gradient,
+            color: hovered ? Color.lerp(C.orange, C.text, 0.08) : C.orange,
             borderRadius: BorderRadius.circular(C.r(12)),
-            boxShadow: enabled
-                ? [BoxShadow(color: C.orange.withValues(alpha: hovered ? 0.55 : 0.3), blurRadius: hovered ? 22 : 14)]
-                : null,
           ),
           child: Material(
             color: Colors.transparent,
@@ -544,8 +537,8 @@ class GradientButton extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (icon != null) ...[Icon(icon, size: 18, color: Colors.white), const SizedBox(width: 8)],
-                  Text(label, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+                  if (icon != null) ...[Icon(icon, size: 18, color: C.onAccent), const SizedBox(width: 8)],
+                  Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: C.onAccent)),
                 ]),
               ),
             ),
@@ -583,7 +576,7 @@ class GhostButton extends StatelessWidget {
 }
 
 /// Кнопка подключения: плитка со знаком ▶▶. Кликабельна только сама плитка.
-/// При подключении знак «перематывается», при активном соединении плитка светится.
+/// При подключении знак «перематывается», активное соединение отмечено акцентом.
 class ConnectButton extends StatefulWidget {
   const ConnectButton({super.key, required this.connected, required this.busy, required this.onTap});
   final bool connected;
@@ -642,7 +635,7 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
     final active = widget.connected;
     final lit = active || widget.busy || _hover;
     return AnimatedScale(
-      scale: _hover ? 1.03 : 1,
+      scale: 1,
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
       child: ClipRRect(
@@ -663,7 +656,7 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(radius),
                 // Ровная заливка: тёмный градиент на экране ложился заметными полосами.
-                color: active ? C.palette.tileActiveTop : C.palette.tileTop,
+                color: _hover ? C.surface2 : C.palette.tileTop,
                 border: Border.all(
                   color: active ? C.orange : (lit ? C.orange.withValues(alpha: 0.55) : C.border),
                   width: 2,
@@ -689,26 +682,6 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
       ),
     );
   }
-}
-
-/// Свечение вокруг кнопки подключения (рисуется снаружи клипа).
-class ConnectGlow extends StatelessWidget {
-  const ConnectGlow({super.key, required this.active, required this.child});
-  final bool active;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(50),
-          boxShadow: [
-            // Большая тёмная тень на тёмном фоне тоже давала полосы — оставлено только свечение при подключении.
-            if (active) BoxShadow(color: C.orange.withValues(alpha: 0.4), blurRadius: 60, spreadRadius: 2),
-          ],
-        ),
-        child: child,
-      );
 }
 
 class DelayBadge extends StatelessWidget {
@@ -748,7 +721,7 @@ class Tag extends StatelessWidget {
       );
 }
 
-/// Сегментированный переключатель: оранжевая «плашка» плавно переезжает к выбранному пункту;
+/// Сегментированный переключатель: нейтральная «плашка» плавно переезжает к выбранному пункту;
 /// невыбранные пункты подсвечиваются при наведении.
 class Segmented<T> extends StatefulWidget {
   const Segmented({super.key, required this.value, required this.items, required this.onChanged});
@@ -820,7 +793,9 @@ class _SegmentedState<T> extends State<Segmented<T>> {
               duration: Duration(milliseconds: _animate ? 240 : 0),
               curve: Curves.easeOutCubic,
               child: DecoratedBox(
-                decoration: BoxDecoration(gradient: C.gradient, borderRadius: BorderRadius.circular(C.r(10))),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(C.text.withValues(alpha: 0.10), C.surface2),
+                  borderRadius: BorderRadius.circular(C.r(10))),
               ),
             ),
           Row(
@@ -838,8 +813,9 @@ class _SegmentedState<T> extends State<Segmented<T>> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                         decoration: BoxDecoration(
                           // До первого измерения выбранный пункт закрашен сам — без пустого кадра.
-                          gradient: selected && thumb == null ? C.gradient : null,
-                          color: !selected && hovered ? C.hover : null,
+                          color: selected && thumb == null
+                              ? Color.alphaBlend(C.text.withValues(alpha: 0.10), C.surface2)
+                              : (!selected && hovered ? C.hover : null),
                           borderRadius: BorderRadius.circular(C.r(10)),
                         ),
                         // Плавно меняется только цвет текста; фон не смешивается — едет сама плашка.
@@ -849,7 +825,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
                             fontFamily: 'Segoe UI',
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: selected ? Colors.white : (hovered ? C.text : C.muted),
+                            color: selected || hovered ? C.text : C.muted,
                           ),
                           child: Text(screenTextOf(context, e.value)),
                         ),
