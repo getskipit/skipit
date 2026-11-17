@@ -641,7 +641,8 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
       child: ClipRRect(
         // Клип ограничивает и зону нажатия: углы плитки не кликаются.
         borderRadius: BorderRadius.circular(radius),
-        clipBehavior: Clip.antiAlias,
+        // Рамка и заливка сглаживаются вместе: на общем крае нет повторного смешивания с фоном.
+        clipBehavior: Clip.antiAliasWithSaveLayer,
         child: MouseRegion(
           cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _hover = true),
