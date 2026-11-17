@@ -211,7 +211,7 @@ class _MenuRow<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = item.danger ? C.red : C.orange;
+    final accent = item.danger ? C.red : C.highlight;
     return Hover(
       builder: (context, hovered) {
         final color = item.danger ? C.red : (hovered || item.checked ? C.text : C.text.withValues(alpha: 0.82));
@@ -242,7 +242,7 @@ class _MenuRow<T> extends StatelessWidget {
               ],
               if (item.checked) ...[
                 const SizedBox(width: 14),
-                Icon(Icons.check_rounded, size: 16, color: C.orange),
+                Icon(Icons.check_rounded, size: 16, color: C.highlight),
               ],
             ]),
           ),

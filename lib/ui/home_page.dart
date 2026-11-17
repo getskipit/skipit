@@ -83,7 +83,7 @@ class _HomePageState extends State<HomePage> {
                 : state.appRulesPending
                     ? _NoticeBox(
                         icon: Icons.info_rounded,
-                        color: C.orange,
+                        color: C.highlight,
                         title: tr('Список программ изменён'),
                         text: tr('Правила по приложениям (Маршрутизация → Приложения) начнут действовать '
                             'после переподключения'),
@@ -118,7 +118,7 @@ class _HomePageState extends State<HomePage> {
                 ? tr('Закрываю другой VPN…')
                 : (state.status == ConnStatus.connecting ? tr('Нажмите, чтобы отменить') : tr('Нажмите, чтобы подключиться')),
         style: TextStyle(
-          color: connected ? (C.isDark ? C.orangeLight : C.orange) : C.muted,
+          color: connected ? (C.isDark ? C.highlightLight : C.highlight) : C.muted,
           fontSize: connected ? 18 : 13,
           fontWeight: connected ? FontWeight.w500 : FontWeight.w400,
           fontFeatures: const [FontFeature.tabularFigures()],
@@ -342,14 +342,14 @@ class _TunCorePicker extends StatelessWidget {
               decoration: BoxDecoration(
                 color: hovered ? C.surface2 : C.surface,
                 borderRadius: BorderRadius.circular(C.r(11)),
-                border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.5) : C.border),
+                border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.5) : C.border),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Text(tr('Режим TUN'), style: TextStyle(color: C.muted, fontSize: 12)),
                 const SizedBox(width: 8),
                 _CoreName(value == TunCore.xray ? 'Xray' : 'sing-box'),
                 const SizedBox(width: 4),
-                Icon(Icons.expand_more_rounded, size: 18, color: hovered ? C.orange : C.muted),
+                Icon(Icons.expand_more_rounded, size: 18, color: hovered ? C.highlight : C.muted),
               ]),
             ),
           ),
@@ -393,10 +393,10 @@ class _RoutingInfoState extends State<_RoutingInfo> {
               decoration: BoxDecoration(
                 color: hovered ? C.surface2 : C.surface,
                 borderRadius: BorderRadius.circular(C.r(14)),
-                border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.5) : C.border),
+                border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.5) : C.border),
               ),
               child: Row(children: [
-                Icon(Icons.alt_route_rounded, size: 18, color: hovered ? C.orange : C.muted),
+                Icon(Icons.alt_route_rounded, size: 18, color: hovered ? C.highlight : C.muted),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -419,7 +419,7 @@ class _RoutingInfoState extends State<_RoutingInfo> {
                     ),
                   ]),
                 ),
-                Icon(Icons.chevron_right_rounded, size: 18, color: hovered ? C.orange : C.muted),
+                Icon(Icons.chevron_right_rounded, size: 18, color: hovered ? C.highlight : C.muted),
               ]),
             ),
           ),
@@ -437,13 +437,13 @@ class _KillSwitchBox extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
-          color: C.orange.withValues(alpha: 0.08),
+          color: C.highlight.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(C.r(14)),
-          border: Border.all(color: C.orange.withValues(alpha: 0.45)),
+          border: Border.all(color: C.highlight.withValues(alpha: 0.45)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(Icons.shield_rounded, size: 18, color: C.orange),
+            Icon(Icons.shield_rounded, size: 18, color: C.highlight),
             const SizedBox(width: 8),
             Expanded(
               child: Text(tr('Интернет закрыт: Kill Switch'),
@@ -658,7 +658,7 @@ class _Speed extends StatelessWidget {
           border: Border.all(color: C.border),
         ),
         child: Row(children: [
-          Icon(icon, size: 18, color: active ? C.orange : C.muted),
+          Icon(icon, size: 18, color: active ? C.highlight : C.muted),
           const SizedBox(width: 8),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

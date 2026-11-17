@@ -179,9 +179,9 @@ class AppDropdown<T> extends StatelessWidget {
             height: height ?? 42,
             padding: const EdgeInsets.only(left: 14, right: 8),
             decoration: BoxDecoration(
-              color: hovered ? C.orange.withValues(alpha: 0.08) : (height != null ? C.surface : Colors.transparent),
+              color: hovered ? C.highlight.withValues(alpha: 0.08) : (height != null ? C.surface : Colors.transparent),
               borderRadius: BorderRadius.circular(C.r(height != null ? 18 : 12)),
-              border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.7) : C.border),
+              border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.7) : C.border),
             ),
             child: Row(mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min, children: [
               if (leading != null) ...[leading!, const SizedBox(width: 12)],
@@ -211,7 +211,7 @@ class AppDropdown<T> extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.expand_more_rounded, color: hovered ? C.orange : C.muted),
+              Icon(Icons.expand_more_rounded, color: hovered ? C.highlight : C.muted),
             ]),
           ),
         ),
@@ -245,7 +245,7 @@ class _SpinnerState extends State<Spinner> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final icon = Icon(widget.icon, size: widget.size, color: C.orange);
+    final icon = Icon(widget.icon, size: widget.size, color: C.highlight);
     return widget.pulse
         ? FadeTransition(opacity: Tween(begin: 0.3, end: 1.0).animate(_anim), child: icon)
         : RotationTransition(turns: _anim, child: icon);
@@ -298,10 +298,10 @@ class AppSwitch extends StatelessWidget {
             height: 30,
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: value ? C.orange : C.surface2,
+              color: value ? C.highlight : C.surface2,
               borderRadius: BorderRadius.circular(C.r(15)),
               border: Border.all(
-                color: value ? C.orange : (hovered ? C.orange.withValues(alpha: 0.6) : C.border),
+                color: value ? C.highlight : (hovered ? C.highlight.withValues(alpha: 0.6) : C.border),
                 width: 1.5,
               ),
             ),
@@ -460,8 +460,8 @@ class Panel extends StatelessWidget {
               borderRadius: BorderRadius.circular(C.r(18)),
               border: Border.all(
                 color: glow
-                    ? C.orange.withValues(alpha: 0.6)
-                    : (hovered ? C.orange.withValues(alpha: 0.35) : C.border),
+                    ? C.highlight.withValues(alpha: 0.6)
+                    : (hovered ? C.highlight.withValues(alpha: 0.35) : C.border),
               ),
             ),
             child: child,
@@ -524,7 +524,7 @@ class GradientButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           decoration: BoxDecoration(
-            color: hovered ? Color.lerp(C.orange, C.text, 0.08) : C.orange,
+            color: hovered ? Color.lerp(C.highlight, C.text, 0.08) : C.highlight,
             borderRadius: BorderRadius.circular(C.r(12)),
           ),
           child: Material(
@@ -537,8 +537,8 @@ class GradientButton extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (icon != null) ...[Icon(icon, size: 18, color: C.onAccent), const SizedBox(width: 8)],
-                  Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: C.onAccent)),
+                  if (icon != null) ...[Icon(icon, size: 18, color: Colors.white), const SizedBox(width: 8)],
+                  Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
                 ]),
               ),
             ),
@@ -562,11 +562,11 @@ class GhostButton extends StatelessWidget {
         onPressed: busy ? null : onPressed,
         style: ButtonStyle(
           side: WidgetStateProperty.resolveWith((s) => BorderSide(
-                color: s.contains(WidgetState.hovered) ? C.orange.withValues(alpha: 0.7) : C.border,
+                color: s.contains(WidgetState.hovered) ? C.highlight.withValues(alpha: 0.7) : C.border,
               )),
           backgroundColor: WidgetStateProperty.resolveWith(
-              (s) => s.contains(WidgetState.hovered) ? C.orange.withValues(alpha: 0.08) : Colors.transparent),
-          overlayColor: WidgetStateProperty.all(C.orange.withValues(alpha: 0.08)),
+              (s) => s.contains(WidgetState.hovered) ? C.highlight.withValues(alpha: 0.08) : Colors.transparent),
+          overlayColor: WidgetStateProperty.all(C.highlight.withValues(alpha: 0.08)),
         ),
         icon: busy
             ? const Spinner(size: 18)
@@ -656,9 +656,11 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(radius),
                 // Ровная заливка: тёмный градиент на экране ложился заметными полосами.
-                color: _hover ? C.surface2 : C.palette.tileTop,
+                color: active
+                    ? Color.alphaBlend(C.highlight.withValues(alpha: 0.12), C.palette.tileTop)
+                    : (_hover ? C.surface2 : C.palette.tileTop),
                 border: Border.all(
-                  color: active ? C.orange : (lit ? C.orange.withValues(alpha: 0.55) : C.border),
+                  color: active ? C.highlight : (lit ? C.highlight.withValues(alpha: 0.55) : C.border),
                   width: 2,
                 ),
               ),
@@ -721,7 +723,7 @@ class Tag extends StatelessWidget {
       );
 }
 
-/// Сегментированный переключатель: нейтральная «плашка» плавно переезжает к выбранному пункту;
+/// Сегментированный переключатель: мягкая акцентная «плашка» переезжает к выбранному пункту;
 /// невыбранные пункты подсвечиваются при наведении.
 class Segmented<T> extends StatefulWidget {
   const Segmented({super.key, required this.value, required this.items, required this.onChanged});
@@ -794,7 +796,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
               curve: Curves.easeOutCubic,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Color.alphaBlend(C.text.withValues(alpha: 0.10), C.surface2),
+                  color: Color.alphaBlend(C.highlight.withValues(alpha: 0.24), C.surface2),
                   borderRadius: BorderRadius.circular(C.r(10))),
               ),
             ),
@@ -814,7 +816,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
                         decoration: BoxDecoration(
                           // До первого измерения выбранный пункт закрашен сам — без пустого кадра.
                           color: selected && thumb == null
-                              ? Color.alphaBlend(C.text.withValues(alpha: 0.10), C.surface2)
+                              ? Color.alphaBlend(C.highlight.withValues(alpha: 0.24), C.surface2)
                               : (!selected && hovered ? C.hover : null),
                           borderRadius: BorderRadius.circular(C.r(10)),
                         ),

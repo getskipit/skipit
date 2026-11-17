@@ -98,7 +98,7 @@ class _RoutingCompareDialogState extends State<RoutingCompareDialog> {
                 final d = differences[i];
                 return Padding(padding: const EdgeInsets.only(bottom: 14), child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(d.title, style: TextStyle(color: C.orange, fontWeight: FontWeight.w700)),
+                    Text(d.title, style: TextStyle(color: C.highlight, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 5),
                     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [column(d.left), const SizedBox(width: 12), column(d.right)]),
                   ],

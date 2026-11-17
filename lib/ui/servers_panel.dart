@@ -148,7 +148,7 @@ class _ServersPanelState extends State<ServersPanel> {
                       builder: (context, hovered) => GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: _clearSearch,
-                        child: Icon(Icons.close_rounded, size: 18, color: hovered ? C.orange : C.muted),
+                        child: Icon(Icons.close_rounded, size: 18, color: hovered ? C.highlight : C.muted),
                       ),
                     ),
                   ),
@@ -273,7 +273,7 @@ class _ServersPanelState extends State<ServersPanel> {
                       bottom: above ? null : -9,
                       child: Container(
                         height: 4,
-                        decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(2)),
+                        decoration: BoxDecoration(color: C.highlight, borderRadius: BorderRadius.circular(2)),
                       ),
                     ),
                 ]);
@@ -391,7 +391,7 @@ class _IconAction extends StatelessWidget {
                     // Пока идёт работа, оживает сам значок кнопки: стрелки обновления вращаются,
                     // остальные значки (проверка задержки) мигают — так действия не путаются.
                     ? Spinner(size: 20, icon: icon, pulse: icon != Icons.sync_rounded)
-                    : Icon(icon, size: 20, color: hovered ? C.orange : C.muted),
+                    : Icon(icon, size: 20, color: hovered ? C.highlight : C.muted),
               ),
             ),
           ),
@@ -591,7 +591,7 @@ class _GroupCardState extends State<_GroupCard> {
                 decoration: BoxDecoration(
                   color: C.surface2,
                   borderRadius: BorderRadius.circular(C.r(11)),
-                  border: Border.all(color: C.orange),
+                  border: Border.all(color: C.highlight),
                 ),
                 child: FlagText(state.screenText(sub.displayName),
                     maxLines: 1,
@@ -650,7 +650,7 @@ class _GroupCardState extends State<_GroupCard> {
                                   ? tr('Закреплена вверху списка. Перетащите заголовок на другую закреплённую подписку, '
                                       'чтобы поменять их местами')
                                   : tr('Закреплена вверху списка'),
-                              child: Icon(Icons.push_pin_rounded, size: 14, color: C.orange),
+                              child: Icon(Icons.push_pin_rounded, size: 14, color: C.highlight),
                             ),
                           ],
                           if (sub?.hidden ?? false) ...[const SizedBox(width: 8), Tag(tr('скрыта'))],
@@ -786,7 +786,7 @@ class _SubscriptionBar extends StatelessWidget {
                       value: total > 0 ? progress : 0,
                       minHeight: 5,
                       backgroundColor: C.border,
-                      color: progress > 0.9 ? C.red : C.orange,
+                      color: progress > 0.9 ? C.red : C.highlight,
                     ),
                   ),
                 ),
@@ -893,7 +893,7 @@ class _SubscriptionDetails extends StatelessWidget {
                       value: total > 0 ? progress : 0,
                       minHeight: 6,
                       backgroundColor: C.border,
-                      color: progress > 0.9 ? C.red : C.orange,
+                      color: progress > 0.9 ? C.red : C.highlight,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -939,14 +939,14 @@ class _SubscriptionDetails extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             decoration: BoxDecoration(
-              color: C.orange.withValues(alpha: 0.06),
+              color: C.highlight.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(C.r(12)),
-              border: Border.all(color: C.orange.withValues(alpha: 0.35)),
+              border: Border.all(color: C.highlight.withValues(alpha: 0.35)),
             ),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Padding(
                 padding: const EdgeInsets.only(top: 1),
-                child: Icon(Icons.campaign_rounded, size: 16, color: C.orange),
+                child: Icon(Icons.campaign_rounded, size: 16, color: C.highlight),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1043,7 +1043,7 @@ class _ServerRow extends StatelessWidget {
               radius: const Radius.circular(4),
               thumbColor: WidgetStateProperty.resolveWith((s) =>
                   s.contains(WidgetState.dragged) || s.contains(WidgetState.hovered)
-                      ? C.orange.withValues(alpha: 0.85)
+                      ? C.highlight.withValues(alpha: 0.85)
                       : C.muted.withValues(alpha: 0.6)),
             ),
             child: Scrollbar(
@@ -1084,7 +1084,7 @@ class _ServerRow extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           decoration: BoxDecoration(
-            color: selected ? C.orange.withValues(alpha: 0.10) : (hovered ? C.hover : Colors.transparent),
+            color: selected ? C.highlight.withValues(alpha: 0.10) : (hovered ? C.hover : Colors.transparent),
             border: Border(top: BorderSide(color: C.border)),
           ),
           child: Row(children: [
@@ -1093,7 +1093,7 @@ class _ServerRow extends StatelessWidget {
               duration: const Duration(milliseconds: 140),
               width: 3,
               height: 60,
-              color: selected ? C.orange : Colors.transparent,
+              color: selected ? C.highlight : Colors.transparent,
             ),
             const SizedBox(width: 13),
             // Скрытый с главной сервер (виден только в разделе «Серверы») — приглушён.
@@ -1112,7 +1112,7 @@ class _ServerRow extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 4),
                   Wrap(spacing: 6, runSpacing: 4, children: [
-                    Tag(server.protocolLabel, color: C.isDark ? C.orangeLight : C.orange),
+                    Tag(server.protocolLabel, color: C.isDark ? C.highlightLight : C.highlight),
                     if (server.transportLabel.isNotEmpty) Tag(server.transportLabel),
                     if (server.isJson) Tag('JSON', color: C.cyan),
                     if (server.hidden) Tag(tr('скрыт')),

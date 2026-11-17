@@ -211,8 +211,13 @@ class C {
   static Color get orange => _p.accent.main;
   static Color get orangeLight => _p.accent.light;
 
-  /// Контраст подписи на акценте не ниже 4,5:1 при любом выбранном цвете.
-  static Color get onAccent => orange.computeLuminance() > 0.179 ? Colors.black : Colors.white;
+  /// Выделения сохраняют выбранный оттенок, но выглядят спокойнее фирменного знака.
+  static Color get highlight => _soften(orange);
+  static Color get highlightLight => _soften(orangeLight);
+  static Color _soften(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl.withSaturation(hsl.saturation * 0.78).toColor();
+  }
 
   /// Цвет предупреждений (строки журнала, медленный ответ, значок «внимание»): всегда оранжевый,
   /// какой бы ни был акцент. [warnText] — для текста и значков: на тёмном фоне светлее.
@@ -252,8 +257,8 @@ ThemeData buildTheme() {
     useMaterial3: true,
     fontFamily: 'Segoe UI',
     colorScheme: (dark ? const ColorScheme.dark() : const ColorScheme.light()).copyWith(
-      primary: C.orange,
-      onPrimary: C.onAccent,
+      primary: C.highlight,
+      onPrimary: Colors.white,
       secondary: C.cyan,
       surface: C.surface,
       onSurface: C.text,
@@ -262,11 +267,11 @@ ThemeData buildTheme() {
   );
   return base.copyWith(
     scaffoldBackgroundColor: C.bg,
-    hoverColor: C.orange.withValues(alpha: 0.08),
+    hoverColor: C.highlight.withValues(alpha: 0.08),
     // Квадратная подсветка фокуса после клика мышью не нужна.
     focusColor: Colors.transparent,
-    splashColor: C.orange.withValues(alpha: 0.12),
-    highlightColor: C.orange.withValues(alpha: 0.06),
+    splashColor: C.highlight.withValues(alpha: 0.12),
+    highlightColor: C.highlight.withValues(alpha: 0.06),
     dividerColor: C.border,
     dividerTheme: DividerThemeData(color: C.border, thickness: 1, space: 1),
     textTheme: base.textTheme.apply(bodyColor: C.text, displayColor: C.text),
@@ -297,9 +302,9 @@ ThemeData buildTheme() {
               color: states.contains(WidgetState.error)
                   ? C.red
                   : states.contains(WidgetState.focused)
-                      ? C.orange
+                      ? C.highlight
                       : states.contains(WidgetState.hovered)
-                          ? C.orange.withValues(alpha: 0.55)
+                          ? C.highlight.withValues(alpha: 0.55)
                           : C.border,
             ),
           )),
@@ -310,7 +315,7 @@ ThemeData buildTheme() {
     // своих переключателей и списков (Hover), над любой кнопкой — палец.
     textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-            foregroundColor: dark ? C.orangeLight : C.orange, enabledMouseCursor: SystemMouseCursors.click)),
+            foregroundColor: dark ? C.highlightLight : C.highlight, enabledMouseCursor: SystemMouseCursors.click)),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: C.text,

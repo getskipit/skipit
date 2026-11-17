@@ -581,7 +581,7 @@ class _DayGroupState extends State<_DayGroup> {
         Hover(
           builder: (context, hovered) {
             final marked = here && !open;
-            final accent = marked ? C.orange : (hovered ? C.text : C.muted);
+            final accent = marked ? C.highlight : (hovered ? C.text : C.muted);
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => onToggle(!open),
@@ -594,7 +594,7 @@ class _DayGroupState extends State<_DayGroup> {
                   // к почти прозрачному белому середина перехода вспыхивала светло-серым.
                   color: hovered ? Color.alphaBlend(C.hover, C.surface2) : C.surface2,
                   borderRadius: BorderRadius.circular(C.r(10)),
-                  border: Border.all(color: marked ? C.orange.withValues(alpha: 0.55) : C.border),
+                  border: Border.all(color: marked ? C.highlight.withValues(alpha: 0.55) : C.border),
                 ),
                 child: Row(children: [
                   Expanded(
@@ -605,18 +605,18 @@ class _DayGroupState extends State<_DayGroup> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
                     decoration: BoxDecoration(
-                      color: (marked ? C.orange : C.muted).withValues(alpha: 0.14),
+                      color: (marked ? C.highlight : C.muted).withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(C.r(8)),
                     ),
                     child: Text('$count',
-                        style: TextStyle(color: marked ? C.orange : C.muted, fontSize: 11, fontWeight: FontWeight.w700)),
+                        style: TextStyle(color: marked ? C.highlight : C.muted, fontSize: 11, fontWeight: FontWeight.w700)),
                   ),
                   const SizedBox(width: 4),
                   AnimatedRotation(
                     turns: open ? 0.5 : 0,
                     duration: const Duration(milliseconds: 260),
                     curve: Curves.easeOutCubic,
-                    child: Icon(Icons.expand_more_rounded, size: 18, color: hovered || marked ? C.orange : C.muted),
+                    child: Icon(Icons.expand_more_rounded, size: 18, color: hovered || marked ? C.highlight : C.muted),
                   ),
                 ]),
               ),
@@ -641,9 +641,9 @@ class _DayGroupState extends State<_DayGroup> {
                   duration: const Duration(milliseconds: 160),
                   child: Container(
                     alignment: Alignment.centerLeft,
-                    color: C.orange.withValues(alpha: 0.10),
+                    color: C.highlight.withValues(alpha: 0.10),
                     // Оранжевая метка слева — как у выбранного сервера на главной.
-                    child: Container(width: 3, color: C.orange),
+                    child: Container(width: 3, color: C.highlight),
                   ),
                 ),
               ),
@@ -908,7 +908,7 @@ class _SessionView extends StatelessWidget {
                 _Chip(_routeTitle(r), count(r), _routeColor(r), route == r, () => onRoute(r)),
               if (s.live) ...[
                 Container(width: 1, height: 18, color: C.border),
-                _Chip(tr('Последняя минута'), null, C.orange, recent, () => onRecent(!recent)),
+                _Chip(tr('Последняя минута'), null, C.highlight, recent, () => onRecent(!recent)),
               ],
               if (!recentOnly && s.connectionsTotal > stored.length)
                 Text(tr('в списке — последние {0}', [stored.length]), style: TextStyle(color: C.muted, fontSize: 11.5)),
@@ -1105,14 +1105,14 @@ class _HoldWhileReadingState<T extends Object> extends State<_HoldWhileReading<T
                     decoration: BoxDecoration(
                       color: C.surface2,
                       borderRadius: BorderRadius.circular(C.r(16)),
-                      border: Border.all(color: hovered ? C.orange : C.border),
+                      border: Border.all(color: hovered ? C.highlight : C.border),
                       boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 10, offset: Offset(0, 3))],
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Text(pending > 0 ? '${widget.newLabel}: $pending' : tr('К последним записям'),
                           style: TextStyle(color: C.text, fontSize: 12, fontWeight: FontWeight.w600)),
                       const SizedBox(width: 4),
-                      Icon(Icons.arrow_downward_rounded, size: 14, color: hovered ? C.orange : C.muted),
+                      Icon(Icons.arrow_downward_rounded, size: 14, color: hovered ? C.highlight : C.muted),
                     ]),
                   ),
                 ),
@@ -1182,7 +1182,7 @@ class _LineTextState extends State<_LineText> {
 
   Widget _content() {
     final line = widget.line;
-    final orange = C.isDark ? C.orangeLight : C.orange;
+    final orange = C.isDark ? C.highlightLight : C.highlight;
     final t = line.time;
     final hint = LogExplain.of(line.source, line.text);
     final color = switch (line.level) {
@@ -1283,7 +1283,7 @@ String _routeTitle(ConnRoute r) => switch (r) {
     };
 
 Color _routeColor(ConnRoute r) => switch (r) {
-      ConnRoute.proxy => C.isDark ? C.orangeLight : C.orange,
+      ConnRoute.proxy => C.isDark ? C.highlightLight : C.highlight,
       ConnRoute.direct => C.green,
       ConnRoute.block => C.red,
       ConnRoute.dns => C.muted,
@@ -1386,7 +1386,7 @@ class _ConnGroupText extends StatelessWidget {
     if (!many) return head;
 
     final count = group.items.length;
-    final orange = C.isDark ? C.orangeLight : C.orange;
+    final orange = C.isDark ? C.highlightLight : C.highlight;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
         Flexible(child: head),

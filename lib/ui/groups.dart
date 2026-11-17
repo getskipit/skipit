@@ -84,11 +84,11 @@ class GroupNavItem extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(C.r(12)),
                   color: selected
-                      ? C.orange.withValues(alpha: 0.14)
+                      ? C.highlight.withValues(alpha: 0.14)
                       : (hovered ? C.hover : Colors.transparent),
                 ),
                 child: Row(children: [
-                  Icon(group.icon, size: 20, color: selected || hovered ? C.orange : C.muted),
+                  Icon(group.icon, size: 20, color: selected || hovered ? C.highlight : C.muted),
                   if (showLabel) ...[
                     const SizedBox(width: 12),
                     Expanded(
@@ -168,7 +168,7 @@ class GroupTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: hovered ? Color.alphaBlend(C.hover, C.surface) : C.surface,
               borderRadius: BorderRadius.circular(C.r(18)),
-              border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.6) : C.border),
+              border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.6) : C.border),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
@@ -176,10 +176,10 @@ class GroupTile extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: C.surface2,
+                    color: C.highlight.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(C.r(12)),
                   ),
-                  child: Icon(group.icon, size: 20, color: C.muted),
+                  child: Icon(group.icon, size: 20, color: C.highlight),
                 ),
                 const Spacer(),
                 if (group.alert != null)
@@ -189,7 +189,7 @@ class GroupTile extends StatelessWidget {
                     margin: const EdgeInsets.only(right: 6),
                     decoration: BoxDecoration(color: group.alert, shape: BoxShape.circle),
                   ),
-                Icon(Icons.chevron_right_rounded, color: hovered ? C.orange : C.muted),
+                Icon(Icons.chevron_right_rounded, color: hovered ? C.highlight : C.muted),
               ]),
               const Spacer(),
               Text(group.title, maxLines: 1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
@@ -199,12 +199,12 @@ class GroupTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: C.muted, fontSize: 12.5, height: 1.3)),
               const SizedBox(height: 8),
-              // Что сейчас выбрано — спокойной подписью; важное отмечено отдельно.
+              // Что сейчас выбрано — мягким акцентом; важное отмечено отдельно.
               Text(group.summary,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      color: C.muted, fontSize: 12, fontWeight: FontWeight.w400)),
+                      color: C.isDark ? C.highlightLight : C.highlight, fontSize: 12, fontWeight: FontWeight.w400)),
             ]),
           ),
         ),
@@ -246,11 +246,11 @@ class GroupHeader extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: hovered ? C.orange.withValues(alpha: 0.14) : C.surface2,
+                color: hovered ? C.highlight.withValues(alpha: 0.14) : C.surface2,
                 shape: BoxShape.circle,
-                border: Border.all(color: hovered ? C.orange.withValues(alpha: 0.6) : C.border),
+                border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.6) : C.border),
               ),
-              child: Icon(Icons.arrow_back_rounded, size: 20, color: hovered ? C.orange : C.muted),
+              child: Icon(Icons.arrow_back_rounded, size: 20, color: hovered ? C.highlight : C.muted),
             ),
           ),
         ),
@@ -275,7 +275,7 @@ class GroupHeader extends StatelessWidget {
               style: DefaultTextStyle.of(context).style.merge(g == null
                   ? big.copyWith(color: C.text)
                   : TextStyle(
-                      color: hovered ? C.orange : C.muted,
+                      color: hovered ? C.highlight : C.muted,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0,

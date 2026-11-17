@@ -82,7 +82,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
               // Значок и лёгкая подложка: видно, что это кнопка, а не подсвеченный текст.
               TextButton.icon(
                 onPressed: () => Navigator.pop(ctx, _ConflictChoice.proceed),
-                style: TextButton.styleFrom(backgroundColor: C.orange.withValues(alpha: 0.12)),
+                style: TextButton.styleFrom(backgroundColor: C.highlight.withValues(alpha: 0.12)),
                 icon: const Icon(Icons.call_split_rounded, size: 18),
                 label: Text(tr('Подключиться рядом')),
               ),
@@ -134,7 +134,7 @@ Future<bool> _askAboutZapret(BuildContext context, AppState state, String zapret
               child: Row(children: [
                 Checkbox(
                   value: dontAsk,
-                  activeColor: C.orange,
+                  activeColor: C.highlight,
                   onChanged: (v) => setLocal(() => dontAsk = v ?? false),
                 ),
                 Text(tr('Больше не спрашивать')),
@@ -501,8 +501,8 @@ class _ToastState extends State<_Toast> with TickerProviderStateMixin {
   (IconData, Color)? get _badge => switch (widget.kind) {
         ToastKind.success => (Icons.check_rounded, C.green),
         ToastKind.error => (Icons.priority_high_rounded, C.red),
-        ToastKind.update => (Icons.arrow_downward_rounded, C.isDark ? C.orangeLight : C.orange),
-        ToastKind.info => (Icons.info_rounded, C.orange),
+        ToastKind.update => (Icons.arrow_downward_rounded, C.isDark ? C.highlightLight : C.highlight),
+        ToastKind.info => (Icons.info_rounded, C.highlight),
       };
 
   void dismiss() {
@@ -669,7 +669,7 @@ class _TopBar extends StatelessWidget {
         return Row(children: [
           const AppBadge(size: 34),
           const SizedBox(width: 10),
-          Text(AppPaths.appName, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
+          Text(AppPaths.appName, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
           const SizedBox(width: 18),
           Expanded(child: _TopNav(index: index, items: items, hidden: hidden, wide: wide, onSelect: onSelect)),
           Tooltip(
@@ -798,7 +798,7 @@ class _TopNavState extends State<_TopNav> with TickerProviderStateMixin {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(C.r(12)),
-                  color: C.surface2,
+                  color: C.highlight.withValues(alpha: 0.10),
                 ),
               ),
             ),
@@ -875,7 +875,7 @@ class _TopItem extends StatelessWidget {
                   color: !selected && hovered ? C.hover : Colors.transparent,
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(icon, size: 20, color: selected || hovered ? C.orange : C.muted),
+                  Icon(icon, size: 20, color: selected || hovered ? C.highlight : C.muted),
                   // В узком окне подпись у выбранного пункта плавно выезжает, у прежнего — уезжает.
                   AnimatedSize(
                     duration: const Duration(milliseconds: 260),
@@ -933,8 +933,8 @@ class _MenuSlot extends StatelessWidget {
 /// Цвет точки и слово статуса подключения — для бокового и верхнего меню.
 (Color, String) _statusOf(AppState state) => switch (state.status) {
       ConnStatus.connected => (C.green, tr('Подключено')),
-      ConnStatus.connecting => (C.orangeLight, tr('Подключение…')),
-      ConnStatus.disconnecting => (C.orangeLight, tr('Отключение…')),
+      ConnStatus.connecting => (C.highlightLight, tr('Подключение…')),
+      ConnStatus.disconnecting => (C.highlightLight, tr('Отключение…')),
       ConnStatus.disconnected => (C.muted, tr('Не подключено')),
     };
 
@@ -1037,7 +1037,7 @@ class _Sidebar extends StatelessWidget {
                             child: Text(AppPaths.appName,
                                 maxLines: 1,
                                 softWrap: false,
-                                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w600)),
+                                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
                           ),
                         ),
                       ),
@@ -1139,9 +1139,9 @@ class _MenuBadge extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: C.surface2,
                             borderRadius: BorderRadius.circular(C.r(10)),
-                            border: Border.all(color: C.orange.withValues(alpha: 0.5)),
+                            border: Border.all(color: C.highlight.withValues(alpha: 0.5)),
                           ),
-                          child: Icon(arrows, size: 20, color: C.orange),
+                          child: Icon(arrows, size: 20, color: C.highlight),
                         )
                       : const AppBadge(key: ValueKey('badge'), size: 36),
                 ),
@@ -1247,13 +1247,13 @@ class _NavColumnState extends State<_NavColumn> with TickerProviderStateMixin {
                       alignment: Alignment.centerLeft,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(C.r(12)),
-                        color: C.surface2,
+                        color: C.highlight.withValues(alpha: 0.10),
                       ),
                       // Оранжевая метка слева у выбранного пункта.
                       child: Container(
                         width: 3,
                         height: 18,
-                        decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(2)),
+                        decoration: BoxDecoration(color: C.highlight, borderRadius: BorderRadius.circular(2)),
                       ),
                     ),
                   ),
@@ -1322,7 +1322,7 @@ class _NavItem extends StatelessWidget {
           ),
           child: Row(children: [
             const SizedBox(width: 14),
-            Icon(icon, size: 20, color: selected || hovered ? C.orange : C.muted),
+            Icon(icon, size: 20, color: selected || hovered ? C.highlight : C.muted),
             Expanded(
               child: SlideLabel(
                 collapsed: collapsed,
@@ -1442,9 +1442,9 @@ class _VersionRow extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             height: _height,
             decoration: BoxDecoration(
-              color: hasUpdate ? C.orange.withValues(alpha: 0.14) : (hovered ? C.hover : Colors.transparent),
+              color: hasUpdate ? C.highlight.withValues(alpha: 0.14) : (hovered ? C.hover : Colors.transparent),
               borderRadius: BorderRadius.circular(C.r(12)),
-              border: Border.all(color: hasUpdate ? C.orange.withValues(alpha: 0.5) : Colors.transparent),
+              border: Border.all(color: hasUpdate ? C.highlight.withValues(alpha: 0.5) : Colors.transparent),
             ),
             child: Row(children: [
               const SizedBox(width: 13),
@@ -1454,7 +1454,7 @@ class _VersionRow extends StatelessWidget {
                   child: state.checkingUpdates || downloading
                       ? const Spinner(size: 18, icon: Icons.sync_rounded)
                       : Icon(hasUpdate ? Icons.download_rounded : Icons.sync_rounded,
-                          size: 18, color: hasUpdate || hovered ? C.orange : C.muted),
+                          size: 18, color: hasUpdate || hovered ? C.highlight : C.muted),
                 ),
               ),
               Expanded(
@@ -1477,7 +1477,7 @@ class _VersionRow extends StatelessWidget {
                         Text(action,
                             maxLines: 1,
                             softWrap: false,
-                            style: TextStyle(color: hasUpdate || hovered ? C.orange : C.muted, fontSize: 11)),
+                            style: TextStyle(color: hasUpdate || hovered ? C.highlight : C.muted, fontSize: 11)),
                       ],
                     ),
                   ),

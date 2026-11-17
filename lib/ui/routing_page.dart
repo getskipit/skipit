@@ -126,7 +126,7 @@ class RoutingPage extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 4, bottom: 8),
                 child: Text(
                   provider != null ? tr('Свои профили — работают вместе с правилами провайдера') : tr('Свои профили'),
-                  style: TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: C.isDark ? C.highlightLight : C.highlight, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
               if (own.length >= 2)
@@ -202,7 +202,7 @@ class _ProviderRulesCard extends StatelessWidget {
         ]),
         line(Icons.alt_route_rounded, C.green, tr('Напрямую'),
             s.direct == 0 ? '—' : '${s.directExamples.join(', ')}${s.direct > s.directExamples.length ? tr(' и ещё {0}', [s.direct - s.directExamples.length]) : ''}'),
-        line(Icons.shield_rounded, C.orange, tr('Через VPN'),
+        line(Icons.shield_rounded, C.highlight, tr('Через VPN'),
             tr('всё остальное{0}{1}{2}', [
               s.proxy > 0 ? tr(' + отдельные правила: {0}', [s.proxy]) : '',
               proxies > 1 ? tr(' · серверов в конфиге: {0}', [proxies]) : '',
@@ -274,7 +274,7 @@ class _DnsCardState extends State<_DnsCard> {
                       'https://dns.google/dns-query — DoH\n'
                       'tls://1.1.1.1 — DoT')),
                   triggerMode: TooltipTriggerMode.tap,
-                  child: Icon(Icons.info_rounded, size: 18, color: C.orange),
+                  child: Icon(Icons.info_rounded, size: 18, color: C.highlight),
                 ),
               ),
             ),
@@ -284,7 +284,7 @@ class _DnsCardState extends State<_DnsCard> {
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Icon(Icons.dns_rounded, color: own ? C.orange : C.muted),
+          Icon(Icons.dns_rounded, color: own ? C.highlight : C.muted),
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -318,7 +318,7 @@ class _DnsCardState extends State<_DnsCard> {
           ),
           if (skipped != null) ...[
             const SizedBox(height: 6),
-            Text(skipped, style: TextStyle(color: C.orange, fontSize: 12)),
+            Text(skipped, style: TextStyle(color: C.highlight, fontSize: 12)),
           ],
         ],
         const SizedBox(height: 14),
@@ -360,7 +360,7 @@ class _ProfileTile extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: state.settings.compactRuleRows ? 3 : 12),
       child: Row(children: [
           Icon(selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-              color: selected ? C.orange : C.muted),
+              color: selected ? C.highlight : C.muted),
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -551,7 +551,7 @@ class _RoutingEditorState extends State<_RoutingEditor> {
               const SizedBox(height: 8),
               Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                 Tag(source.action == 'proxy' ? tr('через VPN') : source.action == 'direct' ? tr('напрямую') : tr('Блокировать'),
-                    color: source.action == 'proxy' ? C.orange : source.action == 'direct' ? C.green : C.red),
+                    color: source.action == 'proxy' ? C.highlight : source.action == 'direct' ? C.green : C.red),
                 AppDropdown<String>(value: source.action,
                     items: {'proxy': tr('через VPN'), 'direct': tr('напрямую'), 'block': tr('Блокировать')},
                     onChanged: (v) => setState(() => source.action = v)),
@@ -592,7 +592,7 @@ class _RoutingEditorState extends State<_RoutingEditor> {
           style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
           decoration: InputDecoration(
             labelText: label,
-            labelStyle: TextStyle(color: key.startsWith('proxy') ? C.orange : key.startsWith('direct') ? C.green : C.red),
+            labelStyle: TextStyle(color: key.startsWith('proxy') ? C.highlight : key.startsWith('direct') ? C.green : C.red),
             hintText: AppScope.read(context).screenText(hint),
             alignLabelWithHint: true,
             floatingLabelBehavior: FloatingLabelBehavior.always,

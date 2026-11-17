@@ -74,7 +74,7 @@ String _ms(int? value) => value == null ? '—' : tr('{0} мс', [value]);
 /// Значок и цвет вывода: зелёный «всё в порядке», оранжевый «причина» или «к сведению», красный «не вышло».
 (IconData, Color) _look(SiteNoteKind kind) => switch (kind) {
       SiteNoteKind.ok => (Icons.check_circle_rounded, C.green),
-      SiteNoteKind.info => (Icons.info_rounded, C.orange),
+      SiteNoteKind.info => (Icons.info_rounded, C.highlight),
       SiteNoteKind.warn => (Icons.error_rounded, C.warn),
       SiteNoteKind.bad => (Icons.error_rounded, C.red),
     };
@@ -161,7 +161,7 @@ String? _blocked(AppState state, bool own, String what) => !state.isConnected
     : (state.checking && !own ? tr('Идёт другая проверка — эта станет доступна, когда она закончится') : null);
 
 Color? _pathColor(ConnRoute? route) => switch (route) {
-      ConnRoute.proxy => C.orange,
+      ConnRoute.proxy => C.highlight,
       ConnRoute.direct => C.green,
       ConnRoute.block => C.red,
       _ => null,
@@ -357,7 +357,7 @@ class _SiteCardState extends State<_SiteCard> {
               _wrong
                   ? tr('Впишите адрес сайта, например example.com; несколько — через запятую, не больше {0}', [SiteCheck.maxHosts])
                   : _blocked(state, state.checkingSite, tr('проверить сайт'))!,
-              style: TextStyle(color: _wrong ? C.orange : C.muted, fontSize: 12)),
+              style: TextStyle(color: _wrong ? C.highlight : C.muted, fontSize: 12)),
         ],
         if (reports.length == 1) ..._full(reports.single),
         if (reports.length > 1) ...[
@@ -414,7 +414,7 @@ class _LineCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: C.surface2,
         borderRadius: BorderRadius.circular(C.r(10)),
-        border: Border.all(color: active ? C.orange.withValues(alpha: 0.6) : C.border),
+        border: Border.all(color: active ? C.highlight.withValues(alpha: 0.6) : C.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         Text(name, style: TextStyle(color: C.muted, fontSize: 11)),
@@ -425,7 +425,7 @@ class _LineCard extends StatelessWidget {
               style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
-                  color: off ? C.muted : (p.silent && r.done ? C.orange : null),
+                  color: off ? C.muted : (p.silent && r.done ? C.highlight : null),
                   fontFeatures: const [FontFeature.tabularFigures()])),
           if (caption != null) ...[
             const SizedBox(width: 8),
@@ -445,7 +445,7 @@ class _LineCard extends StatelessWidget {
             tween: Tween(end: off ? 0 : r.progress),
             duration: const Duration(milliseconds: 250),
             builder: (context, shown, _) => LinearProgressIndicator(
-                value: shown, minHeight: 3, backgroundColor: C.border, color: active ? C.orange : C.muted),
+                value: shown, minHeight: 3, backgroundColor: C.border, color: active ? C.highlight : C.muted),
           ),
         ),
         const SizedBox(height: 6),
@@ -561,7 +561,7 @@ class _LineBars extends CustomPainter {
         // Замер сюда ещё не дошёл (или в отрезке одни запинки).
         if (!stall) bar(slot, 2, C.border);
       } else {
-        final color = C.orange.withValues(alpha: worst > base + LineCheck.spikeOver ? 1 : 0.4);
+        final color = C.highlight.withValues(alpha: worst > base + LineCheck.spikeOver ? 1 : 0.4);
         if (worst > peak) {
           // Выше шкалы: столбик во всю высоту с разрывом у вершины.
           bar(slot, size.height - 6, color);
@@ -602,7 +602,7 @@ class _SpeedCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: C.surface2,
         borderRadius: BorderRadius.circular(C.r(10)),
-        border: Border.all(color: active ? C.orange.withValues(alpha: 0.6) : C.border),
+        border: Border.all(color: active ? C.highlight.withValues(alpha: 0.6) : C.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         Text(name, style: TextStyle(color: C.muted, fontSize: 11)),
@@ -620,7 +620,7 @@ class _SpeedCard extends StatelessWidget {
           width: double.infinity,
           // Файл может скачаться раньше срока: тогда столбики готового замера растягиваются на всю ширину.
           child: CustomPaint(
-              painter: _SpeedBars(samples, active ? C.orange : C.orange.withValues(alpha: 0.45),
+              painter: _SpeedBars(samples, active ? C.highlight : C.highlight.withValues(alpha: 0.45),
                   active || samples.isEmpty ? SpeedTest.ticks : samples.length)),
         ),
         const SizedBox(height: 8),
@@ -630,7 +630,7 @@ class _SpeedCard extends StatelessWidget {
             tween: Tween(end: active ? r.progress : (samples.isEmpty ? 0 : 1)),
             duration: SpeedTest.tick,
             builder: (context, shown, _) => LinearProgressIndicator(
-                value: shown, minHeight: 3, backgroundColor: C.border, color: active ? C.orange : C.muted),
+                value: shown, minHeight: 3, backgroundColor: C.border, color: active ? C.highlight : C.muted),
           ),
         ),
         const SizedBox(height: 6),
@@ -750,7 +750,7 @@ class _DnsCheckCard extends StatelessWidget {
             child: !p.done
                 ? const Spinner(size: 16)
                 : Icon(p.ok ? Icons.check_circle_rounded : Icons.error_rounded,
-                    size: 16, color: !p.ok ? C.red : (p.slow || p.far ? C.orange : C.green)),
+                    size: 16, color: !p.ok ? C.red : (p.slow || p.far ? C.highlight : C.green)),
           ),
           const SizedBox(width: 10),
           Expanded(

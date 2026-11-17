@@ -71,10 +71,10 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(color: C.orange.withValues(alpha: 0.12),
+                decoration: BoxDecoration(color: C.highlight.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(C.r(6))),
                 child: Text('${_selected.length}/${_subscriptions.length}',
-                    style: TextStyle(color: C.orange, fontSize: 11, fontWeight: FontWeight.w600)),
+                    style: TextStyle(color: C.highlight, fontSize: 11, fontWeight: FontWeight.w600)),
               ),
               const Spacer(),
               TextButton(
@@ -132,9 +132,9 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
         title: Row(children: [
           Container(
             width: 40, height: 40,
-            decoration: BoxDecoration(color: C.orange.withValues(alpha: 0.12),
+            decoration: BoxDecoration(color: C.highlight.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(C.r(12))),
-            child: Icon(Icons.sync_rounded, color: C.orange, size: 23),
+            child: Icon(Icons.sync_rounded, color: C.highlight, size: 23),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

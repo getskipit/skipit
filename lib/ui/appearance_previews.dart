@@ -32,7 +32,7 @@ class PictureChoice<T> extends StatelessWidget {
                     padding: const EdgeInsets.all(1),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(C.r(11)),
-                      border: Border.all(color: on ? C.orange : (hovered ? C.muted : C.border), width: 2),
+                      border: Border.all(color: on ? C.highlight : (hovered ? C.muted : C.border), width: 2),
                     ),
                     child: ClipRRect(borderRadius: BorderRadius.circular(C.r(8)), child: picture),
                   ),
@@ -92,7 +92,7 @@ class MiniWindow extends StatelessWidget {
                     child: Container(
                       width: 18,
                       height: 7,
-                      decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(_r(3))),
+                      decoration: BoxDecoration(color: C.highlight, borderRadius: BorderRadius.circular(_r(3))),
                     ),
                   ),
                 ]),
@@ -116,7 +116,7 @@ class MiniWindow extends StatelessWidget {
                       width: 6,
                       height: 6,
                       decoration: BoxDecoration(
-                          color: C.orange.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(_r(2))),
+                          color: C.highlight.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(_r(2))),
                     ),
                     const Spacer(),
                     _bar(16, p.text, h: 2),
@@ -132,7 +132,7 @@ class MiniWindow extends StatelessWidget {
                   Container(
                     height: 7,
                     decoration: BoxDecoration(
-                      color: i == 0 ? C.orange.withValues(alpha: 0.35) : p.surface2,
+                      color: i == 0 ? C.highlight.withValues(alpha: 0.35) : p.surface2,
                       borderRadius: BorderRadius.circular(_r(2)),
                     ),
                   ),
@@ -153,7 +153,7 @@ class MiniWindow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [for (var i = 0; i < 4; i++) _bar(navTop ? 9 : 12, i == 0 ? C.orange : p.markMuted, h: 2.5)];
+    final items = [for (var i = 0; i < 4; i++) _bar(navTop ? 9 : 12, i == 0 ? C.highlight : p.markMuted, h: 2.5)];
     final nav = navTop
         ? Container(
             height: 12,

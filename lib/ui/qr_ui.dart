@@ -118,7 +118,7 @@ Future<void> showQrDialog(BuildContext context, {required String title, required
           ),
           const SizedBox(height: 14),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(Icons.info_rounded, size: 16, color: C.orange),
+            Icon(Icons.info_rounded, size: 16, color: C.highlight),
             const SizedBox(width: 8),
             Expanded(
               child: Text(

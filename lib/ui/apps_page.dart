@@ -184,7 +184,7 @@ class _AppsPageState extends State<AppsPage> {
                 padding: const EdgeInsets.only(bottom: 14),
                 child: Panel(
                   child: Row(children: [
-                    Icon(Icons.info_rounded, color: C.orange),
+                    Icon(Icons.info_rounded, color: C.highlight),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(tr('Правила по приложениям работают в режимах «Смешанный» и TUN.'),
@@ -231,12 +231,12 @@ class _AppsPageState extends State<AppsPage> {
                 margin: const EdgeInsets.only(bottom: 14),
                 padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                 decoration: BoxDecoration(
-                  color: C.orange.withValues(alpha: C.isDark ? 0.12 : 0.08),
+                  color: C.highlight.withValues(alpha: C.isDark ? 0.12 : 0.08),
                   borderRadius: BorderRadius.circular(C.r(14)),
-                  border: Border.all(color: C.orange.withValues(alpha: 0.7), width: 1.5),
+                  border: Border.all(color: C.highlight.withValues(alpha: 0.7), width: 1.5),
                 ),
                 child: Row(children: [
-                  Icon(Icons.info_rounded, color: C.orange),
+                  Icon(Icons.info_rounded, color: C.highlight),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -416,11 +416,11 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                                     decoration: BoxDecoration(
                                       color: checked
-                                          ? C.orange.withValues(alpha: 0.12)
+                                          ? C.highlight.withValues(alpha: 0.12)
                                           : (hovered ? C.hover : Colors.transparent),
                                       borderRadius: BorderRadius.circular(C.r(12)),
                                       border: Border.all(
-                                          color: checked ? C.orange.withValues(alpha: 0.6) : Colors.transparent),
+                                          color: checked ? C.highlight.withValues(alpha: 0.6) : Colors.transparent),
                                     ),
                                     child: Opacity(
                                       opacity: added ? 0.45 : 1,
@@ -445,7 +445,7 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
                                             width: 22,
                                             height: 22,
                                             decoration: BoxDecoration(
-                                              gradient: checked ? C.gradient : null,
+                                              color: checked ? C.highlight : null,
                                               borderRadius: BorderRadius.circular(C.r(7)),
                                               border: checked ? null : Border.all(color: C.border, width: 1.5),
                                             ),
@@ -496,7 +496,7 @@ class AppIcon extends StatelessWidget {
           width: size,
           height: size,
           decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(C.r(8))),
-          child: Icon(folder ? Icons.folder_rounded : Icons.web_asset_rounded, size: size * 0.62, color: C.orange),
+          child: Icon(folder ? Icons.folder_rounded : Icons.web_asset_rounded, size: size * 0.62, color: C.highlight),
         );
     final p = path;
     // У папки программы значок есть (берётся из её exe); у обычной папки пути нет — рисуется запасной.

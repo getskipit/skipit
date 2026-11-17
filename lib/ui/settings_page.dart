@@ -776,7 +776,7 @@ class _SettingsPageState extends State<SettingsPage> {
             padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
             child: Panel(
               child: Row(children: [
-                Icon(Icons.info_rounded, color: C.orange),
+                Icon(Icons.info_rounded, color: C.highlight),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -981,7 +981,7 @@ class _SettingsPageState extends State<SettingsPage> {
         tr('О программе'),
         tr('Версия, обновления и их канал, версии ядер'),
         state.appUpdate != null ? tr('Доступна версия {0}', [state.appUpdate!.version]) : tr('Версия {0}', [appVersion]),
-        alert: SettingsPage._coresMissing(state) ? C.red : (state.appUpdate != null ? C.orange : null),
+        alert: SettingsPage._coresMissing(state) ? C.red : (state.appUpdate != null ? C.highlight : null),
         [
         _Section('', [
           _Row(
@@ -1320,7 +1320,7 @@ class _Section extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(title,
-              style: TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w600)),
+              style: TextStyle(color: C.isDark ? C.highlightLight : C.highlight, fontSize: 12, fontWeight: FontWeight.w600)),
         ),
         Panel(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
@@ -1373,7 +1373,7 @@ class _UserAgentFieldState extends State<_UserAgentField> {
                         setState(() => _text.text = AppSettings.defaultUserAgent);
                         widget.onChanged(AppSettings.defaultUserAgent);
                       },
-                      child: Icon(Icons.restart_alt_rounded, size: 18, color: hovered ? C.orange : C.muted),
+                      child: Icon(Icons.restart_alt_rounded, size: 18, color: hovered ? C.highlight : C.muted),
                     ),
                   ),
                 ),
@@ -1459,7 +1459,7 @@ class _IconPicker extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(C.r(12)),
                     border: Border.all(
-                      color: style == value ? C.orange : (hovered ? C.border : Colors.transparent),
+                      color: style == value ? C.highlight : (hovered ? C.border : Colors.transparent),
                       width: 2,
                     ),
                   ),
@@ -1580,15 +1580,15 @@ class _PartChips extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(8, 6, 10, 6),
                   decoration: BoxDecoration(
                     color: on
-                        ? C.orange.withValues(alpha: hovered ? 0.22 : 0.14)
+                        ? C.highlight.withValues(alpha: hovered ? 0.22 : 0.14)
                         : (hovered ? Color.alphaBlend(C.hover, C.surface2) : C.surface2),
                     borderRadius: BorderRadius.circular(C.r(10)),
                     border: Border.all(
-                        color: on || hovered ? C.orange.withValues(alpha: hovered ? 0.8 : 0.6) : C.border),
+                        color: on || hovered ? C.highlight.withValues(alpha: hovered ? 0.8 : 0.6) : C.border),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(on ? Icons.check_rounded : Icons.add_rounded,
-                        size: 16, color: on || hovered ? C.orange : C.muted),
+                        size: 16, color: on || hovered ? C.highlight : C.muted),
                     const SizedBox(width: 4),
                     Text(value, style: TextStyle(fontSize: 13, color: on || hovered ? C.text : C.muted)),
                   ]),
