@@ -455,7 +455,7 @@ class _LogsPageState extends State<LogsPage> {
   Widget _empty(String text) => Center(child: Text(text, style: TextStyle(color: C.muted)));
 
   Widget _card(Widget child) => Container(
-        decoration: BoxDecoration(
+        decoration: SmoothBoxDecoration(
           color: C.surface,
           borderRadius: BorderRadius.circular(C.r(18)),
           border: Border.all(color: C.border),
@@ -589,7 +589,7 @@ class _DayGroupState extends State<_DayGroup> {
                 duration: const Duration(milliseconds: 140),
                 margin: EdgeInsets.fromLTRB(8, first ? 8 : 4, 8, 4),
                 padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
-                decoration: BoxDecoration(
+                decoration: SmoothBoxDecoration(
                   // Наведение — поверх того же фона, непрозрачным цветом: при переходе от непрозрачного
                   // к почти прозрачному белому середина перехода вспыхивала светло-серым.
                   color: hovered ? Color.alphaBlend(C.hover, C.surface2) : C.surface2,
@@ -604,7 +604,7 @@ class _DayGroupState extends State<_DayGroup> {
                   // Сколько журналов в этом дне.
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                    decoration: BoxDecoration(
+                    decoration: SmoothBoxDecoration(
                       color: (marked ? C.highlight : C.muted).withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(C.r(8)),
                     ),
@@ -700,7 +700,7 @@ class _SessionTile extends StatelessWidget {
                     Container(
                       width: 7,
                       height: 7,
-                      decoration: BoxDecoration(color: C.green, shape: BoxShape.circle),
+                      decoration: SmoothBoxDecoration(color: C.green, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 6),
                   ],
@@ -733,7 +733,7 @@ class _RoundIcon extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: 26,
         height: 26,
-        decoration: BoxDecoration(color: C.surface2, shape: BoxShape.circle, border: Border.all(color: C.border)),
+        decoration: SmoothBoxDecoration(color: C.surface2, shape: BoxShape.circle, border: Border.all(color: C.border)),
         child: Icon(icon, size: 15, color: C.muted),
       );
 }
@@ -751,7 +751,7 @@ class _Count extends StatelessWidget {
         child: Container(
           margin: const EdgeInsets.only(left: 6),
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(C.r(8))),
+          decoration: SmoothBoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(C.r(8))),
           child: Text(value > 99 ? '99+' : '$value',
               style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
         ),
@@ -1102,7 +1102,7 @@ class _HoldWhileReadingState<T extends Object> extends State<_HoldWhileReading<T
                   cursor: SystemMouseCursors.click,
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(12, 6, 10, 6),
-                    decoration: BoxDecoration(
+                    decoration: SmoothBoxDecoration(
                       color: C.surface2,
                       borderRadius: BorderRadius.circular(C.r(16)),
                       border: Border.all(color: hovered ? C.highlight : C.border),
@@ -1247,7 +1247,7 @@ class _LineTextState extends State<_LineText> {
               onTap: () => setState(() => _open = !_open),
               child: Container(
                 padding: const EdgeInsets.fromLTRB(6, 0, 2, 0),
-                decoration: BoxDecoration(
+                decoration: SmoothBoxDecoration(
                   color: hovered || _open ? orange.withValues(alpha: 0.16) : C.surface2,
                   borderRadius: BorderRadius.circular(C.r(8)),
                   border: Border.all(color: hovered || _open ? orange.withValues(alpha: 0.6) : C.border),
@@ -1306,7 +1306,7 @@ class _Chip extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
+              decoration: SmoothBoxDecoration(
                 color: selected ? color.withValues(alpha: 0.14) : (hovered ? C.hover : Colors.transparent),
                 borderRadius: BorderRadius.circular(C.r(9)),
                 border: Border.all(color: selected ? color.withValues(alpha: 0.5) : C.border),
@@ -1404,7 +1404,7 @@ class _ConnGroupText extends StatelessWidget {
                 child: Container(
                   margin: const EdgeInsets.only(left: 8, right: 4),
                   padding: const EdgeInsets.fromLTRB(6, 0, 2, 0),
-                  decoration: BoxDecoration(
+                  decoration: SmoothBoxDecoration(
                     color: hovered || open ? orange.withValues(alpha: 0.16) : C.surface2,
                     borderRadius: BorderRadius.circular(C.r(8)),
                     border: Border.all(color: hovered || open ? orange.withValues(alpha: 0.6) : C.border),

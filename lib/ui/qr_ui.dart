@@ -114,7 +114,7 @@ Future<void> showQrDialog(BuildContext context, {required String title, required
           Container(
             width: (MediaQuery.sizeOf(ctx).height * 0.5).clamp(200.0, 320.0).floorToDouble(),
             height: (MediaQuery.sizeOf(ctx).height * 0.5).clamp(200.0, 320.0).floorToDouble(),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(C.r(12))),
+            decoration: SmoothBoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(C.r(12))),
             child: CustomPaint(painter: QrPainter(qr)),
           ),
           const SizedBox(height: 14),

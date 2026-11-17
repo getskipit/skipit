@@ -500,6 +500,7 @@ void FlutterWindow::HandleTrayCall(
           }
         }
       }
+      UpdateTrayMenu(GetHandle(), tray_menu_);
     }
     result->Success();
   } else if (method == "clearNotification") {

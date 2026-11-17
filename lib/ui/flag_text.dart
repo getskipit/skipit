@@ -121,7 +121,7 @@ class FlagIcon extends StatelessWidget {
       return Container(
         width: height,
         height: height,
-        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: C.border)),
+        decoration: SmoothBoxDecoration(shape: BoxShape.circle, border: Border.all(color: C.border)),
         child: ClipOval(
           child: Image.asset(
             'assets/flags/$country.png',

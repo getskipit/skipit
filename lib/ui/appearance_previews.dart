@@ -30,7 +30,7 @@ class PictureChoice<T> extends StatelessWidget {
                     width: width + 6,
                     height: height + 6,
                     padding: const EdgeInsets.all(1),
-                    decoration: BoxDecoration(
+                    decoration: SmoothBoxDecoration(
                       borderRadius: BorderRadius.circular(C.r(11)),
                       border: Border.all(color: on ? C.highlight : (hovered ? C.muted : C.border), width: 2),
                     ),
@@ -66,11 +66,11 @@ class MiniWindow extends StatelessWidget {
   double _r(double x) => x * (corners ?? p.corners);
 
   Widget _bar(double w, Color c, {double h = 3}) =>
-      Container(width: w, height: h, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2)));
+      Container(width: w, height: h, decoration: SmoothBoxDecoration(color: c, borderRadius: BorderRadius.circular(2)));
 
   Widget _card({Widget? child, EdgeInsets padding = const EdgeInsets.all(4)}) => Container(
         padding: padding,
-        decoration: BoxDecoration(
+        decoration: SmoothBoxDecoration(
           color: p.surface2,
           borderRadius: BorderRadius.circular(_r(4)),
           border: Border.all(color: p.border, width: 0.6),
@@ -92,7 +92,7 @@ class MiniWindow extends StatelessWidget {
                     child: Container(
                       width: 18,
                       height: 7,
-                      decoration: BoxDecoration(color: C.highlight, borderRadius: BorderRadius.circular(_r(3))),
+                      decoration: SmoothBoxDecoration(color: C.highlight, borderRadius: BorderRadius.circular(_r(3))),
                     ),
                   ),
                 ]),
@@ -115,7 +115,7 @@ class MiniWindow extends StatelessWidget {
                     Container(
                       width: 6,
                       height: 6,
-                      decoration: BoxDecoration(
+                      decoration: SmoothBoxDecoration(
                           color: C.highlight.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(_r(2))),
                     ),
                     const Spacer(),
@@ -131,7 +131,7 @@ class MiniWindow extends StatelessWidget {
                 for (var i = 0; i < 4; i++) ...[
                   Container(
                     height: 7,
-                    decoration: BoxDecoration(
+                    decoration: SmoothBoxDecoration(
                       color: i == 0 ? C.highlight.withValues(alpha: 0.35) : p.surface2,
                       borderRadius: BorderRadius.circular(_r(2)),
                     ),

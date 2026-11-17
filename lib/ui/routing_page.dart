@@ -537,7 +537,7 @@ class _RoutingEditorState extends State<_RoutingEditor> {
             width: double.infinity,
             margin: const EdgeInsets.only(top: 12),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(border: Border.all(color: C.muted.withValues(alpha: 0.25)),
+            decoration: SmoothBoxDecoration(border: Border.all(color: C.muted.withValues(alpha: 0.25)),
                 borderRadius: BorderRadius.circular(12)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Tooltip(message: AppScope.read(context).screenText(source.url), child: Text(AppScope.read(context).screenText(source.url), maxLines: 2, overflow: TextOverflow.ellipsis,

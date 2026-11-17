@@ -71,6 +71,7 @@ struct Menu {
   HWND owner = nullptr;
   UINT message = 0;
   TrayMenuModel model;
+  TrayMenuCommands commands{};
   std::vector<Item> items;
   std::vector<Label> labels;
   // Названия провайдеров в списке серверов (видимые сейчас).
@@ -275,6 +276,7 @@ void Paint(HWND hwnd, HDC target) {
   {
     Gdiplus::Graphics g(mem);
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
     g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
     g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
     g.Clear(Rgb(p.bg));
@@ -531,8 +533,10 @@ LRESULT CALLBACK MenuProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
       if (m) {
         const int index = HitTest(*m, POINT{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)});
         if (index >= 0) {
-          PostMessage(m->owner, m->message, m->items[index].command, 0);
-          DestroyWindow(hwnd);
+          const UINT command = m->items[index].command;
+          const bool close = command == m->commands.open || command == m->commands.exit;
+          PostMessage(m->owner, m->message, command, 0);
+          if (close) DestroyWindow(hwnd);
         }
       }
       return 0;
@@ -555,6 +559,78 @@ LRESULT CALLBACK MenuProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
   return DefWindowProc(hwnd, message, wparam, lparam);
 }
 
+int BuildItems(Menu& menu, const TrayMenuModel& model, const TrayMenuCommands& commands) {
+  menu.items.clear();
+  menu.rows.clear();
+  menu.commands = commands;
+  menu.model = model;
+  menu.flags.clear();
+  menu.flags.resize(model.servers.size());
+
+  // Первым идёт главное действие — подключить или отключить.
+  Item toggle;
+  toggle.command = commands.toggle;
+  toggle.text = model.label_toggle;
+  toggle.glyph = model.state == 2 ? kGlyphStop : kGlyphPlay;
+  toggle.accent = model.state != 2;
+  menu.items.push_back(toggle);
+  for (size_t i = 0; i < model.modes.size(); i++) {
+    Item mode;
+    mode.kind = Kind::kMode;
+    mode.command = commands.mode_base + static_cast<UINT>(i);
+    mode.text = model.modes[i];
+    mode.selected = static_cast<int>(i) == model.mode;
+    menu.items.push_back(mode);
+  }
+  for (size_t i = 0; i < model.cores.size(); i++) {
+    Item core;
+    core.kind = Kind::kCore;
+    core.command = commands.core_base + static_cast<UINT>(i);
+    core.text = model.cores[i];
+    core.selected = static_cast<int>(i) == model.core;
+    menu.items.push_back(core);
+  }
+  if (model.kill_switch >= 0) {
+    Item kill_switch;
+    kill_switch.kind = Kind::kSwitch;
+    kill_switch.command = commands.kill_switch;
+    kill_switch.text = model.label_kill_switch;
+    kill_switch.selected = model.kill_switch == 1;
+    menu.items.push_back(kill_switch);
+  }
+  int selected_row = -1;
+  for (size_t i = 0; i < model.servers.size(); i++) {
+    // Провайдер сменился — перед сервером идёт строка с названием провайдера.
+    const std::wstring& group = model.servers[i].group;
+    if (!group.empty() && (i == 0 || model.servers[i - 1].group != group)) {
+      menu.rows.push_back(-1 - static_cast<int>(i));
+    }
+    Item server;
+    server.kind = Kind::kServer;
+    server.command = commands.server_base + static_cast<UINT>(i);
+    server.text = model.servers[i].name;
+    server.server = static_cast<int>(i);
+    server.row = static_cast<int>(menu.rows.size());
+    server.selected = static_cast<int>(i) == model.selected_server;
+    if (server.selected) selected_row = server.row;
+    menu.rows.push_back(static_cast<int>(i));
+    menu.items.push_back(server);
+  }
+  Item show;
+  show.command = commands.open;
+  show.text = model.label_open;
+  show.glyph = kGlyphOpen;
+  menu.items.push_back(show);
+  Item quit;
+  quit.command = commands.exit;
+  quit.text = model.label_exit;
+  quit.glyph = kGlyphPower;
+  quit.danger = true;
+  menu.items.push_back(quit);
+
+  return selected_row;
+}
+
 void EnsureReady() {
   static bool ready = false;
   if (ready) return;
@@ -575,6 +651,28 @@ void EnsureReady() {
 
 }  // namespace
 
+void UpdateTrayMenu(HWND owner, const TrayMenuModel& model) {
+  if (!g_menu) return;
+  auto* menu = reinterpret_cast<Menu*>(GetWindowLongPtr(g_menu, GWLP_USERDATA));
+  if (!menu || menu->owner != owner) return;
+  RECT rect{};
+  GetWindowRect(g_menu, &rect);
+  BuildItems(*menu, model, menu->commands);
+  menu->server_offset = std::max(0, std::min(menu->server_offset,
+      static_cast<int>(menu->rows.size()) - VisibleServers(*menu)));
+  const int height = Layout(*menu);
+  MONITORINFO info{sizeof(info)};
+  GetMonitorInfo(MonitorFromWindow(g_menu, MONITOR_DEFAULTTONEAREST), &info);
+  const int top = std::max(static_cast<int>(info.rcWork.top),
+      std::min(static_cast<int>(rect.top), static_cast<int>(info.rcWork.bottom) - height));
+  SetWindowPos(g_menu, nullptr, rect.left, top, rect.right - rect.left, height,
+               SWP_NOZORDER | SWP_NOACTIVATE);
+  POINT cursor{};
+  GetCursorPos(&cursor);
+  ScreenToClient(g_menu, &cursor);
+  menu->hover = HitTest(*menu, cursor);
+  InvalidateRect(g_menu, nullptr, FALSE);
+}
 void ShowTrayMenu(HWND owner, UINT message, POINT pt, const TrayMenuModel& model,
                   const TrayMenuCommands& commands) {
   EnsureReady();
@@ -583,69 +681,7 @@ void ShowTrayMenu(HWND owner, UINT message, POINT pt, const TrayMenuModel& model
   auto menu = std::make_unique<Menu>();
   menu->owner = owner;
   menu->message = message;
-  menu->model = model;
-  menu->flags.resize(model.servers.size());
-
-  // Первым идёт главное действие — подключить или отключить.
-  Item toggle;
-  toggle.command = commands.toggle;
-  toggle.text = model.label_toggle;
-  toggle.glyph = model.state == 2 ? kGlyphStop : kGlyphPlay;
-  toggle.accent = model.state != 2;
-  menu->items.push_back(toggle);
-  for (size_t i = 0; i < model.modes.size(); i++) {
-    Item mode;
-    mode.kind = Kind::kMode;
-    mode.command = commands.mode_base + static_cast<UINT>(i);
-    mode.text = model.modes[i];
-    mode.selected = static_cast<int>(i) == model.mode;
-    menu->items.push_back(mode);
-  }
-  for (size_t i = 0; i < model.cores.size(); i++) {
-    Item core;
-    core.kind = Kind::kCore;
-    core.command = commands.core_base + static_cast<UINT>(i);
-    core.text = model.cores[i];
-    core.selected = static_cast<int>(i) == model.core;
-    menu->items.push_back(core);
-  }
-  if (model.kill_switch >= 0) {
-    Item kill_switch;
-    kill_switch.kind = Kind::kSwitch;
-    kill_switch.command = commands.kill_switch;
-    kill_switch.text = model.label_kill_switch;
-    kill_switch.selected = model.kill_switch == 1;
-    menu->items.push_back(kill_switch);
-  }
-  int selected_row = -1;
-  for (size_t i = 0; i < model.servers.size(); i++) {
-    // Провайдер сменился — перед сервером идёт строка с названием провайдера.
-    const std::wstring& group = model.servers[i].group;
-    if (!group.empty() && (i == 0 || model.servers[i - 1].group != group)) {
-      menu->rows.push_back(-1 - static_cast<int>(i));
-    }
-    Item server;
-    server.kind = Kind::kServer;
-    server.command = commands.server_base + static_cast<UINT>(i);
-    server.text = model.servers[i].name;
-    server.server = static_cast<int>(i);
-    server.row = static_cast<int>(menu->rows.size());
-    server.selected = static_cast<int>(i) == model.selected_server;
-    if (server.selected) selected_row = server.row;
-    menu->rows.push_back(static_cast<int>(i));
-    menu->items.push_back(server);
-  }
-  Item show;
-  show.command = commands.open;
-  show.text = model.label_open;
-  show.glyph = kGlyphOpen;
-  menu->items.push_back(show);
-  Item quit;
-  quit.command = commands.exit;
-  quit.text = model.label_exit;
-  quit.glyph = kGlyphPower;
-  quit.danger = true;
-  menu->items.push_back(quit);
+  const int selected_row = BuildItems(*menu, model, commands);
 
   // Список открывается так, чтобы выбранный сервер был виден.
   const int count = static_cast<int>(menu->rows.size());

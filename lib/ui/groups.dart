@@ -81,7 +81,7 @@ class GroupNavItem extends StatelessWidget {
                 duration: const Duration(milliseconds: 160),
                 height: 42,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
+                decoration: SmoothBoxDecoration(
                   borderRadius: BorderRadius.circular(C.r(12)),
                   color: selected
                       ? C.surface2
@@ -104,7 +104,7 @@ class GroupNavItem extends StatelessWidget {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: BoxDecoration(color: group.alert, shape: BoxShape.circle),
+                        decoration: SmoothBoxDecoration(color: group.alert, shape: BoxShape.circle),
                       ),
                   ],
                 ]),
@@ -165,7 +165,7 @@ class GroupTile extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             height: 172,
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
+            decoration: SmoothBoxDecoration(
               color: hovered ? Color.alphaBlend(C.hover, C.surface) : C.surface,
               borderRadius: BorderRadius.circular(C.r(18)),
               border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.6) : C.border),
@@ -175,7 +175,7 @@ class GroupTile extends StatelessWidget {
                 Container(
                   width: 40,
                   height: 40,
-                  decoration: BoxDecoration(
+                  decoration: SmoothBoxDecoration(
                     color: C.surface2,
                     borderRadius: BorderRadius.circular(C.r(12)),
                   ),
@@ -187,7 +187,7 @@ class GroupTile extends StatelessWidget {
                     width: 9,
                     height: 9,
                     margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(color: group.alert, shape: BoxShape.circle),
+                    decoration: SmoothBoxDecoration(color: group.alert, shape: BoxShape.circle),
                   ),
                 Icon(Icons.chevron_right_rounded, color: hovered ? C.highlight : C.muted),
               ]),
@@ -245,7 +245,7 @@ class GroupHeader extends StatelessWidget {
               duration: const Duration(milliseconds: 160),
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
+              decoration: SmoothBoxDecoration(
                 color: hovered ? C.surface2 : C.surface2,
                 shape: BoxShape.circle,
                 border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.6) : C.border),
@@ -290,7 +290,7 @@ class GroupHeader extends StatelessWidget {
           curve: Curves.easeOutCubic,
           height: g == null ? 17 : 34,
           clipBehavior: Clip.hardEdge,
-          decoration: const BoxDecoration(),
+          decoration: const SmoothBoxDecoration(),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 260),
             switchInCurve: Curves.easeOutCubic,

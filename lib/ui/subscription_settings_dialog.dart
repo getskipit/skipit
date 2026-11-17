@@ -61,21 +61,16 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
 
   Widget _selectionCard(BuildContext context) => Container(
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(color: C.bg, border: Border.all(color: C.border),
+        decoration: SmoothBoxDecoration(color: C.surface2, border: Border.all(color: C.border),
             borderRadius: BorderRadius.circular(C.r(14))),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Padding(
             padding: const EdgeInsets.only(left: 14, right: 6),
             child: Row(children: [
-              Text(tr('Подписки'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              Text(tr('Подписки'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(color: C.surface2,
-                    borderRadius: BorderRadius.circular(C.r(6))),
-                child: Text('${_selected.length}/${_subscriptions.length}',
-                    style: TextStyle(color: C.highlight, fontSize: 11, fontWeight: FontWeight.w600)),
-              ),
+              Text('${_selected.length}/${_subscriptions.length}',
+                  style: TextStyle(color: C.muted, fontSize: 12)),
               const Spacer(),
               TextButton(
                 onPressed: () => setState(() {
@@ -90,7 +85,7 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
           ),
           const Divider(height: 1),
           SizedBox(
-            height: math.min(168, math.min(_subscriptions.length * 40.0, MediaQuery.sizeOf(context).height * 0.22)),
+            height: math.min(160, math.min(_subscriptions.length * 40.0, math.max(80, ((MediaQuery.sizeOf(context).height * 0.22 - 24) / 40).floor() * 40.0))),
             child: Scrollbar(controller: _scroll, thumbVisibility: true,
               child: ListView.builder(
                 controller: _scroll,
@@ -111,7 +106,7 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
                             visualDensity: VisualDensity.compact),
                         const SizedBox(width: 4),
                         Expanded(child: Text(screenTextOf(context, sub.displayName), maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
                         const SizedBox(width: 14),
                       ]),
                     ),
@@ -119,6 +114,67 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
                 },
               ),
             ),
+          ),
+        ]),
+      );
+
+  Widget _scheduleCard() => Container(
+        key: const ValueKey('subscription-interval-panel'),
+        padding: const EdgeInsets.all(12),
+        decoration: SmoothBoxDecoration(color: C.surface2,
+            border: Border.all(color: _invalid ? C.red : C.border),
+            borderRadius: BorderRadius.circular(C.r(14))),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.schedule_rounded, color: C.muted, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(tr('Автообновление'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+            const SizedBox(width: 8),
+            Tooltip(
+              message: tr('Свой интервал сохранится после обновления подписки.'),
+              child: Segmented<bool>(
+                value: _provider,
+                items: {true: tr('Провайдера'), false: tr('Свой')},
+                onChanged: (value) => setState(() { _provider = value; _invalid = false; }),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 240),
+            sizeCurve: Curves.easeInOutCubic,
+            firstCurve: Curves.easeInOut,
+            secondCurve: Curves.easeInOut,
+            alignment: Alignment.topLeft,
+            crossFadeState: _provider ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+            firstChild: Text(tr('Каждый провайдер задаёт интервал своей подписки.'),
+                style: TextStyle(color: C.muted, fontSize: 13, height: 1.4)),
+            secondChild: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Text(tr('Каждые'), style: const TextStyle(fontSize: 13)),
+                const SizedBox(width: 12),
+                SizedBox(width: 88, child: TextField(
+                  key: const ValueKey('subscription-interval'),
+                  controller: _hours,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (_) { if (_invalid) setState(() => _invalid = false); },
+                  decoration: InputDecoration(
+                    hintText: '12',
+                    fillColor: C.surface,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                )),
+                const SizedBox(width: 12),
+                Text(tr('часов'), style: TextStyle(color: C.muted, fontSize: 13)),
+              ]),
+              const SizedBox(height: 8),
+              Text(_invalid ? tr('Укажите целое число часов: 0 — выключить') : tr('0 — отключить автообновление'),
+                  style: TextStyle(color: _invalid ? C.red : C.muted, fontSize: 12)),
+            ]),
           ),
         ]),
       );
@@ -134,64 +190,7 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
             const SizedBox(height: 12),
             _selectionCard(context),
             const SizedBox(height: 12),
-            Row(children: [
-              Icon(Icons.schedule_rounded, color: C.muted, size: 18),
-              const SizedBox(width: 8),
-              Expanded(child: Text(tr('Автообновление'),
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: tr('Свой интервал сохранится после обновления подписки.'),
-                child: Segmented<bool>(
-                value: _provider,
-                items: {true: tr('Провайдера'), false: tr('Свой')},
-                onChanged: (value) => setState(() { _provider = value; _invalid = false; }),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 10),
-            Container(
-              key: const ValueKey('subscription-interval-panel'),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: C.bg,
-                  border: Border.all(color: _invalid ? C.red : C.border),
-                  borderRadius: BorderRadius.circular(C.r(14))),
-              child: AnimatedCrossFade(
-                duration: const Duration(milliseconds: 240),
-                sizeCurve: Curves.easeInOutCubic,
-                firstCurve: Curves.easeInOut,
-                secondCurve: Curves.easeInOut,
-                alignment: Alignment.topLeft,
-                crossFadeState: _provider ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-                firstChild: Text(tr('Каждый провайдер задаёт интервал своей подписки.'),
-                      style: TextStyle(color: C.muted, fontSize: 13, height: 1.4)),
-                secondChild: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Text(tr('Каждые'), style: const TextStyle(fontSize: 13)),
-                        const SizedBox(width: 12),
-                        SizedBox(width: 82, child: TextField(
-                          key: const ValueKey('subscription-interval'),
-                          controller: _hours,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 14),
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          onChanged: (_) { if (_invalid) setState(() => _invalid = false); },
-                          decoration: InputDecoration(
-                            hintText: '12',
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          ),
-                        )),
-                        const SizedBox(width: 12),
-                        Text(tr('часов'), style: TextStyle(color: C.muted, fontSize: 13)),
-                      ]),
-                      const SizedBox(height: 8),
-                      Text(_invalid ? tr('Укажите целое число часов: 0 — выключить') : tr('0 — отключить автообновление'),
-                          style: TextStyle(color: _invalid ? C.red : C.muted, fontSize: 12)),
-                    ]),
-              ),
-            ),
+            _scheduleCard(),
           ]),
         ),
         actions: [

@@ -339,7 +339,7 @@ class _TunCorePicker extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
-              decoration: BoxDecoration(
+              decoration: SmoothBoxDecoration(
                 color: hovered ? C.surface2 : C.surface,
                 borderRadius: BorderRadius.circular(C.r(11)),
                 border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.5) : C.border),
@@ -390,7 +390,7 @@ class _RoutingInfoState extends State<_RoutingInfo> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
+              decoration: SmoothBoxDecoration(
                 color: hovered ? C.surface2 : C.surface,
                 borderRadius: BorderRadius.circular(C.r(14)),
                 border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.5) : C.border),
@@ -436,7 +436,7 @@ class _KillSwitchBox extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        decoration: BoxDecoration(
+        decoration: SmoothBoxDecoration(
           color: C.surface2,
           borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.highlight.withValues(alpha: 0.45)),
@@ -483,7 +483,7 @@ class _NoticeBox extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        decoration: BoxDecoration(
+        decoration: SmoothBoxDecoration(
           color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: color.withValues(alpha: 0.45)),
@@ -598,7 +598,7 @@ class _ErrorBoxState extends State<_ErrorBox> {
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-          decoration: BoxDecoration(
+          decoration: SmoothBoxDecoration(
             color: C.red.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(C.r(14)),
             border: Border.all(color: C.red.withValues(alpha: 0.4)),
@@ -652,7 +652,7 @@ class _Speed extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
+        decoration: SmoothBoxDecoration(
           color: C.surface,
           borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.border),

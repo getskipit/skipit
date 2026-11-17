@@ -1456,7 +1456,7 @@ class _IconPicker extends StatelessWidget {
                   duration: const Duration(milliseconds: 160),
                   margin: const EdgeInsets.symmetric(horizontal: 2),
                   padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
+                  decoration: SmoothBoxDecoration(
                     borderRadius: BorderRadius.circular(C.r(12)),
                     border: Border.all(
                       color: style == value ? C.highlight : (hovered ? C.border : Colors.transparent),
@@ -1495,7 +1495,7 @@ class _AccentPicker extends StatelessWidget {
                     duration: const Duration(milliseconds: 160),
                     width: 28,
                     height: 28,
-                    decoration: BoxDecoration(
+                    decoration: SmoothBoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
                           colors: [a.light, a.main], begin: Alignment.topLeft, end: Alignment.bottomRight),
@@ -1578,7 +1578,7 @@ class _PartChips extends StatelessWidget {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
                   padding: const EdgeInsets.fromLTRB(8, 6, 10, 6),
-                  decoration: BoxDecoration(
+                  decoration: SmoothBoxDecoration(
                     color: on
                         ? C.surface2
                         : (hovered ? Color.alphaBlend(C.hover, C.surface2) : C.surface2),

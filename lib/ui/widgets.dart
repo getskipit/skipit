@@ -178,7 +178,7 @@ class AppDropdown<T> extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             height: height ?? 42,
             padding: const EdgeInsets.only(left: 14, right: 8),
-            decoration: BoxDecoration(
+            decoration: SmoothBoxDecoration(
               color: hovered ? C.hover : (height != null ? C.surface : Colors.transparent),
               borderRadius: BorderRadius.circular(C.r(height != null ? 18 : 12)),
               border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.7) : C.border),
@@ -297,7 +297,7 @@ class AppSwitch extends StatelessWidget {
             width: 50,
             height: 30,
             padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
+            decoration: SmoothBoxDecoration(
               color: value ? C.highlight : C.surface2,
               borderRadius: BorderRadius.circular(C.r(15)),
               border: Border.all(
@@ -316,7 +316,7 @@ class AppSwitch extends StatelessWidget {
                 width: value ? 21 : 15,
                 height: value ? 21 : 15,
                 margin: EdgeInsets.symmetric(horizontal: value ? 0 : 3),
-                decoration: BoxDecoration(color: value ? Colors.white : C.muted, shape: BoxShape.circle),
+                decoration: SmoothBoxDecoration(color: value ? Colors.white : C.muted, shape: BoxShape.circle),
               ),
             ),
           ),
@@ -455,7 +455,7 @@ class Panel extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             padding: padding,
-            decoration: BoxDecoration(
+            decoration: SmoothBoxDecoration(
               color: hovered ? C.surface2 : C.surface,
               borderRadius: BorderRadius.circular(C.r(18)),
               border: Border.all(
@@ -525,7 +525,7 @@ class GradientButton extends StatelessWidget {
         opacity: enabled ? 1 : 0.5,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          decoration: BoxDecoration(
+          decoration: SmoothBoxDecoration(
             color: hovered ? Color.lerp(color, C.text, 0.08) : color,
             borderRadius: BorderRadius.circular(C.r(12)),
           ),
@@ -642,10 +642,10 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
       curve: Curves.easeOut,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        decoration: BoxDecoration(
+        decoration: SmoothBoxDecoration(
           borderRadius: BorderRadius.circular(radius),
           boxShadow: [
-            if (active) BoxShadow(color: C.highlight.withValues(alpha: 0.18), blurRadius: 18),
+            if (active) BoxShadow(color: C.highlight.withValues(alpha: 0.22), blurRadius: 20),
           ],
         ),
         child: MouseRegion(
@@ -662,7 +662,8 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
               decoration: ShapeDecoration(
                 // Ровная заливка: тёмный градиент на экране ложился заметными полосами.
                 color: active ? C.palette.tileTop : (_hover ? C.surface2 : C.palette.tileTop),
-                shape: _ConnectTileShape(
+                shape: SmoothRoundedRectangleBorder(
+                  borderRadius: const BorderRadius.all(Radius.circular(50)),
                   side: BorderSide(
                     color: active ? C.highlight : (lit ? C.highlight.withValues(alpha: 0.55) : C.border),
                     width: 2,
@@ -692,47 +693,6 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
   }
 }
 
-/// Дополнительное сглаживание только тонкой рамки; заливка и знак остаются резкими.
-class _ConnectTileShape extends RoundedRectangleBorder {
-  const _ConnectTileShape({required BorderSide side, required this.edgeSigma})
-      : super(side: side, borderRadius: const BorderRadius.all(Radius.circular(50)));
-  final double edgeSigma;
-
-  @override
-  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
-    if (side.style == BorderStyle.none || side.width == 0) return;
-    canvas.drawRRect(
-      borderRadius.resolve(textDirection).toRRect(rect).deflate(side.width / 2),
-      side.toPaint()
-        ..isAntiAlias = true
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, edgeSigma),
-    );
-  }
-
-  @override
-  ShapeBorder? lerpFrom(ShapeBorder? a, double t) {
-    if (a is _ConnectTileShape) {
-      return _ConnectTileShape(
-        side: BorderSide.lerp(a.side, side, t),
-        edgeSigma: a.edgeSigma + (edgeSigma - a.edgeSigma) * t,
-      );
-    }
-    return super.lerpFrom(a, t);
-  }
-
-  @override
-  ShapeBorder? lerpTo(ShapeBorder? b, double t) {
-    if (b is _ConnectTileShape) return b.lerpFrom(this, t);
-    return super.lerpTo(b, t);
-  }
-
-  @override
-  bool operator ==(Object other) => other is _ConnectTileShape && other.side == side && other.edgeSigma == edgeSigma;
-
-  @override
-  int get hashCode => Object.hash(side, edgeSigma);
-}
-
 class DelayBadge extends StatelessWidget {
   const DelayBadge(this.ms, {super.key, this.testing = false});
   final int? ms;
@@ -744,7 +704,7 @@ class DelayBadge extends StatelessWidget {
     final color = C.delay(ms);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
+      decoration: SmoothBoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(C.r(8)),
       ),
@@ -762,7 +722,7 @@ class Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-        decoration: BoxDecoration(
+        decoration: SmoothBoxDecoration(
           border: Border.all(color: color.withValues(alpha: 0.4)),
           borderRadius: BorderRadius.circular(C.r(6)),
         ),
@@ -830,7 +790,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
       fit: BoxFit.scaleDown,
       child: Container(
         padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
+        decoration: SmoothBoxDecoration(
           color: C.surface2,
           borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.border),
@@ -842,7 +802,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
               duration: Duration(milliseconds: _animate ? 240 : 0),
               curve: Curves.easeOutCubic,
               child: DecoratedBox(
-                decoration: BoxDecoration(
+                decoration: SmoothBoxDecoration(
                   color: C.highlight,
                   borderRadius: BorderRadius.circular(C.r(10))),
               ),
@@ -860,7 +820,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
                       child: Container(
                         key: _keys.putIfAbsent(e.key, GlobalKey.new),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                        decoration: BoxDecoration(
+                        decoration: SmoothBoxDecoration(
                           // До первого измерения выбранный пункт закрашен сам — без пустого кадра.
                           color: selected && thumb == null
                               ? C.highlight

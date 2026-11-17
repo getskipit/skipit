@@ -273,7 +273,7 @@ class _ServersPanelState extends State<ServersPanel> {
                       bottom: above ? null : -9,
                       child: Container(
                         height: 4,
-                        decoration: BoxDecoration(color: C.highlight, borderRadius: BorderRadius.circular(2)),
+                        decoration: SmoothBoxDecoration(color: C.highlight, borderRadius: BorderRadius.circular(2)),
                       ),
                     ),
                 ]);
@@ -382,7 +382,7 @@ class _IconAction extends StatelessWidget {
               duration: const Duration(milliseconds: 140),
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
+              decoration: SmoothBoxDecoration(
                 color: hovered ? C.hover : Colors.transparent,
                 borderRadius: BorderRadius.circular(C.r(10)),
               ),
@@ -588,7 +588,7 @@ class _GroupCardState extends State<_GroupCard> {
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 280),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
+                decoration: SmoothBoxDecoration(
                   color: C.surface2,
                   borderRadius: BorderRadius.circular(C.r(11)),
                   border: Border.all(color: C.highlight),
@@ -596,7 +596,7 @@ class _GroupCardState extends State<_GroupCard> {
                 child: FlagText(state.screenText(sub.displayName),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
               ),
             ),
             child: Listener(onPointerDown: (e) => _pressedAt = e.position.dy, child: header),
@@ -607,7 +607,7 @@ class _GroupCardState extends State<_GroupCard> {
       opacity: _dragging ? 0.45 : ((sub?.hidden ?? false) ? 0.55 : 1),
       duration: const Duration(milliseconds: 140),
       child: Container(
-      decoration: BoxDecoration(
+      decoration: SmoothBoxDecoration(
         color: C.surface,
         borderRadius: BorderRadius.circular(C.r(18)),
         border: Border.all(color: C.border),
@@ -640,7 +640,7 @@ class _GroupCardState extends State<_GroupCard> {
                             child: FlagText(state.screenText(sub?.displayName ?? tr('Мои серверы')),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                           ),
                           // Значок закреплённой подписки.
                           if (sub?.pinned ?? false) ...[
@@ -860,7 +860,7 @@ class _SubscriptionDetails extends StatelessWidget {
     Widget tile(String caption, List<Widget> children) => Expanded(
           child: Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
+            decoration: SmoothBoxDecoration(
               color: C.surface2,
               borderRadius: BorderRadius.circular(C.r(12)),
               border: Border.all(color: C.border),
@@ -938,7 +938,7 @@ class _SubscriptionDetails extends StatelessWidget {
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            decoration: BoxDecoration(
+            decoration: SmoothBoxDecoration(
               color: C.surface2,
               borderRadius: BorderRadius.circular(C.r(12)),
               border: Border.all(color: C.highlight.withValues(alpha: 0.35)),
@@ -1029,7 +1029,7 @@ class _ServerRow extends StatelessWidget {
           width: 760,
           height: 520,
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
+          decoration: SmoothBoxDecoration(
             color: C.surface2,
             borderRadius: BorderRadius.circular(C.r(12)),
             border: Border.all(color: C.border),
@@ -1083,7 +1083,7 @@ class _ServerRow extends StatelessWidget {
         onSecondaryTapUp: (d) => _menu(context, state, d.globalPosition),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
-          decoration: BoxDecoration(
+          decoration: SmoothBoxDecoration(
             color: selected ? C.surface2 : (hovered ? C.hover : Colors.transparent),
             border: Border(top: BorderSide(color: C.border)),
           ),
@@ -1179,7 +1179,7 @@ class _NoFlag extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: 26,
         height: 26,
-        decoration: BoxDecoration(color: C.surface2, shape: BoxShape.circle, border: Border.all(color: C.border)),
+        decoration: SmoothBoxDecoration(color: C.surface2, shape: BoxShape.circle, border: Border.all(color: C.border)),
         child: Icon(Icons.public_rounded, size: 16, color: C.muted),
       );
 }

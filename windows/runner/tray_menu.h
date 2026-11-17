@@ -68,4 +68,7 @@ struct TrayMenuCommands {
 void ShowTrayMenu(HWND owner, UINT message, POINT pt, const TrayMenuModel& model,
                   const TrayMenuCommands& commands);
 
+// Обновляет уже открытое меню без закрытия и повторного появления.
+void UpdateTrayMenu(HWND owner, const TrayMenuModel& model);
+
 #endif  // RUNNER_TRAY_MENU_H_
