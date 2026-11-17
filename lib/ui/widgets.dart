@@ -634,46 +634,51 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
     const radius = 50.0;
     final active = widget.connected;
     final lit = active || widget.busy || _hover;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          if (active) BoxShadow(color: C.highlight.withValues(alpha: 0.12), blurRadius: 18),
-        ],
-      ),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            width: size,
-            height: size,
-            decoration: ShapeDecoration(
-              // Ровная заливка: тёмный градиент на экране ложился заметными полосами.
-              color: active ? C.palette.tileTop : (_hover ? C.surface2 : C.palette.tileTop),
-              shape: _ConnectTileShape(
-                side: BorderSide(
-                  color: active ? C.highlight : (lit ? C.highlight.withValues(alpha: 0.55) : C.border),
-                  width: 2,
+    return AnimatedScale(
+      scale: _hover ? 1.03 : 1,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(radius),
+          boxShadow: [
+            if (active) BoxShadow(color: C.highlight.withValues(alpha: 0.12), blurRadius: 18),
+          ],
+        ),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              width: size,
+              height: size,
+              decoration: ShapeDecoration(
+                // Ровная заливка: тёмный градиент на экране ложился заметными полосами.
+                color: active ? C.palette.tileTop : (_hover ? C.surface2 : C.palette.tileTop),
+                shape: _ConnectTileShape(
+                  side: BorderSide(
+                    color: active ? C.highlight : (lit ? C.highlight.withValues(alpha: 0.55) : C.border),
+                    width: 2,
+                  ),
+                  edgeSigma: 0.5 / View.of(context).devicePixelRatio,
                 ),
-                edgeSigma: 0.5 / View.of(context).devicePixelRatio,
               ),
-            ),
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 10),
-                child: AnimatedBuilder(
-                  animation: _anim,
-                  builder: (_, __) => AppMark(
-                    size: 104,
-                    // Разгон и торможение в каждом цикле — стрелки «перелетают» на место друг друга.
-                    flight: _anim.isAnimating ? Curves.easeInOutCubic.transform(_anim.value) : null,
-                    muted: !lit,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: AnimatedBuilder(
+                    animation: _anim,
+                    builder: (_, __) => AppMark(
+                      size: 104,
+                      // Разгон и торможение в каждом цикле — стрелки «перелетают» на место друг друга.
+                      flight: _anim.isAnimating ? Curves.easeInOutCubic.transform(_anim.value) : null,
+                      muted: !lit,
+                    ),
                   ),
                 ),
               ),
