@@ -634,48 +634,46 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
     const radius = 50.0;
     final active = widget.connected;
     final lit = active || widget.busy || _hover;
-    return AnimatedScale(
-      scale: 1,
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      child: ClipRRect(
-        // Клип ограничивает и зону нажатия: углы плитки не кликаются.
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        // Рамка и заливка сглаживаются вместе: на общем крае нет повторного смешивания с фоном.
-        clipBehavior: Clip.antiAliasWithSaveLayer,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() => _hover = false),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onTap,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radius),
-                // Ровная заливка: тёмный градиент на экране ложился заметными полосами.
-                color: active
-                    ? C.palette.tileTop
-                    : (_hover ? C.surface2 : C.palette.tileTop),
-                border: Border.all(
+        boxShadow: [
+          if (active) BoxShadow(color: C.highlight.withValues(alpha: 0.12), blurRadius: 18),
+        ],
+      ),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            width: size,
+            height: size,
+            decoration: ShapeDecoration(
+              // Ровная заливка: тёмный градиент на экране ложился заметными полосами.
+              color: active ? C.palette.tileTop : (_hover ? C.surface2 : C.palette.tileTop),
+              shape: _ConnectTileShape(
+                side: BorderSide(
                   color: active ? C.highlight : (lit ? C.highlight.withValues(alpha: 0.55) : C.border),
                   width: 2,
                 ),
+                edgeSigma: 0.5 / View.of(context).devicePixelRatio,
               ),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 10),
-                  child: AnimatedBuilder(
-                    animation: _anim,
-                    builder: (_, __) => AppMark(
-                      size: 104,
-                      // Разгон и торможение в каждом цикле — стрелки «перелетают» на место друг друга.
-                      flight: _anim.isAnimating ? Curves.easeInOutCubic.transform(_anim.value) : null,
-                      muted: !lit,
-                    ),
+            ),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 10),
+                child: AnimatedBuilder(
+                  animation: _anim,
+                  builder: (_, __) => AppMark(
+                    size: 104,
+                    // Разгон и торможение в каждом цикле — стрелки «перелетают» на место друг друга.
+                    flight: _anim.isAnimating ? Curves.easeInOutCubic.transform(_anim.value) : null,
+                    muted: !lit,
                   ),
                 ),
               ),
@@ -685,6 +683,47 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
       ),
     );
   }
+}
+
+/// Дополнительное сглаживание только тонкой рамки; заливка и знак остаются резкими.
+class _ConnectTileShape extends RoundedRectangleBorder {
+  const _ConnectTileShape({required BorderSide side, required this.edgeSigma})
+      : super(side: side, borderRadius: const BorderRadius.all(Radius.circular(50)));
+  final double edgeSigma;
+
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
+    if (side.style == BorderStyle.none || side.width == 0) return;
+    canvas.drawRRect(
+      borderRadius.resolve(textDirection).toRRect(rect).deflate(side.width / 2),
+      side.toPaint()
+        ..isAntiAlias = true
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, edgeSigma),
+    );
+  }
+
+  @override
+  ShapeBorder? lerpFrom(ShapeBorder? a, double t) {
+    if (a is _ConnectTileShape) {
+      return _ConnectTileShape(
+        side: BorderSide.lerp(a.side, side, t),
+        edgeSigma: a.edgeSigma + (edgeSigma - a.edgeSigma) * t,
+      );
+    }
+    return super.lerpFrom(a, t);
+  }
+
+  @override
+  ShapeBorder? lerpTo(ShapeBorder? b, double t) {
+    if (b is _ConnectTileShape) return b.lerpFrom(this, t);
+    return super.lerpTo(b, t);
+  }
+
+  @override
+  bool operator ==(Object other) => other is _ConnectTileShape && other.side == side && other.edgeSigma == edgeSigma;
+
+  @override
+  int get hashCode => Object.hash(side, edgeSigma);
 }
 
 class DelayBadge extends StatelessWidget {
