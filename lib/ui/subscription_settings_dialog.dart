@@ -90,7 +90,7 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
           ),
           const Divider(height: 1),
           SizedBox(
-            height: math.min(168, math.min(_subscriptions.length * 40.0, MediaQuery.sizeOf(context).height * 0.25)),
+            height: math.min(168, math.min(_subscriptions.length * 40.0, MediaQuery.sizeOf(context).height * 0.22)),
             child: Scrollbar(controller: _scroll, thumbVisibility: true,
               child: ListView.builder(
                 controller: _scroll,
@@ -126,29 +126,14 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
   @override
   Widget build(BuildContext context) => AlertDialog(
         scrollable: true,
-        titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 16),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
-        title: Row(children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(color: C.surface2,
-                borderRadius: BorderRadius.circular(C.r(12))),
-            child: Icon(Icons.sync_rounded, color: C.highlight, size: 23),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(tr('Настройки подписок'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 3),
-            Text(tr('Общее обновление для выбранных подписок'),
-                style: TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w400)),
-          ])),
-        ]),
+        title: Text(tr('Настройки подписок')),
         content: SizedBox(
           width: 480,
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(tr('Общее обновление для выбранных подписок'), style: TextStyle(color: C.muted, fontSize: 13)),
+            const SizedBox(height: 12),
             _selectionCard(context),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Row(children: [
               Icon(Icons.schedule_rounded, color: C.muted, size: 18),
               const SizedBox(width: 8),

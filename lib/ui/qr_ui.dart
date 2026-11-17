@@ -106,13 +106,14 @@ Future<void> showQrDialog(BuildContext context, {required String title, required
   await showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
+      scrollable: true,
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       content: SizedBox(
         width: 360,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
-            width: 320,
-            height: 320,
+            width: (MediaQuery.sizeOf(ctx).height * 0.5).clamp(200.0, 320.0).floorToDouble(),
+            height: (MediaQuery.sizeOf(ctx).height * 0.5).clamp(200.0, 320.0).floorToDouble(),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(C.r(12))),
             child: CustomPaint(painter: QrPainter(qr)),
           ),

@@ -210,8 +210,8 @@ Future<void> main(List<String> rawArgs) async {
       server: server ?? tr('Сервер не выбран'),
       state: state.isConnected ? 2 : (state.isBusy ? 1 : 0),
       dark: dark,
-      accent: accent.main,
-      accentLight: accent.light,
+      accent: C.highlightFor(accent),
+      accentLight: C.highlightLightFor(accent),
       modes: [for (final m in trayModes) m == ConnectionMode.proxyOnly ? tr('Порты') : m.label],
       mode: trayModes.indexOf(state.settings.mode),
       // Ядро TUN выбирается только в режимах с адаптером — в остальных переключателя в меню нет.

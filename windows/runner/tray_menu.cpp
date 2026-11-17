@@ -266,7 +266,7 @@ void Paint(HWND hwnd, HDC target) {
   const float s = static_cast<float>(m->scale);
   const Palette p = PaletteFor(m->model.dark);
   // Цвет акцента программы (Настройки → Внешний вид).
-  const COLORREF orange = m->model.accent, orange_light = m->model.accent_light;
+  const COLORREF orange = m->model.accent;
 
   // Рисуем в память и переносим одним куском — без мерцания.
   HDC mem = CreateCompatibleDC(target);
@@ -350,13 +350,9 @@ void Paint(HWND hwnd, HDC target) {
       const bool hovered = static_cast<int>(i) == m->hover;
 
       if (item.kind == Kind::kMode || item.kind == Kind::kCore) {
-        // Выбранный режим (ядро) — оранжевая плашка с градиентом, как переключатель в окне программы.
+        // Ровный акцент, как у переключателей в основном окне.
         if (item.selected) {
-          Gdiplus::GraphicsPath path;
-          AddRounded(path, r, 8 * s);
-          Gdiplus::LinearGradientBrush gradient(Gdiplus::PointF(r.X, r.Y), Gdiplus::PointF(r.GetRight(), r.GetBottom()),
-                                                Rgb(orange_light), Rgb(orange));
-          g.FillPath(&gradient, &path);
+          FillRounded(g, r, 8 * s, Rgb(orange));
         } else if (hovered) {
           FillRounded(g, r, 8 * s, Rgb(p.muted, 40));
         }
@@ -367,9 +363,9 @@ void Paint(HWND hwnd, HDC target) {
 
       const COLORREF accent = item.danger ? kRed : orange;
       if (hovered) {
-        FillRounded(g, r, 9 * s, Rgb(accent, 34));
+        FillRounded(g, r, 9 * s, Rgb(p.muted, 28));
       } else if (item.kind == Kind::kServer && item.selected) {
-        FillRounded(g, r, 9 * s, Rgb(orange, 20));
+        FillRounded(g, r, 9 * s, Rgb(p.muted, 28));
       }
 
       if (item.kind == Kind::kServer) {

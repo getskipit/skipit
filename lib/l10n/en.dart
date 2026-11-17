@@ -1333,4 +1333,8 @@ const en = <String, String>{
   'Скачайте переносной ZIP на странице релиза. Закройте SkipIt и распакуйте архив в папку программы с заменой файлов. Папку userdata сохраните.': 'Download the portable ZIP from the release page. Close SkipIt and extract the archive into the app folder, replacing files. Keep the userdata folder.',
   'Компактные строки правил': 'Compact rule rows',
   'Уменьшить отступы в списках профилей маршрутизации и программ': 'Reduce spacing in routing profile and app lists',
+  'Подготовка отчёта…': 'Preparing report…',
+  'Правила по сайтам и IP': 'Website and IP rules',
+  'Как записывать сайты и IP': 'How to enter websites and IP addresses',
+  'Дополнительно': 'Additional settings',
 };

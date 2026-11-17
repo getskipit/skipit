@@ -974,11 +974,16 @@ class _ReportPreviewDialogState extends State<ReportPreviewDialog> {
       final lines = snapshot.data?.split('\n');
       return AlertDialog(
       title: Text(tr('Предпросмотр отчёта')),
-      content: SizedBox(width: 760, height: 430, child: snapshot.hasError
-          ? Center(child: Text(tr('Не удалось собрать отчёт: {0}', [screenTextOf(context, describeNetError(snapshot.error!))])))
+      content: snapshot.hasError
+          ? SizedBox(width: 520, child: Text(
+              tr('Не удалось собрать отчёт: {0}', [screenTextOf(context, describeNetError(snapshot.error!))])))
           : !snapshot.hasData
-              ? const Center(child: CircularProgressIndicator())
-              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              ? SizedBox(width: 360, height: 96, child: Row(children: [
+                  const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 16),
+                  Expanded(child: Text(tr('Подготовка отчёта…'), style: TextStyle(color: C.muted))),
+                ]))
+              : SizedBox(width: 760, height: 430, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   if (screenPrivacyOf(context)) ...[
                     Text(tr('IP и ссылки скрыты только на экране; в файле сохранятся исходные данные.'),
                         style: TextStyle(color: C.muted, fontSize: 12)),
@@ -993,9 +998,9 @@ class _ReportPreviewDialogState extends State<ReportPreviewDialog> {
                   ))),
                 ])),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Отмена'))),
-        GradientButton(label: tr('Сохранить'), onPressed: snapshot.hasData
-            ? () => Navigator.pop(context, snapshot.data!) : null),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr(snapshot.hasError ? 'Закрыть' : 'Отмена'))),
+        if (snapshot.hasData)
+          GradientButton(label: tr('Сохранить'), onPressed: () => Navigator.pop(context, snapshot.data!)),
       ],
     );
     },

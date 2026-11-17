@@ -439,12 +439,12 @@ class _LogsPageState extends State<LogsPage> {
     final day = picked == 0 ? null : days[picked - 1];
     final ok = day == null
         ? await confirm(context, tr('Очистить историю?'),
-            tr('Журналы прошлых подключений будут удалены. Текущий журнал останется.'))
+            tr('Журналы прошлых подключений будут удалены. Текущий журнал останется.'), danger: true)
         : await confirm(context, tr('Удалить журналы за {0}?', [_dayLabel(day).toLowerCase()]),
             // Текущий журнал начат сегодня — про него есть смысл говорить только тут.
             _dayLabel(day) == tr('Сегодня')
                 ? tr('Все журналы за сегодня, кроме текущего, будут удалены.')
-                : tr('Все журналы за этот день будут удалены.'));
+                : tr('Все журналы за этот день будут удалены.'), danger: true);
     if (!ok || !mounted) return;
     setState(() => _historyId = null);
     AppScope.read(this.context).log.clearHistory(day: day);

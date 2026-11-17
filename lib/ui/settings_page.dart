@@ -756,7 +756,7 @@ class _SettingsPageState extends State<SettingsPage> {
               onPressed: () async {
                 final ok = await confirm(context, tr('Удалить все данные?'),
                     tr('Подписки, серверы, профили, правила программ и настройки будут удалены без возможности '
-                        'вернуть. Чтобы сохранить их, сначала нажмите «Экспорт» выше, в разделе «Данные».'));
+                        'вернуть. Чтобы сохранить их, сначала нажмите «Экспорт» выше, в разделе «Данные».'), danger: true);
                 if (!ok) return;
                 final error = await state.deleteAllData();
                 state.toast(error ?? tr('Все данные удалены'), kind: error == null ? ToastKind.success : ToastKind.error);

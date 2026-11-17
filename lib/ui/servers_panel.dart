@@ -717,7 +717,7 @@ class _GroupCardState extends State<_GroupCard> {
                           }
                         case 'delete':
                           if (context.mounted &&
-                              await confirm(context, tr('Удалить подписку?'), tr('Все её серверы тоже будут удалены.'))) {
+                              await confirm(context, tr('Удалить подписку?'), tr('Все её серверы тоже будут удалены.'), danger: true)) {
                             state.deleteSubscription(sub);
                           }
                       }

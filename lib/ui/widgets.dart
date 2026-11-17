@@ -509,14 +509,16 @@ class PageHeader extends StatelessWidget {
 
 /// Основная кнопка: ровный акцент и контрастная подпись.
 class GradientButton extends StatelessWidget {
-  const GradientButton({super.key, required this.label, this.icon, this.onPressed});
+  const GradientButton({super.key, required this.label, this.icon, this.onPressed, this.danger = false});
   final String label;
   final IconData? icon;
   final VoidCallback? onPressed;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
+    final color = danger ? C.red : C.highlight;
     return Hover(
       enabled: enabled,
       builder: (context, hovered) => Opacity(
@@ -524,7 +526,7 @@ class GradientButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           decoration: BoxDecoration(
-            color: hovered ? Color.lerp(C.highlight, C.text, 0.08) : C.highlight,
+            color: hovered ? Color.lerp(color, C.text, 0.08) : color,
             borderRadius: BorderRadius.circular(C.r(12)),
           ),
           child: Material(
@@ -921,18 +923,20 @@ Future<String?> promptText(
   );
 }
 
-Future<bool> confirm(BuildContext context, String title, String text, {String ok = 'Удалить', double? maxWidth}) async =>
+Future<bool> confirm(BuildContext context, String title, String text,
+    {String ok = 'Удалить', double maxWidth = 560, bool danger = false}) async =>
     await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         title: Text(screenTextOf(context, title)),
-        content: maxWidth == null ? Text(screenTextOf(context, text)) : ConstrainedBox(
+        content: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
           child: Text(screenTextOf(context, text)),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
-          GradientButton(label: tr(ok), onPressed: () => Navigator.pop(ctx, true)),
+          GradientButton(label: tr(ok), danger: danger, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     ) ??

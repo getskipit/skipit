@@ -401,7 +401,7 @@ class _ProfileTile extends StatelessWidget {
               tooltip: tr('Удалить'),
               icon: Icon(Icons.delete_outline_rounded, size: 20, color: C.red),
               onPressed: () async {
-                if (!await confirm(context, tr('Удалить профиль?'), profile.name)) return;
+                if (!await confirm(context, tr('Удалить профиль?'), profile.name, danger: true)) return;
                 state.routingProfiles.remove(profile);
                 state.gcRuleListCache();
                 if (state.settings.selectedRoutingId == profile.id) {
@@ -584,12 +584,18 @@ class _RoutingEditorState extends State<_RoutingEditor> {
     Navigator.pop(context, p);
   }
 
+  Widget _editorHeading(String title) => Padding(
+        padding: const EdgeInsets.only(top: 12, bottom: 8),
+        child: Align(alignment: Alignment.centerLeft,
+            child: Text(title, style: TextStyle(color: C.text, fontSize: 14, fontWeight: FontWeight.w600))),
+      );
+
   Widget _area(String key, String label, String hint) => Expanded(
         child: TextField(
           controller: _lists[key],
           maxLines: 6,
-          minLines: 6,
-          style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
+          minLines: 4,
+          style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
           decoration: InputDecoration(
             labelText: label,
             labelStyle: TextStyle(color: key.startsWith('proxy') ? C.highlight : key.startsWith('direct') ? C.green : C.red),
@@ -605,89 +611,120 @@ class _RoutingEditorState extends State<_RoutingEditor> {
         title: Text(tr('Профиль маршрутизации')),
         content: SizedBox(
           width: 760,
-          child: SingleChildScrollView(
+          child: Scrollbar(
             controller: _scroll,
-            // Сверху — место для подписи первого поля (она стоит на его рамке и иначе срезается краем
-            // прокрутки), справа — для полосы прокрутки, чтобы она не ложилась на поля.
-            padding: const EdgeInsets.only(top: 8, right: 16),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(controller: _name, decoration: InputDecoration(labelText: tr('Название'))),
-              const SizedBox(height: 12),
-              Row(children: [
-                Text(tr('Всё остальное:')),
-                const SizedBox(width: 12),
-                Segmented<bool>(
-                  value: p.globalProxy,
-                  items: {true: tr('через VPN'), false: tr('напрямую')},
-                  onChanged: (v) => setState(() => p.globalProxy = v),
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _scroll,
+              // Сверху — место для подписи первого поля (она стоит на его рамке и иначе срезается краем
+              // прокрутки), справа — для полосы прокрутки, чтобы она не ложилась на поля.
+              padding: const EdgeInsets.only(top: 8, right: 16),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                TextField(controller: _name, decoration: InputDecoration(labelText: tr('Название'))),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 24,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(tr('Всё остальное:')),
+                      const SizedBox(width: 12),
+                      Segmented<bool>(
+                        value: p.globalProxy,
+                        items: {true: tr('через VPN'), false: tr('напрямую')},
+                        onChanged: (v) => setState(() => p.globalProxy = v),
+                      ),
+                    ]),
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(tr('Стратегия доменов'), style: TextStyle(color: C.muted, fontSize: 12)),
+                      const SizedBox(width: 8),
+                      AppDropdown<String>(
+                        value: p.domainStrategy,
+                        items: {for (final s in RoutingProfile.domainStrategies) s: s},
+                        onChanged: (v) => setState(() => p.domainStrategy = v),
+                      ),
+                    ]),
+                  ],
                 ),
-                const Spacer(),
-                AppDropdown<String>(
-                  value: p.domainStrategy,
-                  items: {for (final s in RoutingProfile.domainStrategies) s: s},
-                  onChanged: (v) => setState(() => p.domainStrategy = v),
+                _editorHeading('DNS'),
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _remoteDns,
+                      decoration: InputDecoration(labelText: tr('Удалённый DNS (через VPN)'), hintText: AppScope.read(context).screenText('https://1.1.1.1/dns-query')),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _domesticDns,
+                      decoration: InputDecoration(labelText: tr('Локальный DNS (напрямую)'), hintText: AppScope.read(context).screenText('77.88.8.8')),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: const EdgeInsets.only(bottom: 12),
+                  dense: true,
+                  minTileHeight: 32,
+                  visualDensity: VisualDensity.compact,
+                  shape: const Border(),
+                  collapsedShape: const Border(),
+                  iconColor: C.muted,
+                  collapsedIconColor: C.muted,
+                  title: Tooltip(message: tr('Как записывать сайты и IP'),
+                      child: Text(tr('Правила по сайтам и IP'),
+                          style: TextStyle(color: C.text, fontSize: 14, fontWeight: FontWeight.w600))),
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        AppScope.read(context).screenText(tr('В списках — по одной записи в строке.\n'
+                        'Сайты: example.com — сайт со всеми поддоменами; full:example.com — только этот адрес; '
+                        'geosite:youtube — готовый список сайтов.\n'
+                        'IP: 1.2.3.4 — один адрес; 10.0.0.0/8 — диапазон адресов; geoip:ru — готовый список адресов.')),
+                        style: TextStyle(color: C.muted, fontSize: 12, height: 1.4),
+                      ),
+                    ),
+                  ],
                 ),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                Expanded(
-                  child: TextField(
-                    controller: _remoteDns,
-                    decoration: InputDecoration(labelText: tr('Удалённый DNS (через VPN)'), hintText: AppScope.read(context).screenText('https://1.1.1.1/dns-query')),
+                const SizedBox(height: 12),
+                Row(children: [
+                  _area('proxySites', tr('Через VPN — сайты'), 'instagram.com\nfull:api.example.com\ngeosite:youtube'),
+                  const SizedBox(width: 12),
+                  _area('proxyIp', tr('Через VPN — IP'), '149.154.167.99\n149.154.160.0/20\ngeoip:ru-blocked'),
+                ]),
+                const SizedBox(height: 12),
+                Row(children: [
+                  _area('directSites', tr('Напрямую — сайты'), 'gosuslugi.ru\nfull:lk.example.ru\ngeosite:category-ru'),
+                  const SizedBox(width: 12),
+                  _area('directIp', tr('Напрямую — IP'), '77.88.8.8\n192.168.0.0/16\ngeoip:ru'),
+                ]),
+                const SizedBox(height: 12),
+                Row(children: [
+                  _area('blockSites', tr('Блокировать — сайты'), 'ads.example.com\nfull:track.example.com\ngeosite:category-ads-all'),
+                  const SizedBox(width: 12),
+                  _area('blockIp', tr('Блокировать — IP'), '203.0.113.5\n198.51.100.0/24'),
+                ]),
+                _editorHeading(tr('Дополнительно')),
+                TextField(
+                  controller: _hosts,
+                  maxLines: 3,
+                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: tr('DNS hosts (домен = IP)'),
+                    hintText: AppScope.read(context).screenText('router.home = 192.168.1.1'),
+                    alignLabelWithHint: true,
+                    floatingLabelBehavior: FloatingLabelBehavior.always,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _domesticDns,
-                    decoration: InputDecoration(labelText: tr('Локальный DNS (напрямую)'), hintText: AppScope.read(context).screenText('77.88.8.8')),
-                  ),
-                ),
+                const SizedBox(height: 18),
+                _ruleListsSection(),
               ]),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  AppScope.read(context).screenText(tr('В списках — по одной записи в строке.\n'
-                  'Сайты: example.com — сайт со всеми поддоменами; full:example.com — только этот адрес; '
-                  'geosite:youtube — готовый список сайтов.\n'
-                  'IP: 1.2.3.4 — один адрес; 10.0.0.0/8 — диапазон адресов; geoip:ru — готовый список адресов.')),
-                  style: TextStyle(color: C.muted, fontSize: 12, height: 1.4),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(children: [
-                _area('proxySites', tr('Через VPN — сайты'), 'instagram.com\nfull:api.example.com\ngeosite:youtube'),
-                const SizedBox(width: 12),
-                _area('proxyIp', tr('Через VPN — IP'), '149.154.167.99\n149.154.160.0/20\ngeoip:ru-blocked'),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                _area('directSites', tr('Напрямую — сайты'), 'gosuslugi.ru\nfull:lk.example.ru\ngeosite:category-ru'),
-                const SizedBox(width: 12),
-                _area('directIp', tr('Напрямую — IP'), '77.88.8.8\n192.168.0.0/16\ngeoip:ru'),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                _area('blockSites', tr('Блокировать — сайты'), 'ads.example.com\nfull:track.example.com\ngeosite:category-ads-all'),
-                const SizedBox(width: 12),
-                _area('blockIp', tr('Блокировать — IP'), '203.0.113.5\n198.51.100.0/24'),
-              ]),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _hosts,
-                maxLines: 3,
-                style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-                decoration: InputDecoration(
-                  labelText: tr('DNS hosts (домен = IP)'),
-                  hintText: AppScope.read(context).screenText('router.home = 192.168.1.1'),
-                  alignLabelWithHint: true,
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                ),
-              ),
-              const SizedBox(height: 18),
-              _ruleListsSection(),
-            ]),
+            ),
           ),
         ),
         actions: [

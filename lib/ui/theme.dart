@@ -212,8 +212,10 @@ class C {
   static Color get orangeLight => _p.accent.light;
 
   /// Оранжевый акцент чуть темнее и теплее знака, без примеси серого.
-  static Color get highlight => _p.accent == Accent.orange ? const Color(0xFFE97824) : orange;
-  static Color get highlightLight => _p.accent == Accent.orange ? const Color(0xFFF29B59) : orangeLight;
+  static Color get highlight => highlightFor(_p.accent);
+  static Color get highlightLight => highlightLightFor(_p.accent);
+  static Color highlightFor(Accent accent) => accent == Accent.orange ? const Color(0xFFE97824) : accent.main;
+  static Color highlightLightFor(Accent accent) => accent == Accent.orange ? const Color(0xFFF29B59) : accent.light;
 
   /// Цвет предупреждений (строки журнала, медленный ответ, значок «внимание»): всегда оранжевый,
   /// какой бы ни был акцент. [warnText] — для текста и значков: на тёмном фоне светлее.

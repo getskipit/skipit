@@ -36,7 +36,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    expect(tester.widget<GradientButton>(find.byType(GradientButton)).onPressed, isNull);
+    expect(find.byType(GradientButton), findsNothing);
+    expect(tester.getSize(find.descendant(of: find.byType(Dialog), matching: find.byType(Material)).first).height, lessThan(350));
     const report = 'Пример отчёта\nsite.example\nПоследняя строка';
     pending.complete(report);
     await tester.pump();
