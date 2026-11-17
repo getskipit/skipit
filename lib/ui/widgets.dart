@@ -482,7 +482,7 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heading = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600)),
+      Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
       if (subtitle != null) ...[
         const SizedBox(height: 4),
         Text(subtitle!, style: TextStyle(color: C.muted, fontSize: 13)),

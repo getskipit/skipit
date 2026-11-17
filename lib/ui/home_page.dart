@@ -106,7 +106,7 @@ class _HomePageState extends State<HomePage> {
       Text(statusText,
           style: TextStyle(
             fontSize: 20,
-            fontWeight: connected ? FontWeight.w700 : FontWeight.w500,
+            fontWeight: FontWeight.w600,
             color: connected ? C.text : C.muted,
           )),
       Reveal(open: show('timer'), child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -120,7 +120,7 @@ class _HomePageState extends State<HomePage> {
         style: TextStyle(
           color: connected ? (C.isDark ? C.highlightLight : C.highlight) : C.muted,
           fontSize: connected ? 18 : 13,
-          fontWeight: connected ? FontWeight.w700 : FontWeight.w400,
+          fontWeight: connected ? FontWeight.w600 : FontWeight.w400,
           fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
