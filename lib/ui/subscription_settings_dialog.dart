@@ -61,7 +61,7 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
 
   Widget _selectionCard(BuildContext context) => Container(
         clipBehavior: Clip.antiAlias,
-        decoration: SmoothBoxDecoration(color: C.surface2, border: Border.all(color: C.border),
+        decoration: BoxDecoration(color: C.surface2, border: Border.all(color: C.border),
             borderRadius: BorderRadius.circular(C.r(14))),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Padding(
@@ -121,7 +121,7 @@ class _SubscriptionSettingsDialogState extends State<SubscriptionSettingsDialog>
   Widget _scheduleCard() => Container(
         key: const ValueKey('subscription-interval-panel'),
         padding: const EdgeInsets.all(12),
-        decoration: SmoothBoxDecoration(color: C.surface2,
+        decoration: BoxDecoration(color: C.surface2,
             border: Border.all(color: _invalid ? C.red : C.border),
             borderRadius: BorderRadius.circular(C.r(14))),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -85,7 +85,7 @@ Widget _note(SiteNote note) {
   return Builder(builder: (context) => Container(
     margin: const EdgeInsets.only(top: 8),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-    decoration: SmoothBoxDecoration(
+    decoration: BoxDecoration(
       color: color.withValues(alpha: note.kind == SiteNoteKind.info ? 0.06 : 0.10),
       borderRadius: BorderRadius.circular(C.r(10)),
     ),
@@ -102,7 +102,7 @@ Widget _note(SiteNote note) {
 Widget _metric(String name, String value, String note, {bool mono = false, Color? color}) => Builder(builder: (context) => Container(
       width: 172,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: SmoothBoxDecoration(
+      decoration: BoxDecoration(
         color: C.surface2,
         borderRadius: BorderRadius.circular(C.r(10)),
         border: Border.all(color: C.border),
@@ -261,7 +261,7 @@ class _SiteCardState extends State<_SiteCard> {
           duration: const Duration(milliseconds: 160),
           margin: const EdgeInsets.only(top: 8),
           padding: const EdgeInsets.fromLTRB(12, 9, 8, 10),
-          decoration: SmoothBoxDecoration(
+          decoration: BoxDecoration(
             color: hovered || open ? C.surface2 : C.surface2.withValues(alpha: 0),
             borderRadius: BorderRadius.circular(C.r(10)),
             border: Border.all(color: C.border),
@@ -411,7 +411,7 @@ class _LineCard extends StatelessWidget {
     return Container(
       width: 266,
       padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
-      decoration: SmoothBoxDecoration(
+      decoration: BoxDecoration(
         color: C.surface2,
         borderRadius: BorderRadius.circular(C.r(10)),
         border: Border.all(color: active ? C.highlight.withValues(alpha: 0.6) : C.border),
@@ -599,7 +599,7 @@ class _SpeedCard extends StatelessWidget {
     return Container(
       width: 266,
       padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
-      decoration: SmoothBoxDecoration(
+      decoration: BoxDecoration(
         color: C.surface2,
         borderRadius: BorderRadius.circular(C.r(10)),
         border: Border.all(color: active ? C.highlight.withValues(alpha: 0.6) : C.border),

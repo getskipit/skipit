@@ -14,7 +14,6 @@ import 'shell.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
-import 'smooth_text.dart';
 import '../l10n/l10n.dart';
 
 /// Главная: слева кнопка подключения и режимы, справа список серверов.
@@ -104,7 +103,7 @@ class _HomePageState extends State<HomePage> {
         onTap: () => connectOrToggle(context),
       ),
       const SizedBox(height: 24),
-      SmoothText(statusText,
+      Text(statusText,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -112,7 +111,7 @@ class _HomePageState extends State<HomePage> {
           )),
       Reveal(open: show('timer'), child: Column(mainAxisSize: MainAxisSize.min, children: [
       const SizedBox(height: 6),
-      SmoothText(
+      Text(
         connected && state.connectedAt != null
             ? formatDuration(DateTime.now().difference(state.connectedAt!))
             : state.closingOtherVpn
@@ -340,7 +339,7 @@ class _TunCorePicker extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
-              decoration: SmoothBoxDecoration(
+              decoration: BoxDecoration(
                 color: hovered ? C.surface2 : C.surface,
                 borderRadius: BorderRadius.circular(C.r(11)),
                 border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.5) : C.border),
@@ -391,7 +390,7 @@ class _RoutingInfoState extends State<_RoutingInfo> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: SmoothBoxDecoration(
+              decoration: BoxDecoration(
                 color: hovered ? C.surface2 : C.surface,
                 borderRadius: BorderRadius.circular(C.r(14)),
                 border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.5) : C.border),
@@ -437,7 +436,7 @@ class _KillSwitchBox extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        decoration: SmoothBoxDecoration(
+        decoration: BoxDecoration(
           color: C.surface2,
           borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.highlight.withValues(alpha: 0.45)),
@@ -484,7 +483,7 @@ class _NoticeBox extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        decoration: SmoothBoxDecoration(
+        decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: color.withValues(alpha: 0.45)),
@@ -599,7 +598,7 @@ class _ErrorBoxState extends State<_ErrorBox> {
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-          decoration: SmoothBoxDecoration(
+          decoration: BoxDecoration(
             color: C.red.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(C.r(14)),
             border: Border.all(color: C.red.withValues(alpha: 0.4)),
@@ -653,7 +652,7 @@ class _Speed extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: SmoothBoxDecoration(
+        decoration: BoxDecoration(
           color: C.surface,
           borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.border),

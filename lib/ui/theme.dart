@@ -1,5 +1,3 @@
-import 'smooth_decoration.dart';
-export 'smooth_decoration.dart';
 import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 
@@ -279,13 +277,13 @@ ThemeData buildTheme() {
     cardTheme: CardThemeData(color: C.surface, elevation: 0, margin: EdgeInsets.zero),
     dialogTheme: DialogThemeData(
       backgroundColor: C.surface,
-      shape: SmoothRoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(20)), side: BorderSide(color: C.border)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(20)), side: BorderSide(color: C.border)),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: C.surface2,
       contentTextStyle: TextStyle(color: C.text),
       behavior: SnackBarBehavior.floating,
-      shape: SmoothRoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(12)), side: BorderSide(color: C.border)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(12)), side: BorderSide(color: C.border)),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -296,7 +294,7 @@ ThemeData buildTheme() {
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       // Одна рамка на все состояния. Именно `border`: только его Flutter «разворачивает» по состояниям —
       // заданная через enabledBorder такая рамка рисовалась с почти квадратными углами.
-      border: WidgetStateInputBorder.resolveWith((states) => SmoothOutlineInputBorder(
+      border: WidgetStateInputBorder.resolveWith((states) => OutlineInputBorder(
             borderRadius: BorderRadius.circular(C.r(12)),
             borderSide: BorderSide(
               color: states.contains(WidgetState.error)
@@ -320,14 +318,14 @@ ThemeData buildTheme() {
       style: OutlinedButton.styleFrom(
         foregroundColor: C.text,
         side: BorderSide(color: C.border),
-        shape: SmoothRoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(12))),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(C.r(12))),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         enabledMouseCursor: SystemMouseCursors.click,
       ),
     ),
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(enabledMouseCursor: SystemMouseCursors.click)),
     tooltipTheme: TooltipThemeData(
-      decoration: SmoothBoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(C.r(8)), border: Border.all(color: C.border)),
+      decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(C.r(8)), border: Border.all(color: C.border)),
       textStyle: TextStyle(color: C.text, fontSize: 12),
     ),
     scrollbarTheme: ScrollbarThemeData(thumbColor: WidgetStateProperty.all(C.border)),

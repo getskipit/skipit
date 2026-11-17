@@ -168,7 +168,7 @@ class _MenuCardState<T> extends State<_MenuCard<T>> {
         type: MaterialType.transparency,
         child: Container(
           constraints: BoxConstraints(minWidth: minWidth < 190 ? 190 : minWidth, maxWidth: 380),
-          decoration: SmoothBoxDecoration(
+          decoration: BoxDecoration(
             color: C.surface2,
             borderRadius: BorderRadius.circular(C.r(14)),
             border: Border.all(color: C.border),
@@ -221,7 +221,7 @@ class _MenuRow<T> extends StatelessWidget {
           child: Container(
             height: 34,
             padding: const EdgeInsets.symmetric(horizontal: 9),
-            decoration: SmoothBoxDecoration(
+            decoration: BoxDecoration(
               color: hovered ? accent.withValues(alpha: 0.13) : Colors.transparent,
               borderRadius: BorderRadius.circular(C.r(9)),
             ),

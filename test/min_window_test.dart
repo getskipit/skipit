@@ -15,7 +15,6 @@ import 'package:skipit/state/app_scope.dart';
 import 'package:skipit/state/app_state.dart';
 import 'package:skipit/ui/shell.dart';
 import 'package:skipit/ui/theme.dart';
-import 'package:skipit/ui/smooth_text.dart';
 
 /// Окно наименьшего размера (windows/runner/flutter_window.cpp: kMinWidth × kMinHeight): на каждой
 /// странице ничего не вылезает за края, а заголовок страницы остаётся в одну строку.
@@ -73,7 +72,7 @@ void main() {
 
       // Заголовок страницы в одну строку: при кегле 28 это меньше 50 точек высоты.
       void titleOnOneLine(String title) {
-        final box = tester.getSize(find.ancestor(of: find.text(title).last, matching: find.byType(SmoothText)).first);
+        final box = tester.getSize(find.text(title).last);
         expect(box.height, lessThan(50), reason: 'заголовок «$title» не поместился в строку');
       }
 
@@ -146,10 +145,7 @@ void main() {
     ]) {
       await tester.tap(find.byIcon(icon).first);
       await tester.pump(const Duration(milliseconds: 400));
-      final label = find.text(title).last;
-      final sampled = find.ancestor(of: label, matching: find.byType(SmoothText));
-      expect(tester.getSize(sampled.evaluate().isEmpty ? label : sampled.first).height,
-          lessThan(50), reason: '«$title» не поместился в строку');
+      expect(tester.getSize(find.text(title).last).height, lessThan(50), reason: '«$title» не поместился в строку');
       await shot(title);
     }
   });

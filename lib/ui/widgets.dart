@@ -5,7 +5,6 @@ import '../state/app_scope.dart';
 import 'app_icon.dart';
 import 'app_menu.dart';
 import 'theme.dart';
-import 'smooth_text.dart';
 import 'screen_privacy.dart';
 import '../l10n/l10n.dart';
 
@@ -179,7 +178,7 @@ class AppDropdown<T> extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             height: height ?? 42,
             padding: const EdgeInsets.only(left: 14, right: 8),
-            decoration: SmoothBoxDecoration(
+            decoration: BoxDecoration(
               color: hovered ? C.hover : (height != null ? C.surface : Colors.transparent),
               borderRadius: BorderRadius.circular(C.r(height != null ? 18 : 12)),
               border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.7) : C.border),
@@ -298,7 +297,7 @@ class AppSwitch extends StatelessWidget {
             width: 50,
             height: 30,
             padding: const EdgeInsets.all(3),
-            decoration: SmoothBoxDecoration(
+            decoration: BoxDecoration(
               color: value ? C.highlight : C.surface2,
               borderRadius: BorderRadius.circular(C.r(15)),
               border: Border.all(
@@ -317,7 +316,7 @@ class AppSwitch extends StatelessWidget {
                 width: value ? 21 : 15,
                 height: value ? 21 : 15,
                 margin: EdgeInsets.symmetric(horizontal: value ? 0 : 3),
-                decoration: SmoothBoxDecoration(color: value ? Colors.white : C.muted, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: value ? Colors.white : C.muted, shape: BoxShape.circle),
               ),
             ),
           ),
@@ -456,7 +455,7 @@ class Panel extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             padding: padding,
-            decoration: SmoothBoxDecoration(
+            decoration: BoxDecoration(
               color: hovered ? C.surface2 : C.surface,
               borderRadius: BorderRadius.circular(C.r(18)),
               border: Border.all(
@@ -483,7 +482,7 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heading = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SmoothText(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+      Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
       if (subtitle != null) ...[
         const SizedBox(height: 4),
         Text(subtitle!, style: TextStyle(color: C.muted, fontSize: 13)),
@@ -526,7 +525,7 @@ class GradientButton extends StatelessWidget {
         opacity: enabled ? 1 : 0.5,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          decoration: SmoothBoxDecoration(
+          decoration: BoxDecoration(
             color: hovered ? Color.lerp(color, C.text, 0.08) : color,
             borderRadius: BorderRadius.circular(C.r(12)),
           ),
@@ -643,7 +642,7 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
       curve: Curves.easeOut,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        decoration: SmoothBoxDecoration(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radius),
           boxShadow: [
             if (active) BoxShadow(color: C.highlight.withValues(alpha: 0.22), blurRadius: 20),
@@ -663,7 +662,7 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
               decoration: ShapeDecoration(
                 // Ровная заливка: тёмный градиент на экране ложился заметными полосами.
                 color: active ? C.palette.tileTop : (_hover ? C.surface2 : C.palette.tileTop),
-                shape: SmoothRoundedRectangleBorder(
+                shape: RoundedRectangleBorder(
                   borderRadius: const BorderRadius.all(Radius.circular(50)),
                   side: BorderSide(
                     color: active ? C.highlight : (lit ? C.highlight.withValues(alpha: 0.55) : C.border),
@@ -704,7 +703,7 @@ class DelayBadge extends StatelessWidget {
     final color = C.delay(ms);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: SmoothBoxDecoration(
+      decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(C.r(8)),
       ),
@@ -722,7 +721,7 @@ class Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-        decoration: SmoothBoxDecoration(
+        decoration: BoxDecoration(
           border: Border.all(color: color.withValues(alpha: 0.4)),
           borderRadius: BorderRadius.circular(C.r(6)),
         ),
@@ -790,7 +789,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
       fit: BoxFit.scaleDown,
       child: Container(
         padding: const EdgeInsets.all(4),
-        decoration: SmoothBoxDecoration(
+        decoration: BoxDecoration(
           color: C.surface2,
           borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.border),
@@ -802,7 +801,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
               duration: Duration(milliseconds: _animate ? 240 : 0),
               curve: Curves.easeOutCubic,
               child: DecoratedBox(
-                decoration: SmoothBoxDecoration(
+                decoration: BoxDecoration(
                   color: C.highlight,
                   borderRadius: BorderRadius.circular(C.r(10))),
               ),
@@ -820,7 +819,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
                       child: Container(
                         key: _keys.putIfAbsent(e.key, GlobalKey.new),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                        decoration: SmoothBoxDecoration(
+                        decoration: BoxDecoration(
                           // До первого измерения выбранный пункт закрашен сам — без пустого кадра.
                           color: selected && thumb == null
                               ? C.highlight

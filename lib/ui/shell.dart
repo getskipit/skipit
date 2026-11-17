@@ -46,7 +46,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 6),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: SmoothBoxDecoration(
+              decoration: BoxDecoration(
                 color: C.surface2,
                 borderRadius: BorderRadius.circular(C.r(10)),
                 border: Border.all(color: C.border),
@@ -67,7 +67,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-            decoration: SmoothBoxDecoration(
+            decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(C.r(10)),
               border: Border.all(color: C.border),
             ),
@@ -567,7 +567,7 @@ class _ToastState extends State<_Toast> with TickerProviderStateMixin {
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 520),
                     padding: EdgeInsets.fromLTRB(_badge == null ? 16 : 10, 10, 10, 10),
-                    decoration: SmoothBoxDecoration(
+                    decoration: BoxDecoration(
                       color: C.surface2,
                       borderRadius: BorderRadius.circular(C.r(14)),
                       // Рамка ошибки и новой версии — цветом их значка, у остальных обычная.
@@ -583,7 +583,7 @@ class _ToastState extends State<_Toast> with TickerProviderStateMixin {
                         Container(
                           width: 30,
                           height: 30,
-                          decoration: SmoothBoxDecoration(
+                          decoration: BoxDecoration(
                             color: color.withValues(alpha: 0.14),
                             borderRadius: BorderRadius.circular(C.r(9)),
                           ),
@@ -659,7 +659,7 @@ class _TopBar extends StatelessWidget {
       height: 64,
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: SmoothBoxDecoration(
+      decoration: BoxDecoration(
         color: C.surface,
         borderRadius: BorderRadius.circular(C.r(20)),
         border: Border.all(color: C.border),
@@ -680,7 +680,7 @@ class _TopBar extends StatelessWidget {
             child: Container(
               height: 42,
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: SmoothBoxDecoration(
+              decoration: BoxDecoration(
                 color: C.surface2,
                 borderRadius: BorderRadius.circular(C.r(12)),
                 border: Border.all(color: state.isConnected ? C.green.withValues(alpha: 0.45) : C.border),
@@ -796,7 +796,7 @@ class _TopNavState extends State<_TopNav> with TickerProviderStateMixin {
             rect: rect,
             child: IgnorePointer(
               child: DecoratedBox(
-                decoration: SmoothBoxDecoration(
+                decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(C.r(12)),
                   color: C.surface2,
                 ),
@@ -869,7 +869,7 @@ class _TopItem extends StatelessWidget {
                 duration: const Duration(milliseconds: 160),
                 height: 40,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: SmoothBoxDecoration(
+                decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(C.r(12)),
                   // Фон выбранного пункта рисует общая подсветка в [_TopNav].
                   color: !selected && hovered ? C.hover : Colors.transparent,
@@ -947,7 +947,7 @@ class _StatusDot extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: 9,
         height: 9,
-        decoration: SmoothBoxDecoration(
+        decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
           boxShadow: [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 8)],
@@ -999,7 +999,7 @@ class _Sidebar extends StatelessWidget {
   Widget _panel(BuildContext context, AppState state, bool collapsed, Widget dot, String statusText, VoidCallback toggle) {
     return Container(
       padding: const EdgeInsets.fromLTRB(11, 18, 11, 14),
-      decoration: SmoothBoxDecoration(
+      decoration: BoxDecoration(
         color: C.surface,
         borderRadius: BorderRadius.circular(C.r(22)),
         border: Border.all(color: C.border),
@@ -1064,7 +1064,7 @@ class _Sidebar extends StatelessWidget {
               child: Container(
                 height: 54,
                 padding: const EdgeInsets.only(left: 19, right: 10),
-                decoration: SmoothBoxDecoration(
+                decoration: BoxDecoration(
                   color: C.surface2,
                   borderRadius: BorderRadius.circular(C.r(14)),
                   border: Border.all(color: state.isConnected ? C.green.withValues(alpha: 0.45) : C.border),
@@ -1136,7 +1136,7 @@ class _MenuBadge extends StatelessWidget {
                   child: hovered
                       ? Container(
                           key: ValueKey(arrows),
-                          decoration: SmoothBoxDecoration(
+                          decoration: BoxDecoration(
                             color: C.surface2,
                             borderRadius: BorderRadius.circular(C.r(10)),
                             border: Border.all(color: C.highlight.withValues(alpha: 0.5)),
@@ -1155,7 +1155,7 @@ class _MenuBadge extends StatelessWidget {
                   child: Container(
                     width: 17,
                     height: 17,
-                    decoration: SmoothBoxDecoration(
+                    decoration: BoxDecoration(
                       color: C.surface2,
                       shape: BoxShape.circle,
                       border: Border.all(color: C.border),
@@ -1245,7 +1245,7 @@ class _NavColumnState extends State<_NavColumn> with TickerProviderStateMixin {
                     opacity: shown[index],
                     child: Container(
                       alignment: Alignment.centerLeft,
-                      decoration: SmoothBoxDecoration(
+                      decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(C.r(12)),
                         color: C.surface2,
                       ),
@@ -1253,7 +1253,7 @@ class _NavColumnState extends State<_NavColumn> with TickerProviderStateMixin {
                       child: Container(
                         width: 3,
                         height: 18,
-                        decoration: SmoothBoxDecoration(color: C.highlight, borderRadius: BorderRadius.circular(2)),
+                        decoration: BoxDecoration(color: C.highlight, borderRadius: BorderRadius.circular(2)),
                       ),
                     ),
                   ),
@@ -1315,7 +1315,7 @@ class _NavItem extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           height: height,
-          decoration: SmoothBoxDecoration(
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(C.r(12)),
             // Фон и метку выбранного пункта рисует скользящая подсветка в меню.
             color: !selected && hovered ? C.hover : Colors.transparent,
@@ -1441,7 +1441,7 @@ class _VersionRow extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             height: _height,
-            decoration: SmoothBoxDecoration(
+            decoration: BoxDecoration(
               color: hasUpdate ? C.surface2 : (hovered ? C.hover : Colors.transparent),
               borderRadius: BorderRadius.circular(C.r(12)),
               border: Border.all(color: hasUpdate ? C.highlight.withValues(alpha: 0.5) : Colors.transparent),

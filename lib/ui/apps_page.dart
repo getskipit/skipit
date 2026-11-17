@@ -230,7 +230,7 @@ class _AppsPageState extends State<AppsPage> {
               Container(
                 margin: const EdgeInsets.only(bottom: 14),
                 padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-                decoration: SmoothBoxDecoration(
+                decoration: BoxDecoration(
                   color: C.highlight.withValues(alpha: C.isDark ? 0.12 : 0.08),
                   borderRadius: BorderRadius.circular(C.r(14)),
                   border: Border.all(color: C.highlight.withValues(alpha: 0.7), width: 1.5),
@@ -414,7 +414,7 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 140),
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                                    decoration: SmoothBoxDecoration(
+                                    decoration: BoxDecoration(
                                       color: checked
                                           ? C.surface2
                                           : (hovered ? C.hover : Colors.transparent),
@@ -444,7 +444,7 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
                                           Container(
                                             width: 22,
                                             height: 22,
-                                            decoration: SmoothBoxDecoration(
+                                            decoration: BoxDecoration(
                                               color: checked ? C.highlight : null,
                                               borderRadius: BorderRadius.circular(C.r(7)),
                                               border: checked ? null : Border.all(color: C.border, width: 1.5),
@@ -495,7 +495,7 @@ class AppIcon extends StatelessWidget {
     Widget fallback() => Container(
           width: size,
           height: size,
-          decoration: SmoothBoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(C.r(8))),
+          decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(C.r(8))),
           child: Icon(folder ? Icons.folder_rounded : Icons.web_asset_rounded, size: size * 0.62, color: C.highlight),
         );
     final p = path;
