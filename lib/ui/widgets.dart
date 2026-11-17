@@ -643,7 +643,7 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radius),
           boxShadow: [
-            if (active) BoxShadow(color: C.highlight.withValues(alpha: 0.12), blurRadius: 18),
+            if (active) BoxShadow(color: C.highlight.withValues(alpha: 0.18), blurRadius: 18),
           ],
         ),
         child: MouseRegion(
