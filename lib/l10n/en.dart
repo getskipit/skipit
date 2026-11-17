@@ -70,7 +70,7 @@ const en = <String, String>{
   'Ядро остановлено штатно.': 'The core stopped normally.',
   'Ядро остановлено (при отключении это нормально; если само — см. строки выше).': 'The core stopped (normal when disconnecting; if it stopped by itself, see the lines above).',
   'В настройках сервера есть устаревший параметр. На работу сейчас не влияет; исчезнет, когда провайдер обновит конфиг.': 'The server settings contain a deprecated parameter. It doesn\'t affect operation now; it will go away when the provider updates the config.',
-  'Готового адаптера VPN нет — ядро создаст новый. Это обычная строка, не ошибка.': 'No existing VPN adapter — the core will create a new one. This is a normal line, nothing is wrong.',
+  'Готовый адаптер VPN не найден — ядро попробует создать новый. Само по себе это не означает сбой подключения.': 'No existing VPN adapter was found — the core will try to create one. This alone does not mean the connection failed.',
   'Ядро просит Windows создать сетевой адаптер VPN. Если следом нет строки о запуске — Windows его не создала.': 'The core is asking Windows to create the VPN network adapter. If no startup line follows, Windows didn\'t create it.',
   'Убран брошенный адаптер, оставшийся от прошлого запуска. Работающие адаптеры не трогаются.': 'Removed an abandoned adapter left over from a previous run. Working adapters are not touched.',
   'Драйвер адаптера (Wintun) уже установлен в Windows.': 'The adapter driver (Wintun) is already installed in Windows.',

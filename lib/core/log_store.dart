@@ -44,6 +44,9 @@ class LogLine {
   static int _levelOf(String text) {
     // NOERROR в ответе DNS значит «ошибки нет» — слово «error» внутри него не в счёт.
     final t = text.toLowerCase().replaceAll('noerror', '');
+    // Адаптера ещё нет: Xray создаёт его при подключении. Другие отказы поиска остаются ошибками.
+    if (RegExp(r'^(?:\[[^\]]+\]\s*)*failed to find matching adapter name:').hasMatch(t) &&
+        (t.contains('0x00000490') || t.contains('element not found') || RegExp(r'элемент не найден').hasMatch(t))) return 1;
     // Не ответил один DNS-сервер, а за ним есть запасной: сайт всё равно откроется — это предупреждение.
     if (dnsHasSpare && t.contains('app/dns: failed to retrieve response')) return 1;
     // Программа спросила имя сайта, которого не существует. Ядро пишет это как ошибку, но VPN тут

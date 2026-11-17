@@ -9,6 +9,18 @@ import 'package:skipit/state/app_state.dart';
 
 /// Журнал разбит на отрезки по подключениям, каждый отрезок — файл; журнал дня живёт 5 дней.
 void main() {
+  test('missing TUN adapter is a warning; access and creation failures remain errors', () {
+    for (final line in [
+      'Failed to find matching adapter name: Element not found. (Code 0x00000490)',
+      '[Error] Failed to find matching adapter name: Элемент не найден. (Code 0x00000490)',
+    ]) {
+      expect(LogLine('xray', line).level, 1);
+    }
+    expect(LogLine('xray', 'Failed to find matching adapter name: Access is denied. (Code 0x00000005)').level, 2);
+    expect(LogLine('xray', '[Error] proxy/tun: failed to create adapter').level, 2);
+    expect(LogLine('xray', '[Error] failed to create adapter > Failed to find matching adapter name: Code 0x00000490').level, 2);
+  });
+
   late Directory dir;
   setUp(() async => dir = await Directory.systemTemp.createTemp('skipit-logs'));
   tearDown(() async => dir.delete(recursive: true));

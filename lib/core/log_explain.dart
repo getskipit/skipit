@@ -18,7 +18,8 @@ class LogExplain {
     ),
 
     // Адаптер TUN.
-    (RegExp(r'Failed to find matching adapter name'), (_) => tr('Готового адаптера VPN нет — ядро создаст новый. Это обычная строка, не ошибка.')),
+    (RegExp(r'Failed to find matching adapter name:.*(?:0x00000490|element not found|элемент не найден)', caseSensitive: false),
+      (_) => tr('Готовый адаптер VPN не найден — ядро попробует создать новый. Само по себе это не означает сбой подключения.')),
     (RegExp(r'Creating adapter'), (_) => tr('Ядро просит Windows создать сетевой адаптер VPN. Если следом нет строки о запуске — Windows его не создала.')),
     (RegExp(r'Removed orphaned adapter'), (_) => tr('Убран брошенный адаптер, оставшийся от прошлого запуска. Работающие адаптеры не трогаются.')),
     (RegExp(r'Using existing driver'), (_) => tr('Драйвер адаптера (Wintun) уже установлен в Windows.')),

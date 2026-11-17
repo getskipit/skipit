@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 import 'widgets.dart';
+import 'smooth_text.dart';
 
 // Плитки групп, вид «Списком» и закреплённый заголовок со стрелкой назад — общие у «Настроек» и «Логов».
 
@@ -280,7 +281,7 @@ class GroupHeader extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0,
                       height: 1.2)),
-              child: Text(page, maxLines: 1),
+              child: SmoothText(page, maxLines: 1),
             ),
           ),
         ),
@@ -311,7 +312,7 @@ class GroupHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: C.muted, fontSize: 13, height: 1.3))
-                : Text(g.title, key: ValueKey(g.title), maxLines: 1, overflow: TextOverflow.ellipsis, style: big),
+                : SmoothText(g.title, key: ValueKey(g.title), maxLines: 1, overflow: TextOverflow.ellipsis, style: big),
           ),
         ),
       ],

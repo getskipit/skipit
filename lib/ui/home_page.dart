@@ -14,6 +14,7 @@ import 'shell.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'smooth_text.dart';
 import '../l10n/l10n.dart';
 
 /// Главная: слева кнопка подключения и режимы, справа список серверов.
@@ -103,7 +104,7 @@ class _HomePageState extends State<HomePage> {
         onTap: () => connectOrToggle(context),
       ),
       const SizedBox(height: 24),
-      Text(statusText,
+      SmoothText(statusText,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -111,7 +112,7 @@ class _HomePageState extends State<HomePage> {
           )),
       Reveal(open: show('timer'), child: Column(mainAxisSize: MainAxisSize.min, children: [
       const SizedBox(height: 6),
-      Text(
+      SmoothText(
         connected && state.connectedAt != null
             ? formatDuration(DateTime.now().difference(state.connectedAt!))
             : state.closingOtherVpn

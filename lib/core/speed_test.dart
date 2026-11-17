@@ -138,29 +138,49 @@ class SpeedTest {
   /// [onProgress] раз в [tick] получает скорость за последний отрезок и долю прошедшего времени.
   /// [keepGoing] отвечает, то ли ещё подключение: после отключения VPN замер останавливается.
   static Future<SpeedResult> _measure(SpeedServer server, Future<_Link> Function() open, SpeedProgress? onProgress,
-      bool Function()? keepGoing) async {
+      bool Function()? keepGoing, {Duration openTimeout = _timeout}) async {
     final host = server.host;
     SpeedResult fail(String error, {bool unreachable = false}) =>
         (mbit: null, error: error, unreachable: unreachable, host: host);
+    if (!(keepGoing?.call() ?? true)) return fail(tr('замер прерван: VPN отключился или переподключился'));
     final links = <_Link>[];
+    var accepting = true;
     String? openError;
-    await Future.wait([
+    await Future.wait<void>([
       for (var i = 0; i < streams; i++)
         () async {
           try {
-            links.add(await open());
+            final link = await open();
+            if (accepting) {
+              links.add(link);
+            } else {
+              unawaited(link.tls.close().catchError((Object _) => link.tls));
+              unawaited(link.raw.close().catchError((Object _) => link.raw));
+            }
           } on TimeoutException {
             openError = tr('нет ответа за {0} с', [_timeout.inSeconds]);
           } catch (_) {
             openError = tr('соединение с сервером замера не установилось');
           }
         }(),
-    ]);
+    ]).timeout(openTimeout, onTimeout: () {
+      openError = tr('нет ответа за {0} с', [openTimeout.inSeconds]);
+      return <void>[];
+    });
+    accepting = false;
+    if (!(keepGoing?.call() ?? true)) {
+      for (final link in links) {
+        unawaited(link.tls.close().catchError((Object _) => link.tls));
+        unawaited(link.raw.close().catchError((Object _) => link.raw));
+      }
+      return fail(tr('замер прерван: VPN отключился или переподключился'));
+    }
     if (links.isEmpty) return fail(openError ?? tr('соединение с сервером замера не установилось'), unreachable: true);
     try {
       final done = Completer<void>();
       final watch = Stopwatch()..start();
       var total = 0, alive = links.length;
+      var stopped = false;
       int? atWarmup;
       String? status;
       // Когда пришли последние байты: файлы могут кончиться раньше срока, и простой после них в счёт
@@ -184,7 +204,10 @@ class SpeedTest {
 
         tls.listen((event) {
           if (event == RawSocketEvent.read) {
-            for (var chunk = tls.read(); chunk != null && chunk.isNotEmpty; chunk = tls.read()) {
+            // Возвращаем управление таймерам даже при непрерывном быстром потоке.
+            for (var reads = 0; reads < 16; reads++) {
+              final chunk = tls.read();
+              if (chunk == null || chunk.isEmpty) break;
               if (got == 0) {
                 final head = latin1.decode(chunk.sublist(0, chunk.length < 2048 ? chunk.length : 2048));
                 final line = head.split('\r\n').first;
@@ -194,6 +217,11 @@ class SpeedTest {
               }
               got += chunk.length;
               total += chunk.length;
+              if (watch.elapsed >= duration || !(keepGoing?.call() ?? true)) {
+                stopped = !(keepGoing?.call() ?? true);
+                finish();
+                break;
+              }
             }
             lastDataAt = watch.elapsed;
             if (atWarmup == null && watch.elapsed >= warmup) atWarmup = total;
@@ -208,7 +236,6 @@ class SpeedTest {
       }
 
       var seenBytes = 0, seenAt = Duration.zero;
-      var stopped = false;
       final ticker = Timer.periodic(tick, (_) {
         if (done.isCompleted) return;
         if (!(keepGoing?.call() ?? true)) {
@@ -246,6 +273,12 @@ class SpeedTest {
       }
     }
   }
+
+  /// Изолированный замер с управляемыми соединениями для проверки таймаутов и чтения.
+  static Future<SpeedResult> measureForTest(SpeedServer server,
+      Future<({RawSocket raw, RawSecureSocket tls})> Function() open,
+      {Duration openTimeout = _timeout, bool Function()? keepGoing}) =>
+      _measure(server, open, null, keepGoing, openTimeout: openTimeout);
 
   /// Через VPN: соединения с сервером замера через вход проверки связи ядра на порту [port].
   static Future<SpeedResult> viaVpn(SpeedServer server,
