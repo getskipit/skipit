@@ -482,7 +482,7 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heading = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w500)),
+      Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600)),
       if (subtitle != null) ...[
         const SizedBox(height: 4),
         Text(subtitle!, style: TextStyle(color: C.muted, fontSize: 13)),
@@ -668,7 +668,6 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
                     color: active ? C.highlight : (lit ? C.highlight.withValues(alpha: 0.55) : C.border),
                     width: 2,
                   ),
-                  edgeSigma: 0.5 / View.of(context).devicePixelRatio,
                 ),
               ),
               child: Center(

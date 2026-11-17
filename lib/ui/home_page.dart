@@ -49,7 +49,7 @@ class _HomePageState extends State<HomePage> {
     final statusText = switch (state.status) {
       // Ядро работает, но сервер не отвечает — писать «Защищено» было бы неправдой.
       ConnStatus.connected when state.linkDown => tr('Нет связи'),
-      ConnStatus.connected => tr('Защищено'),
+      ConnStatus.connected => tr('Защищено').toUpperCase(),
       ConnStatus.connecting => tr('Подключаемся…'),
       ConnStatus.disconnecting => tr('Отключаемся…'),
       // Перед подключением закрывается другой VPN — это уже часть подключения, а не простой.
@@ -106,7 +106,7 @@ class _HomePageState extends State<HomePage> {
       Text(statusText,
           style: TextStyle(
             fontSize: 20,
-            fontWeight: connected ? FontWeight.w600 : FontWeight.w500,
+            fontWeight: connected ? FontWeight.w700 : FontWeight.w500,
             color: connected ? C.text : C.muted,
           )),
       Reveal(open: show('timer'), child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -120,7 +120,7 @@ class _HomePageState extends State<HomePage> {
         style: TextStyle(
           color: connected ? (C.isDark ? C.highlightLight : C.highlight) : C.muted,
           fontSize: connected ? 18 : 13,
-          fontWeight: connected ? FontWeight.w600 : FontWeight.w400,
+          fontWeight: connected ? FontWeight.w700 : FontWeight.w400,
           fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),

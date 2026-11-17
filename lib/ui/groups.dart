@@ -256,7 +256,7 @@ class GroupHeader extends StatelessWidget {
         ),
       ),
     );
-    const big = TextStyle(fontSize: 28, fontWeight: FontWeight.w500, height: 1.2);
+    const big = TextStyle(fontSize: 28, fontWeight: FontWeight.w600, height: 1.2);
     // Название раздела плавно уменьшается из заголовка в надпись над группой (и обратно), а строка под ним —
     // подпись страницы или название группы — выезжает снизу и проявляется; высота строк меняется плавно.
     final title = Column(

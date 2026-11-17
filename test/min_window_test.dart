@@ -180,7 +180,7 @@ void main() {
     expect(find.text(formatBytes(state.stats.directDown)), findsOneWidget);
 
     // Страна выхода появляется под временем, когда проверка связи её узнала.
-    expect(find.text('Защищено'), findsOneWidget);
+    expect(find.text('ЗАЩИЩЕНО'), findsOneWidget);
     expect(find.text('Финляндия'), findsNothing);
     state
       ..exitCountry = 'fi'
@@ -214,7 +214,7 @@ void main() {
       ..notifyListeners();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Нет связи'), findsOneWidget);
-    expect(find.text('Защищено'), findsNothing);
+    expect(find.text('ЗАЩИЩЕНО'), findsNothing);
     expect(find.text('VPN подключён, но связи нет'), findsOneWidget);
     expect(find.text('Переподключиться'), findsOneWidget);
     await shot('connected_home_no_link');

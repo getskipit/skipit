@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 
-/// Сглаживает только тонкую рамку, сохраняя резкость содержимого и исходную геометрию.
+/// Рисует край заливки и рамки с одинаковым сглаживанием в физических пикселях.
+/// Содержимое виджета рисуется отдельно: текст и значки не фильтруются.
+const _edgePixels = 0.65;
+
+double get _pixelRatio => WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+
+Paint _edgePaint(Paint paint, double ratio, [double pixels = _edgePixels]) => Paint.from(paint)
+  ..isAntiAlias = true
+  ..maskFilter = MaskFilter.blur(BlurStyle.normal, pixels / ratio);
+
 class SmoothBoxDecoration extends BoxDecoration {
   const SmoothBoxDecoration({
     super.color, super.image, super.border, super.borderRadius, super.boxShadow,
@@ -25,44 +34,58 @@ class SmoothBoxDecoration extends BoxDecoration {
   @override
   BoxPainter createBoxPainter([VoidCallback? onChanged]) {
     final outline = border;
-    if (shape != BoxShape.rectangle || borderRadius == null || outline is! Border ||
-        !outline.isUniform || outline.top.style == BorderStyle.none || outline.top.width == 0) {
+    if ((shape == BoxShape.rectangle && (borderRadius == null || borderRadius == BorderRadius.zero)) ||
+        image != null || (outline != null && (outline is! Border || !outline.isUniform))) {
       return super.createBoxPainter(onChanged);
     }
-    return _SmoothBoxPainter(this, outline.top, onChanged);
+    return _SmoothBoxPainter(this, outline is Border ? outline.top : null, onChanged);
   }
 }
 
 class _SmoothBoxPainter extends BoxPainter {
   _SmoothBoxPainter(this.decoration, this.side, VoidCallback? onChanged)
-      : background = BoxDecoration(
-          color: decoration.color, image: decoration.image, borderRadius: decoration.borderRadius,
-          boxShadow: decoration.boxShadow, gradient: decoration.gradient,
-          backgroundBlendMode: decoration.backgroundBlendMode, shape: decoration.shape,
+      : shadows = BoxDecoration(
+          borderRadius: decoration.borderRadius, boxShadow: decoration.boxShadow, shape: decoration.shape,
         ).createBoxPainter(onChanged),
         super(onChanged);
   final SmoothBoxDecoration decoration;
-  final BorderSide side;
-  final BoxPainter background;
+  final BorderSide? side;
+  final BoxPainter shadows;
 
-  @override
-  void paint(Canvas canvas, Offset offset, ImageConfiguration configuration) {
-    background.paint(canvas, offset, configuration);
-    final rect = offset & configuration.size!;
-    final sigma = 0.5 / (configuration.devicePixelRatio ?? 1);
-    canvas.drawRRect(
-      decoration.borderRadius!.resolve(configuration.textDirection).toRRect(rect).inflate(side.strokeOffset / 2),
-      side.toPaint()..isAntiAlias = true..maskFilter = MaskFilter.blur(BlurStyle.normal, sigma),
-    );
+  void _draw(Canvas canvas, Rect rect, TextDirection? direction, Paint paint, {double inflation = 0}) {
+    if (decoration.shape == BoxShape.circle) {
+      final diameter = rect.shortestSide;
+      canvas.drawOval(Rect.fromCenter(center: rect.center, width: diameter, height: diameter).inflate(inflation), paint);
+    } else {
+      canvas.drawRRect(decoration.borderRadius!.resolve(direction).toRRect(rect).inflate(inflation), paint);
+    }
   }
 
   @override
-  void dispose() { background.dispose(); super.dispose(); }
+  void paint(Canvas canvas, Offset offset, ImageConfiguration configuration) {
+    shadows.paint(canvas, offset, configuration);
+    final rect = offset & configuration.size!;
+    final ratio = configuration.devicePixelRatio ?? 1;
+    final direction = configuration.textDirection;
+    if (decoration.color != null || decoration.gradient != null) {
+      final paint = Paint()..color = decoration.color ?? Colors.white;
+      if (decoration.gradient != null) paint.shader = decoration.gradient!.createShader(rect, textDirection: direction);
+      if (decoration.backgroundBlendMode != null) paint.blendMode = decoration.backgroundBlendMode!;
+      _draw(canvas, rect, direction, _edgePaint(paint, ratio));
+    }
+    final outline = side;
+    if (outline != null && outline.style != BorderStyle.none && outline.width > 0) {
+      _draw(canvas, rect, direction, _edgePaint(outline.toPaint(), ratio), inflation: outline.strokeOffset / 2);
+    }
+  }
+
+  @override
+  void dispose() { shadows.dispose(); super.dispose(); }
 }
 
 /// Такой же контур для Material-диалогов, кнопок и других ShapeDecoration.
 class SmoothRoundedRectangleBorder extends RoundedRectangleBorder {
-  const SmoothRoundedRectangleBorder({super.side, super.borderRadius, this.edgeSigma = 0.5});
+  const SmoothRoundedRectangleBorder({super.side, super.borderRadius, this.edgeSigma = _edgePixels});
   final double edgeSigma;
 
   @override
@@ -70,8 +93,13 @@ class SmoothRoundedRectangleBorder extends RoundedRectangleBorder {
     if (side.style == BorderStyle.none || side.width == 0) return;
     canvas.drawRRect(
       borderRadius.resolve(textDirection).toRRect(rect).inflate(side.strokeOffset / 2),
-      side.toPaint()..isAntiAlias = true..maskFilter = MaskFilter.blur(BlurStyle.normal, edgeSigma),
+      _edgePaint(side.toPaint(), _pixelRatio, edgeSigma),
     );
+  }
+
+  @override
+  void paintInterior(Canvas canvas, Rect rect, Paint paint, {TextDirection? textDirection}) {
+    canvas.drawRRect(borderRadius.resolve(textDirection).toRRect(rect), _edgePaint(paint, _pixelRatio, edgeSigma));
   }
 
   @override
@@ -112,6 +140,14 @@ class SmoothOutlineInputBorder extends OutlineInputBorder {
   }) : super(borderSide: _SmoothBorderSide(borderSide));
 
   @override
+  bool get preferPaintInterior => true;
+
+  @override
+  void paintInterior(Canvas canvas, Rect rect, Paint paint, {TextDirection? textDirection}) {
+    canvas.drawRRect(borderRadius.toRRect(rect), _edgePaint(paint, _pixelRatio));
+  }
+
+  @override
   SmoothOutlineInputBorder copyWith({BorderSide? borderSide, BorderRadius? borderRadius, double? gapPadding}) =>
       SmoothOutlineInputBorder(borderSide: borderSide ?? this.borderSide,
           borderRadius: borderRadius ?? this.borderRadius, gapPadding: gapPadding ?? this.gapPadding);
@@ -130,7 +166,6 @@ class _SmoothBorderSide extends BorderSide {
   _SmoothBorderSide(BorderSide side) : super(color: side.color, width: side.width, style: side.style, strokeAlign: side.strokeAlign);
   @override
   Paint toPaint() {
-    final ratio = WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
-    return super.toPaint()..isAntiAlias = true..maskFilter = MaskFilter.blur(BlurStyle.normal, 0.5 / ratio);
+    return _edgePaint(super.toPaint(), _pixelRatio);
   }
 }

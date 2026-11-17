@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/ui/theme.dart';
@@ -52,5 +53,36 @@ void main() {
     expect(controller.text, 'service.example');
     expect(tester.takeException(), isNull);
     C.use(Palette.dark);
+  });
+
+  testWidgets('rounded fills feather only their edge at different pixel ratios', (tester) async {
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final ratio in [1.0, 1.25, 1.5]) {
+      tester.view.devicePixelRatio = ratio;
+      for (final decoration in <Decoration>[
+        const SmoothBoxDecoration(color: Colors.white, borderRadius: BorderRadius.all(Radius.circular(18))),
+        const ShapeDecoration(color: Colors.white,
+          shape: SmoothRoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(18)))),
+      ]) {
+        await tester.runAsync(() async {
+          final recorder = ui.PictureRecorder();
+          final canvas = Canvas(recorder)..scale(ratio);
+          final painter = decoration.createBoxPainter(() {});
+          painter.paint(canvas, const Offset(20, 20),
+            ImageConfiguration(size: const Size(80, 60), devicePixelRatio: ratio, textDirection: TextDirection.ltr));
+          painter.dispose();
+          final picture = recorder.endRecording();
+          final image = await picture.toImage((120 * ratio).ceil(), (100 * ratio).ceil());
+          final bytes = (await image.toByteData())!.buffer.asUint8List();
+          int alpha(int x, int y) => bytes[(y * image.width + x) * 4 + 3];
+          expect(alpha((20 * ratio).floor() - 1, (50 * ratio).floor()), inExclusiveRange(0, 255));
+          expect(alpha((60 * ratio).floor(), (50 * ratio).floor()), 255);
+          expect(alpha(0, 0), 0);
+          image.dispose();
+          picture.dispose();
+        });
+      }
+    }
+    tester.view.resetDevicePixelRatio();
   });
 }
