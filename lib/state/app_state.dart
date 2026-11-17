@@ -577,7 +577,24 @@ class AppState extends ChangeNotifier {
   @visibleForTesting
   set linkFailsForTest(int value) => _linkFails = value;
 
+  @visibleForTesting
+  Future<({String? country, String? ip})> Function(String, int) readExitInfo = Net.exitInfo;
+
+  @visibleForTesting
+  void startLinkCheckForTest(int port) {
+    _stopLinkCheck();
+    _checkPort = port;
+    status = ConnStatus.connected;
+    _startLinkCheck();
+  }
+
+  @visibleForTesting
+  Future<void> checkLinkForTest() => _checkLink();
+
+  int _linkEpoch = 0;
+
   void _startLinkCheck() {
+    ++_linkEpoch;
     _linkTimer?.cancel();
     _linkFails = 0;
     exitCountry = null;
@@ -591,6 +608,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _stopLinkCheck() {
+    ++_linkEpoch;
     _linkTimer?.cancel();
     _linkTimer = null;
     _checkPort = null;
@@ -612,6 +630,7 @@ class AppState extends ChangeNotifier {
   /// Если проверку просят, пока идёт прежняя (сменилась сеть), новая начнётся сразу после неё: прежняя
   /// могла начаться ещё до смены сети.
   Future<void> _checkLink() async {
+    if (_stopping) return;
     if (_linkChecking) {
       _linkRecheck = true;
       return;
@@ -622,7 +641,7 @@ class AppState extends ChangeNotifier {
     } finally {
       _linkChecking = false;
     }
-    if (_linkRecheck) {
+    if (!_stopping && _linkRecheck) {
       _linkRecheck = false;
       _linkTimer?.cancel();
       unawaited(_checkLink());
@@ -630,17 +649,18 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _checkLinkOnce() async {
+    final epoch = _linkEpoch;
     final port = _checkPort;
-    if (port == null || status != ConnStatus.connected) return;
+    if (_stopping || port == null || status != ConnStatus.connected) return;
     ({String? country, String? ip})? exit;
     var ok = true;
     try {
-      exit = await Net.exitInfo(XrayConfig.checkHost, port);
+      exit = await readExitInfo(XrayConfig.checkHost, port);
     } catch (_) {
       ok = false;
     }
     // Пока шёл запрос, подключение могло смениться — его результат уже не про текущее.
-    if (port != _checkPort || status != ConnStatus.connected) return;
+    if (_stopping || epoch != _linkEpoch || port != _checkPort || status != ConnStatus.connected) return;
     final wasDown = linkDown;
     if (ok) {
       _linkFails = 0;
@@ -702,7 +722,7 @@ class AppState extends ChangeNotifier {
   /// Если интернета нет и напрямую, перезапуск не поможет — ждём.
   Future<void> _healIfStuck() async {
     final since = _linkDownSince;
-    if (!settings.autoReconnect || _healing || since == null || !isConnected) return;
+    if (_stopping || !settings.autoReconnect || _healing || since == null || !isConnected) return;
     if (!shouldHeal(downSince: since, now: DateTime.now(), lastHeal: _lastHeal, netChangedAt: _netChangedAt)) {
       return;
     }
@@ -710,12 +730,13 @@ class AppState extends ChangeNotifier {
     try {
       // Обе проверки сразу: при зависшем ядре вторая ждёт своего срока, и по очереди перезапуск
       // откладывался бы ещё на десяток секунд.
+      final epoch = _linkEpoch;
       final port = _checkPort;
       final viaVpnFuture = port == null ? Future.value(false) : Net.reachable(XrayConfig.checkUrl2, port);
       final direct = await _directInternet();
       final viaVpn = await viaVpnFuture;
       // Пока проверяли, связь могла вернуться, а подключение — смениться.
-      if (!isConnected || _linkDownSince != since) return;
+      if (_stopping || epoch != _linkEpoch || !isConnected || _linkDownSince != since) return;
       if (!direct) {
         if (!_healSkipNoted) {
           _healSkipNoted = true;
@@ -739,12 +760,13 @@ class AppState extends ChangeNotifier {
           'а напрямую интернет есть — перезапускаю подключение', [DateTime.now().difference(since).inSeconds]));
       // Kill Switch на время перезапуска не снимается — мимо VPN ничего не уходит.
       await disconnect(keepError: true, hold: true, hung: true);
+      if (_stopping) return;
       final token = ++_crashRetry;
       // С Kill Switch подписку в паузе не обновляем: он не выпускает запросы DNS мимо VPN, и обновление
       // просто ждало бы своего срока, продлевая время без интернета.
       if (!KillSwitch.active) await _refreshSelectedSubscription();
       // Пока обновлялась подписка, человек мог сам подключиться или открыть интернет без VPN.
-      if (token != _crashRetry || isBusy || isConnected) return;
+      if (_stopping || token != _crashRetry || isBusy || isConnected) return;
       await connect();
       _notify(isConnected ? tr('Связи через сервер не было — VPN переподключён') : tr('Не удалось переподключиться. {0}', [_withoutVpn]),
           isConnected ? 'ok' : 'error');
@@ -862,11 +884,11 @@ class AppState extends ChangeNotifier {
     if (_windowVisible == value) return;
     _windowVisible = value;
     // Окно открыли — цифры обновляются сразу, а не через секунду.
-    if (value && status == ConnStatus.connected) {
+    if (!_stopping && value && status == ConnStatus.connected) {
       unawaited(_pollStats?.call().then((_) => notifyListeners()));
     }
   }
-  Timer? _subsTimer, _updateTimer;
+  Timer? _subsTimer, _updateTimer, _startupUpdateTimer, _geoRefreshTimer;
   Timer? _saveTimer;
   final _crashTimes = <DateTime>[];
 
@@ -893,6 +915,7 @@ class AppState extends ChangeNotifier {
     unawaited(log.open(AppPaths.logDir));
     KillSwitch.onLog = (text) => log.add('app', text);
     await load();
+    if (_stopping) return;
     if (protectedUnreadable) {
       lastError = tr('Сохранённые подписки зашифрованы для другой учётной записи Windows и не читаются. '
           'Добавьте подписки заново или загрузите файл экспорта: Настройки → Программа → Импорт.');
@@ -903,9 +926,10 @@ class AppState extends ChangeNotifier {
     // Каждый шаг запуска изолирован: сбой одного не должен оставлять окно пустым.
     Future<void> step(String name, Future<void> Function() f) async {
       try {
+        if (_stopping) return;
         await f();
       } catch (e) {
-        log.add('app', tr('Сбой при запуске ({0}): {1}', [name, e]));
+        if (!_stopping) log.add('app', tr('Сбой при запуске ({0}): {1}', [name, e]));
       }
     }
 
@@ -919,13 +943,16 @@ class AppState extends ChangeNotifier {
     await step(tr('автозапуск'), () async => autostart = await WinSys.isAutostartEnabled());
     unawaited(step(tr('версии ядер'), detectCoreVersions));
     unawaited(step(tr('служба'), () async {
-      serviceVersion = await ServiceClient.hello();
+      final version = await ServiceClient.hello();
+      if (_stopping) return;
+      serviceVersion = version;
       log.add('app', serviceVersion == null ? tr('Служба SkipIt не отвечает') : tr('Служба SkipIt на месте: {0}', [serviceVersion]));
       notifyListeners();
     }));
     // Тихая проверка обновлений через несколько секунд после запуска и потом раз в шесть часов:
     // программу держат открытой сутками, и без повтора о новой версии узнавали бы только после перезапуска.
-    Timer(const Duration(seconds: 8), () => step(tr('обновления'), () => checkUpdates(silent: true)));
+    if (_stopping) return;
+    _startupUpdateTimer = Timer(const Duration(seconds: 8), () => step(tr('обновления'), () => checkUpdates(silent: true)));
     _updateTimer = Timer.periodic(const Duration(hours: 6), (_) {
       if (!downloadingAppUpdate) checkUpdates(silent: true);
       unawaited(_refreshOldGeoFiles());
@@ -937,6 +964,7 @@ class AppState extends ChangeNotifier {
     _subsTimer = Timer.periodic(const Duration(minutes: 1), (_) => _updateDueSubscriptions());
 
     await handleArgs(args);
+    if (_stopping) return;
     // «Подключаться при запуске» — только при автозапуске с Windows. Раньше сюда же попадал перезапуск
     // с правами администратора (--elevated), и программа подключалась и при ручном открытии.
     final wantConnect = args.contains('--connect') || (settings.connectOnStart && args.contains('--autostart'));
@@ -1371,18 +1399,33 @@ class AppState extends ChangeNotifier {
   @visibleForTesting
   Future<void> loadForTest() => _load();
 
-  void save() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 400), saveNow);
+  @visibleForTesting
+  Future<void> writeStateFile(File file, String text) async {
+    await file.writeAsString(text, flush: true);
   }
 
-  /// Возвращает ошибку сохранения или null, если данные записаны.
-  Future<String?> saveNow({bool showError = true}) async {
+  void save() {
     _saveTimer?.cancel();
+    if (!_stopping) _saveTimer = Timer(const Duration(milliseconds: 400), saveNow);
+  }
+
+  Future<void> _saveQueue = Future<void>.value();
+
+  /// Возвращает ошибку сохранения или null, если данные записаны.
+
+  Future<String?> saveNow({bool showError = true}) {
+    _saveTimer?.cancel();
+    final pending = _saveQueue.then((_) => _writeStateNow(showError: showError));
+    // Ошибка возвращается вызывающему, но не блокирует последующие сохранения.
+    _saveQueue = pending.then<void>((_) {}, onError: (Object error, StackTrace stack) {});
+    return pending;
+  }
+
+  Future<String?> _writeStateNow({required bool showError}) async {
     if (_stateUnreadable) return tr('Файл данных недоступен. Перезапустите SkipIt перед сохранением.');
     String fail(String error) {
       log.add('app', error);
-      if (showError && !_messages.isClosed) toast(error, kind: ToastKind.error);
+      if (showError && !_stopping && !_messages.isClosed) toast(error, kind: ToastKind.error);
       return error;
     }
 
@@ -1401,13 +1444,13 @@ class AppState extends ChangeNotifier {
     for (var attempt = 1; attempt <= 10; attempt++) {
       try {
         final tmp = File('${AppPaths.stateFile}.tmp');
-        await tmp.writeAsString(text, flush: true);
+        await writeStateFile(tmp, text);
         await tmp.rename(AppPaths.stateFile);
         return null;
       } on FileSystemException catch (e) {
         if (attempt == 10) {
           try {
-            await File(AppPaths.stateFile).writeAsString(text, flush: true);
+            await writeStateFile(File(AppPaths.stateFile), text);
             return null;
           } catch (_) {
             return fail(tr('Не удалось сохранить данные: {0}', [e]));
@@ -1446,9 +1489,15 @@ class AppState extends ChangeNotifier {
     _tunCleanup = WinSys.removeOwnTunAdapters();
   }
 
-  Future<void> shutdown() async {
-    _stopping = true;
+  Future<void>? _shutdownTask;
+
+  Future<void> shutdown() => _shutdownTask ??= _shutdown();
+
+  Future<void> _shutdown() async {
+    _stopBackgroundWork();
     await disconnect();
+    // Отмена просит connect() остановиться; дожидаемся его уборки до снятия фильтров и выхода.
+    await _connectTask;
     // Kill Switch мог держать интернет закрытым и без подключения — при выходе снимаем его.
     await KillSwitch.release();
     await saveNow();
@@ -1456,8 +1505,9 @@ class AppState extends ChangeNotifier {
   }
 
   /// Всплывающее сообщение внизу окна. [kind] не задан — определяется по тексту (см. [ToastMessage.kindOf]).
-  void toast(String msg, {ToastKind? kind, String? detail, VoidCallback? undo}) =>
-      _messages.add(ToastMessage(msg, kind ?? ToastMessage.kindOf(msg), detail, undo));
+  void toast(String msg, {ToastKind? kind, String? detail, VoidCallback? undo}) {
+    if (!_stopping && !_messages.isClosed) _messages.add(ToastMessage(msg, kind ?? ToastMessage.kindOf(msg), detail, undo));
+  }
 
   // ---------------------------------------------------------------------------
   // Выборки
@@ -1631,6 +1681,7 @@ class AppState extends ChangeNotifier {
   Future<void> updateSubscriptionsOnStart() => _updateDueSubscriptions(force: true, startup: true);
 
   bool _stopping = false;
+  bool _disposed = false;
   final _subsNetworkErrors = <String>{};
 
   Future<void> _updateDueSubscriptions({bool force = false, bool startup = false}) async {
@@ -1683,21 +1734,22 @@ class AppState extends ChangeNotifier {
     // интернет-провайдера. Для них остаётся обычный запрос — в режиме TUN он идёт через туннель.
     // Порт берётся в момент запроса: за время первой попытки VPN могли отключить.
     Future<FetchedSubscription> direct() => Net.fetchSubscription(address, settings,
-            proxyPort: isConnected && directSubscriptionHost(address) != null ? _directPort : null)
+            proxyPort: isConnected && directSubscriptionHost(address) != null ? _directPort : null,
+            isCancelled: () => _stopping)
         .timeout(limit);
     // Сервер подписки уже не ответил через VPN, а напрямую ответил — не ждём таймаута ещё раз.
     if (viaProxy != null && !_subsDirectOnly.contains(key)) {
       try {
         // Первая попытка короче: если через VPN сервер молчит, быстрее перейти к запросу напрямую.
-        return await Net.fetchSubscription(address, settings, proxyPort: viaProxy)
+        return await Net.fetchSubscription(address, settings, proxyPort: viaProxy, isCancelled: () => _stopping)
             .timeout(const Duration(seconds: 15));
       } catch (e) {
         // Сервер ответил отказом — запрос дошёл, идти другим путём незачем.
-        if (e is ServerRefused && e.isFinal) rethrow;
+        if (_stopping || (e is ServerRefused && e.isFinal)) rethrow;
         log.add('subscription', tr('{0}: через VPN не удалось ({1}), пробую напрямую', [sub.displayName, scrubUrls('$e')]));
       }
       final fetched = await direct();
-      _subsDirectOnly.add(key);
+      if (!_stopping) _subsDirectOnly.add(key);
       return fetched;
     }
     return direct();
@@ -1718,13 +1770,14 @@ class AppState extends ChangeNotifier {
   Future<void> updateAllSubscriptions() => _updateDueSubscriptions(force: true);
 
   Future<void> updateSubscription(Subscription sub, {bool silent = false}) async {
-    if (!updatingSubs.add(sub.id)) return;
+    if (_stopping || !updatingSubs.add(sub.id)) return;
     notifyListeners();
     try {
       FetchedSubscription fetched;
       try {
         fetched = await _fetchSubscription(sub);
       } catch (e, st) {
+        if (_stopping) return;
         // Основной адрес не ответил или ответил ошибкой — пробуем запасной, если провайдер его присылал.
         final spare = sub.fallbackUrl;
         if (spare == null || spare == sub.url) rethrow;
@@ -1741,7 +1794,7 @@ class AppState extends ChangeNotifier {
         log.add('subscription', tr('{0}: обновлена с запасного адреса', [sub.displayName]));
       }
       // Подписку удалили, пока шёл запрос («Удалить подписку», «Удалить все данные») — её серверы не возвращаем.
-      if (!subscriptions.contains(sub)) return;
+      if (_stopping || !subscriptions.contains(sub)) return;
       sub.applyMeta(fetched.meta);
       sub.lastUpdated = DateTime.now();
       sub.error = null;
@@ -1788,6 +1841,7 @@ class AppState extends ChangeNotifier {
       }
       if (!silent) toast(tr('Подписка «{0}» обновлена', [sub.displayName]), detail: tr('Серверов: {0}', [fresh.length]));
     } catch (e) {
+      if (_stopping) return;
       sub.error = describeNetError(e);
       final networkError = e is SocketException || e is TimeoutException || e is HttpException;
       networkError ? _subsNetworkErrors.add(sub.id) : _subsNetworkErrors.remove(sub.id);
@@ -1799,7 +1853,7 @@ class AppState extends ChangeNotifier {
       if (!silent) toast(tr('Не удалось обновить «{0}»: {1}', [sub.displayName, sub.error]));
     } finally {
       updatingSubs.remove(sub.id);
-      changed();
+      if (!_stopping) changed();
     }
   }
 
@@ -2335,6 +2389,7 @@ class AppState extends ChangeNotifier {
   bool connectRequested = false;
 
   void requestConnect() {
+    if (_stopping) return;
     connectRequested = true;
     notifyListeners();
   }
@@ -2356,11 +2411,23 @@ class AppState extends ChangeNotifier {
 
   /// Между шагами подключения: если его отменили, дальше не идём.
   void _checkCancel() {
-    if (_cancelConnect) throw CoreException(tr('Подключение отменено'));
+    if (_cancelConnect || _stopping) throw CoreException(tr('Подключение отменено'));
   }
 
   /// [ignoreOtherVpn] — пользователь уже предупреждён о другом VPN и решил подключаться всё равно.
-  Future<void> connect({bool ignoreOtherVpn = false}) async {
+  Future<void>? _connectTask;
+
+  Future<void> connect({bool ignoreOtherVpn = false}) {
+    if (_stopping || _connectTask != null) return Future<void>.value();
+    late final Future<void> task;
+    task = _connect(ignoreOtherVpn: ignoreOtherVpn).whenComplete(() {
+      if (identical(_connectTask, task)) _connectTask = null;
+    });
+    _connectTask = task;
+    return task;
+  }
+
+  Future<void> _connect({required bool ignoreOtherVpn}) async {
     // Во время «Починить сеть»: уборка закрыла бы только что запущенное ядро.
     if (isBusy || isConnected || repairing) return;
     // Kill Switch уже держит интернет закрытым (переподключение или сбой ядра): если подключиться
@@ -2388,7 +2455,9 @@ class AppState extends ChangeNotifier {
       // Без прав администратора ядра с адаптером, Kill Switch и уборку адаптеров берёт на себя служба SkipIt.
       final viaService = usesTun && !isAdmin;
       if (viaService) {
-        serviceVersion = await ServiceClient.hello();
+        final version = await ServiceClient.hello();
+        _checkCancel();
+        serviceVersion = version;
         if (serviceVersion != ServiceClient.protocol) throw NeedAdminException();
       }
 
@@ -2450,7 +2519,9 @@ class AppState extends ChangeNotifier {
       final split = usesTun && appRules.mode != AppRoutingMode.off && splitMatches.isNotEmpty;
       // С правами администратора ядра запускает сама программа, но посредника всё равно держит служба.
       if (split && !viaService) {
-        serviceVersion = await ServiceClient.hello();
+        final version = await ServiceClient.hello();
+        _checkCancel();
+        serviceVersion = version;
         if (serviceVersion != ServiceClient.protocol) {
           log.add('app', tr('Предупреждение: службы SkipIt нет — DNS по программам не работает, программы мимо VPN '
               'получают адреса, найденные через VPN'));
@@ -2753,11 +2824,13 @@ class AppState extends ChangeNotifier {
         await saveNow();
       }
 
+      _checkCancel();
       status = ConnStatus.connected;
       connectedAt = DateTime.now();
       log.add('app', tr('Подключено'));
       // Через минуту, когда подключение устоялось, — не устарели ли гео-базы и списки по ссылке.
-      Timer(const Duration(minutes: 1), () {
+      _geoRefreshTimer?.cancel();
+      _geoRefreshTimer = Timer(const Duration(minutes: 1), () {
         unawaited(_refreshOldGeoFiles());
         unawaited(_refreshOldRuleLists());
       });
@@ -2792,7 +2865,7 @@ class AppState extends ChangeNotifier {
       }
     } catch (e) {
       // Отмена пользователем — не ошибка: просто возвращаем всё как было.
-      final cancelled = _cancelConnect;
+      final cancelled = _cancelConnect || _stopping;
       if (cancelled) {
         tunFailed = false;
       } else {
@@ -2866,7 +2939,19 @@ class AppState extends ChangeNotifier {
   /// [hold] — не снимать Kill Switch: отключение не по воле пользователя (сбой ядра, переподключение).
   /// [hung] — ядро зависло (самовосстановление): итог трафика у него не спрашиваем — оно не ответит,
   /// и отключение ждало бы ~3 с.
-  Future<void> disconnect({bool keepError = false, bool hold = false, bool hung = false}) async {
+  Future<void>? _disconnectTask;
+
+  Future<void> disconnect({bool keepError = false, bool hold = false, bool hung = false}) {
+    if (_disconnectTask != null) return _disconnectTask!;
+    late final Future<void> task;
+    task = _disconnect(keepError: keepError, hold: hold, hung: hung).whenComplete(() {
+      if (identical(_disconnectTask, task)) _disconnectTask = null;
+    });
+    _disconnectTask = task;
+    return task;
+  }
+
+  Future<void> _disconnect({required bool keepError, required bool hold, required bool hung}) async {
     if (status == ConnStatus.disconnected) return;
     // Подключение ещё идёт — отменяем его; всё уберёт сам connect().
     if (status == ConnStatus.connecting) return cancelConnect();
@@ -2902,6 +2987,7 @@ class AppState extends ChangeNotifier {
   PacServer? _pac;
 
   Future<void> _teardown() async {
+    _geoRefreshTimer?.cancel();
     _statsTimer?.cancel();
     _statsTimer = null;
     _pollStats = null;
@@ -2934,8 +3020,11 @@ class AppState extends ChangeNotifier {
   /// и отправлять его в пустоту, и у пользователя пропадает интернет. Переподключаемся с растущей паузой
   /// ([crashRetryDelay]) и только если ядро успело нормально поработать: частые падения
   /// обычно значат, что его закрывает другая программа, и повторы лишь дёргают сеть.
+  @visibleForTesting
+  void coreCrashForTest(int code) => _onCoreCrash(code);
+
   void _onCoreCrash(int code) {
-    if (status != ConnStatus.connected) return;
+    if (_stopping || status != ConnStatus.connected) return;
     final now = DateTime.now();
     final uptime = connectedAt == null ? Duration.zero : now.difference(connectedAt!);
     final delay = settings.autoReconnect ? countCrash(_crashTimes, now, uptime) : null;
@@ -2944,6 +3033,7 @@ class AppState extends ChangeNotifier {
     unawaited(() async {
       // Включённый Kill Switch остаётся стоять: пока VPN не вернулся, трафик напрямую не идёт.
       await disconnect(keepError: true, hold: true);
+      if (_stopping) return;
       if (delay != null) {
         _notify(
             delay > const Duration(seconds: 5)
@@ -2959,6 +3049,7 @@ class AppState extends ChangeNotifier {
         await Future.delayed(delay);
         // Пока ждали, человек мог сам подключиться или открыть интернет без VPN — тогда не вмешиваемся,
         // а обещание переподключиться убираем.
+        if (_stopping) return;
         if (token != _crashRetry || isBusy || isConnected) {
           if (lastError == waiting) {
             lastError = null;
@@ -3020,7 +3111,7 @@ class AppState extends ChangeNotifier {
   /// Уведомление Windows о сбое или восстановлении VPN. Показывается, только когда окно спрятано
   /// или свёрнуто (это решает оболочка окна) и уведомления не выключены в настройках.
   void _notify(String text, [String kind = 'info']) {
-    if (settings.notifications) unawaited(Tray.notify(screenText(text), kind: kind));
+    if (!_stopping && settings.notifications) unawaited(Tray.notify(screenText(text), kind: kind));
   }
 
   /// Гео-базы и списки по ссылке перед подключением. Гео-базы скачиваются, если они нужны самому
@@ -3093,7 +3184,7 @@ class AppState extends ChangeNotifier {
   /// Неудачная попытка повторяется не чаще раза в 6 часов.
   Future<void> _refreshOldGeoFiles() async {
     final routing = _geoRouting;
-    if (routing == null || updatingGeo || !isConnected) return;
+    if (_stopping || routing == null || updatingGeo || !isConnected) return;
     final now = DateTime.now();
     if (_geoTriedAt != null && now.difference(_geoTriedAt!) < const Duration(hours: 6)) return;
     DateTime? age(String path) => File(path).existsSync() ? File(path).lastModifiedSync() : null;
@@ -3105,7 +3196,7 @@ class AppState extends ChangeNotifier {
     try {
       await updateGeoFiles(routing, true);
     } catch (e) {
-      log.add('app', tr('Не удалось обновить гео-базы: {0}', [e]));
+      if (!_stopping) log.add('app', tr('Не удалось обновить гео-базы: {0}', [e]));
     }
   }
 
@@ -3114,7 +3205,7 @@ class AppState extends ChangeNotifier {
   /// новая копия просто встаёт на место старой и применится при следующем подключении.
   Future<void> _refreshOldRuleLists() async {
     final routing = routingProfiles.where((p) => p.id == _ruleListRouting?.id).firstOrNull;
-    if (routing == null || !isConnected) return;
+    if (_stopping || routing == null || !isConnected) return;
     await updateRuleLists(routing);
   }
 
@@ -3123,11 +3214,12 @@ class AppState extends ChangeNotifier {
   final Map<String, Future<bool>> _ruleListDownloads = {};
 
   Future<bool> downloadRuleListSource(String profileId, RuleListSource source) async {
+    if (_stopping) return false;
     final key = RuleList.cacheFile(profileId, source.url);
     final pending = _ruleListDownloads[key];
     if (pending != null) {
       final ok = await pending;
-      if (ok) {
+      if (ok && !_stopping) {
         final entries = await RuleList.readEntriesAsync(RoutingProfile(id: profileId, name: '', ruleLists: [source]));
         source.count = [entries.proxyDomains, entries.proxyIps, entries.directDomains,
             entries.directIps, entries.blockDomains, entries.blockIps].fold(0, (n, list) => n + list.length);
@@ -3146,11 +3238,13 @@ class AppState extends ChangeNotifier {
     final tmp = File(file.path + '.part');
     try {
       final parsed = await RuleList.fetch(url, proxyPort: isConnected ? (_session ?? settings).httpPort : null);
+      if (_stopping) return false;
       await file.parent.create(recursive: true);
       final text = parsed.text;
       if (utf8.encode(text).length > RuleList.maxBytes) throw const FormatException('Список больше 10 МБ');
       await tmp.writeAsString(text, flush: true);
       await tmp.rename(file.path);
+      if (_stopping) return false;
       source
         ..count = parsed.domains.length + parsed.ips.length
         ..updatedAt = DateTime.now();
@@ -3162,6 +3256,7 @@ class AppState extends ChangeNotifier {
       changed();
       return true;
     } catch (e) {
+      if (_stopping) return false;
       _ruleListTriedAt[url] = DateTime.now();
       final reason = e is FormatException ? tr(e.message) : e is HttpException ? tr(e.message) : '$e';
       log.add('app', tr('Предупреждение: список не обновлён ({0}): {1}', [scrubUrls(url), scrubUrls(reason)]));
@@ -3175,6 +3270,7 @@ class AppState extends ChangeNotifier {
   /// и только если неудачная попытка по этому адресу была больше 6 часов назад.
   Future<void> updateRuleLists(RoutingProfile p, {bool force = false}) async {
     for (final s in List<RuleListSource>.of(p.ruleLists)) {
+      if (_stopping) return;
       if (!force &&
           !RuleList.updateDue(s,
               cacheExists:
@@ -3198,6 +3294,7 @@ class AppState extends ChangeNotifier {
   /// [staged] — файлы ложатся рядом (*.new) и встают на место перед следующим подключением: работающее
   /// ядро держит старые открытыми.
   Future<void> updateGeoFiles([RoutingProfile? routing, bool staged = false]) async {
+    if (_stopping) return;
     final r = routing ?? selectedRouting;
     updatingGeo = true;
     notifyListeners();
@@ -3206,7 +3303,9 @@ class AppState extends ChangeNotifier {
       log.add('app', tr('Загрузка geoip/geosite…'));
       final suffix = staged ? '.new' : '';
       await Net.download(r.geoipUrl, '${AppPaths.geoipFile}$suffix', proxyPort: proxy);
+      if (_stopping) return;
       await Net.download(r.geositeUrl, '${AppPaths.geositeFile}$suffix', proxyPort: proxy);
+      if (_stopping) return;
       if (!staged) {
         // Скачанное вручную новее отложенного с прошлого раза.
         for (final path in [AppPaths.geoipFile, AppPaths.geositeFile]) {
@@ -3237,7 +3336,10 @@ class AppState extends ChangeNotifier {
 
   Future<void> detectCoreVersions() async {
     for (final core in CoreSpec.all) {
-      coreVersions[core.name] = await Updates.installedVersion(core);
+      if (_stopping) return;
+      final version = await Updates.installedVersion(core);
+      if (_stopping) return;
+      coreVersions[core.name] = version;
     }
     notifyListeners();
   }
@@ -3247,7 +3349,7 @@ class AppState extends ChangeNotifier {
   /// [silent] — фоновая проверка (при запуске и раз в шесть часов): сообщает только о найденном
   /// обновлении, а уже найденное держит на месте, пока не придёт новый ответ.
   Future<void> checkUpdates({bool silent = false}) async {
-    if (checkingUpdates) return;
+    if (_stopping || checkingUpdates) return;
     // Тестовая сборка не обновляется из релизов: установщик заменил бы установленную программу.
     if (AppPaths.isDev || appRepo.isEmpty) {
       if (!silent) toast(tr('Тестовая сборка не обновляется из релизов'));
@@ -3259,9 +3361,11 @@ class AppState extends ChangeNotifier {
     try {
       final r = await Updates.latest(appRepo,
           proxyPort: _updateProxy, prerelease: settings.updateChannel == UpdateChannel.beta);
+      if (_stopping) return;
       // Релиз без установщика — значит, GitHub его ещё собирает: не предлагаем, пока не будет готов.
       final newer =
           Updates.compare(r.version, appVersion) > 0 && await Updates.hasInstaller(r, proxyPort: _updateProxy, portable: AppPaths.isPortable);
+      if (_stopping) return;
       appUpdate = newer ? r : null;
       lastUpdateCheck = DateTime.now();
       if (appUpdate != null) {
@@ -3279,6 +3383,7 @@ class AppState extends ChangeNotifier {
         toast(tr('У вас установлена последняя версия'));
       }
     } catch (e) {
+      if (_stopping) return;
       log.add('update', tr('Проверка обновлений: {0}', [e]));
       if (!silent) {
         toast(e is UpdateLimitedException ? '$e' : tr('Не удалось проверить обновления: {0}', [describeNetError(e)]));
@@ -3306,7 +3411,7 @@ class AppState extends ChangeNotifier {
   /// Скачивает установщик новой версии SkipIt из релиза на GitHub и сверяет его контрольную сумму.
   Future<String?> downloadAppUpdate() async {
     final release = appUpdate;
-    if (AppPaths.isPortable || release == null || downloadingAppUpdate) return null;
+    if (_stopping || AppPaths.isPortable || release == null || downloadingAppUpdate) return null;
     downloadingAppUpdate = true;
     updateProgress = null;
     notifyListeners();
@@ -3326,7 +3431,7 @@ class AppState extends ChangeNotifier {
       }
       final path = '${dir.path}\\${release.installerName}';
       await Net.download(release.installerUrl, path, proxyPort: _updateProxy, onProgress: (received, total) {
-        if (total <= 0) return;
+        if (_stopping || total <= 0) return;
         final p = (received / total).clamp(0.0, 1.0);
         // Окно перерисовывается на каждый процент, а не на каждый полученный кусок файла.
         if (updateProgress != null && (p * 100).floor() == (updateProgress! * 100).floor()) return;
@@ -3334,7 +3439,9 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       });
       // Запускаем только то, что совпало с контрольной суммой из релиза.
+      if (_stopping) return null;
       final expected = await Updates.expectedSha256(release, proxyPort: _updateProxy);
+      if (_stopping) return null;
       if (viaService && expected != null) {
         try {
           final staged = await ServiceClient.stageUpdate(path, expected);
@@ -3362,13 +3469,29 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  @override
-  void dispose() {
+  void _stopBackgroundWork() {
     _stopping = true;
+    ++_crashRetry;
+    _reconnectWhenUp = false;
+    _startupUpdateTimer?.cancel();
+    _geoRefreshTimer?.cancel();
     _subsTimer?.cancel();
     _updateTimer?.cancel();
     _statsTimer?.cancel();
+    _saveTimer?.cancel();
+    _stopLinkCheck();
     for (final timer in _undoCleanupTimers) { timer.cancel(); }
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_stopping && !_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _stopBackgroundWork();
+    _disposed = true;
     _messages.close();
     super.dispose();
   }

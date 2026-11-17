@@ -33,8 +33,10 @@ class Net {
     String url,
     AppSettings settings, {
     int? proxyPort,
+    bool Function()? isCancelled,
   }) async {
     final plain = await _fetch(url, settings, proxyPort: proxyPort);
+    if (isCancelled?.call() ?? false) return plain;
     final gotJson = plain.result.servers.any((s) => s.isJson);
     if (!settings.preferJson || gotJson || plain.result.servers.isEmpty) return plain;
     final uri = Uri.tryParse(url);

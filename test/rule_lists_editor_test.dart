@@ -35,7 +35,7 @@ void main() {
   setUp(() async {
     tmp = await Directory.systemTemp.createTemp('skipit-rleditor');
     AppPaths.dataDir = tmp;
-    state = AppState();
+    state = _MemoryState();
     state.routingProfiles.addAll([RoutingProfile.global(), ...RoutingProfile.templates()]);
     state.routingProfiles.add(RoutingProfile(name: 'Мой профиль'));
   });
@@ -144,9 +144,16 @@ void main() {
   });
 }
 
+// Эти тесты проверяют редактор; файловая запись отдельно проверяется в state_lifecycle_test.
+// Операции реального диска не должны зависеть от виртуальных часов widget-теста.
+class _MemoryState extends AppState {
+  @override
+  Future<String?> saveNow({bool showError = true}) async => null;
+}
+
 /// Подключённое состояние, записывающее порядок вызовов: медленное обновление списков
 /// и переподключение. С ``unawaited`` вместо ``await`` переподключение обгоняло бы докачку.
-class _RecordingState extends AppState {
+class _RecordingState extends _MemoryState {
   final events = <String>[];
 
   @override
