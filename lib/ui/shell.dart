@@ -82,7 +82,7 @@ Future<_ConflictChoice> _askAboutConflicts(BuildContext context, List<VpnConflic
               // Значок и лёгкая подложка: видно, что это кнопка, а не подсвеченный текст.
               TextButton.icon(
                 onPressed: () => Navigator.pop(ctx, _ConflictChoice.proceed),
-                style: TextButton.styleFrom(backgroundColor: C.highlight.withValues(alpha: 0.12)),
+                style: TextButton.styleFrom(backgroundColor: C.surface2),
                 icon: const Icon(Icons.call_split_rounded, size: 18),
                 label: Text(tr('Подключиться рядом')),
               ),
@@ -798,7 +798,7 @@ class _TopNavState extends State<_TopNav> with TickerProviderStateMixin {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(C.r(12)),
-                  color: C.highlight.withValues(alpha: 0.10),
+                  color: C.surface2,
                 ),
               ),
             ),
@@ -1247,7 +1247,7 @@ class _NavColumnState extends State<_NavColumn> with TickerProviderStateMixin {
                       alignment: Alignment.centerLeft,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(C.r(12)),
-                        color: C.highlight.withValues(alpha: 0.10),
+                        color: C.surface2,
                       ),
                       // Оранжевая метка слева у выбранного пункта.
                       child: Container(
@@ -1442,7 +1442,7 @@ class _VersionRow extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             height: _height,
             decoration: BoxDecoration(
-              color: hasUpdate ? C.highlight.withValues(alpha: 0.14) : (hovered ? C.hover : Colors.transparent),
+              color: hasUpdate ? C.surface2 : (hovered ? C.hover : Colors.transparent),
               borderRadius: BorderRadius.circular(C.r(12)),
               border: Border.all(color: hasUpdate ? C.highlight.withValues(alpha: 0.5) : Colors.transparent),
             ),

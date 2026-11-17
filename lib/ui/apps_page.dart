@@ -416,7 +416,7 @@ class _RunningAppsDialogState extends State<_RunningAppsDialog> {
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                                     decoration: BoxDecoration(
                                       color: checked
-                                          ? C.highlight.withValues(alpha: 0.12)
+                                          ? C.surface2
                                           : (hovered ? C.hover : Colors.transparent),
                                       borderRadius: BorderRadius.circular(C.r(12)),
                                       border: Border.all(

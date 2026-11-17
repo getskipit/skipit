@@ -939,7 +939,7 @@ class _SubscriptionDetails extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             decoration: BoxDecoration(
-              color: C.highlight.withValues(alpha: 0.06),
+              color: C.surface2,
               borderRadius: BorderRadius.circular(C.r(12)),
               border: Border.all(color: C.highlight.withValues(alpha: 0.35)),
             ),
@@ -1084,7 +1084,7 @@ class _ServerRow extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           decoration: BoxDecoration(
-            color: selected ? C.highlight.withValues(alpha: 0.10) : (hovered ? C.hover : Colors.transparent),
+            color: selected ? C.surface2 : (hovered ? C.hover : Colors.transparent),
             border: Border(top: BorderSide(color: C.border)),
           ),
           child: Row(children: [

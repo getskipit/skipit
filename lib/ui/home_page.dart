@@ -437,7 +437,7 @@ class _KillSwitchBox extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
-          color: C.highlight.withValues(alpha: 0.08),
+          color: C.surface2,
           borderRadius: BorderRadius.circular(C.r(14)),
           border: Border.all(color: C.highlight.withValues(alpha: 0.45)),
         ),

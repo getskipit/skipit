@@ -641,7 +641,7 @@ class _DayGroupState extends State<_DayGroup> {
                   duration: const Duration(milliseconds: 160),
                   child: Container(
                     alignment: Alignment.centerLeft,
-                    color: C.highlight.withValues(alpha: 0.10),
+                    color: C.surface2,
                     // Оранжевая метка слева — как у выбранного сервера на главной.
                     child: Container(width: 3, color: C.highlight),
                   ),

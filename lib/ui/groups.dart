@@ -84,7 +84,7 @@ class GroupNavItem extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(C.r(12)),
                   color: selected
-                      ? C.highlight.withValues(alpha: 0.14)
+                      ? C.surface2
                       : (hovered ? C.hover : Colors.transparent),
                 ),
                 child: Row(children: [
@@ -176,7 +176,7 @@ class GroupTile extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: C.highlight.withValues(alpha: 0.12),
+                    color: C.surface2,
                     borderRadius: BorderRadius.circular(C.r(12)),
                   ),
                   child: Icon(group.icon, size: 20, color: C.highlight),
@@ -246,7 +246,7 @@ class GroupHeader extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: hovered ? C.highlight.withValues(alpha: 0.14) : C.surface2,
+                color: hovered ? C.surface2 : C.surface2,
                 shape: BoxShape.circle,
                 border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.6) : C.border),
               ),

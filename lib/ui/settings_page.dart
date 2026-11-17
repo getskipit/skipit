@@ -1580,7 +1580,7 @@ class _PartChips extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(8, 6, 10, 6),
                   decoration: BoxDecoration(
                     color: on
-                        ? C.highlight.withValues(alpha: hovered ? 0.22 : 0.14)
+                        ? C.surface2
                         : (hovered ? Color.alphaBlend(C.hover, C.surface2) : C.surface2),
                     borderRadius: BorderRadius.circular(C.r(10)),
                     border: Border.all(

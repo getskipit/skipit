@@ -211,13 +211,9 @@ class C {
   static Color get orange => _p.accent.main;
   static Color get orangeLight => _p.accent.light;
 
-  /// Выделения сохраняют выбранный оттенок, но выглядят спокойнее фирменного знака.
-  static Color get highlight => _soften(orange);
-  static Color get highlightLight => _soften(orangeLight);
-  static Color _soften(Color color) {
-    final hsl = HSLColor.fromColor(color);
-    return hsl.withSaturation(hsl.saturation * 0.78).toColor();
-  }
+  /// Оранжевый акцент чуть темнее и теплее знака, без примеси серого.
+  static Color get highlight => _p.accent == Accent.orange ? const Color(0xFFE97824) : orange;
+  static Color get highlightLight => _p.accent == Accent.orange ? const Color(0xFFF29B59) : orangeLight;
 
   /// Цвет предупреждений (строки журнала, медленный ответ, значок «внимание»): всегда оранжевый,
   /// какой бы ни был акцент. [warnText] — для текста и значков: на тёмном фоне светлее.

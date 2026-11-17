@@ -179,7 +179,7 @@ class AppDropdown<T> extends StatelessWidget {
             height: height ?? 42,
             padding: const EdgeInsets.only(left: 14, right: 8),
             decoration: BoxDecoration(
-              color: hovered ? C.highlight.withValues(alpha: 0.08) : (height != null ? C.surface : Colors.transparent),
+              color: hovered ? C.hover : (height != null ? C.surface : Colors.transparent),
               borderRadius: BorderRadius.circular(C.r(height != null ? 18 : 12)),
               border: Border.all(color: hovered ? C.highlight.withValues(alpha: 0.7) : C.border),
             ),
@@ -565,8 +565,8 @@ class GhostButton extends StatelessWidget {
                 color: s.contains(WidgetState.hovered) ? C.highlight.withValues(alpha: 0.7) : C.border,
               )),
           backgroundColor: WidgetStateProperty.resolveWith(
-              (s) => s.contains(WidgetState.hovered) ? C.highlight.withValues(alpha: 0.08) : Colors.transparent),
-          overlayColor: WidgetStateProperty.all(C.highlight.withValues(alpha: 0.08)),
+              (s) => s.contains(WidgetState.hovered) ? C.hover : Colors.transparent),
+          overlayColor: WidgetStateProperty.all(C.hover),
         ),
         icon: busy
             ? const Spinner(size: 18)
@@ -657,7 +657,7 @@ class _ConnectButtonState extends State<ConnectButton> with SingleTickerProvider
                 borderRadius: BorderRadius.circular(radius),
                 // Ровная заливка: тёмный градиент на экране ложился заметными полосами.
                 color: active
-                    ? Color.alphaBlend(C.highlight.withValues(alpha: 0.12), C.palette.tileTop)
+                    ? C.palette.tileTop
                     : (_hover ? C.surface2 : C.palette.tileTop),
                 border: Border.all(
                   color: active ? C.highlight : (lit ? C.highlight.withValues(alpha: 0.55) : C.border),
@@ -796,7 +796,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
               curve: Curves.easeOutCubic,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Color.alphaBlend(C.highlight.withValues(alpha: 0.24), C.surface2),
+                  color: C.highlight,
                   borderRadius: BorderRadius.circular(C.r(10))),
               ),
             ),
@@ -816,7 +816,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
                         decoration: BoxDecoration(
                           // До первого измерения выбранный пункт закрашен сам — без пустого кадра.
                           color: selected && thumb == null
-                              ? Color.alphaBlend(C.highlight.withValues(alpha: 0.24), C.surface2)
+                              ? C.highlight
                               : (!selected && hovered ? C.hover : null),
                           borderRadius: BorderRadius.circular(C.r(10)),
                         ),
@@ -827,7 +827,7 @@ class _SegmentedState<T> extends State<Segmented<T>> {
                             fontFamily: 'Segoe UI',
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: selected || hovered ? C.text : C.muted,
+                            color: selected ? Colors.white : (hovered ? C.text : C.muted),
                           ),
                           child: Text(screenTextOf(context, e.value)),
                         ),
