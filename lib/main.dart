@@ -179,11 +179,8 @@ Future<void> main(List<String> rawArgs) async {
     final tooltip = '${AppPaths.appName} — $status${server != null ? '\n$server' : ''}';
     // Тема берётся из настроек, а не из уже применённой палитры: этот обработчик срабатывает раньше,
     // чем окно перекрасится.
-    final dark = switch (state.settings.theme) {
-      AppTheme.dark || AppTheme.black => true,
-      AppTheme.light => false,
-      AppTheme.system => WidgetsBinding.instance.platformDispatcher.platformBrightness != Brightness.light,
-    };
+    final systemBrightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final dark = state.settings.theme.resolve(systemBrightness).brightness == Brightness.dark;
     final accent = Accent.values.asNameMap()[state.settings.accent] ?? Accent.orange;
     // Серверы для меню — в том же порядке, что на главной (не больше 60: меню прокручивается колесом).
     final servers = state.serversInListOrder.take(60).toList();
@@ -316,14 +313,7 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Tick
 
   Palette _resolvePalette() {
     final s = widget.state.settings;
-    final base = switch (s.theme) {
-      AppTheme.dark => Palette.dark,
-      AppTheme.black => Palette.black,
-      AppTheme.light => Palette.light,
-      AppTheme.system => WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.light
-          ? Palette.light
-          : Palette.dark,
-    };
+    final base = s.theme.resolve(WidgetsBinding.instance.platformDispatcher.platformBrightness);
     return base.styled(Accent.values.asNameMap()[s.accent] ?? Accent.orange, s.corners);
   }
 
@@ -338,20 +328,23 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Tick
   void _syncIcon() {
     final s = widget.state.settings;
     // Вызывается на каждое изменение состояния — сначала дешёвая проверка, не те ли самые настройки.
-    if (_iconKey == '${s.iconStyle}|${s.accent}') return;
-    final style = IconStyle.values.asNameMap()[s.iconStyle] ?? IconStyle.classic;
-    final accent = Accent.values.asNameMap()[s.accent] ?? Accent.orange;
     final key = '${s.iconStyle}|${s.accent}';
     if (key == _iconKey) return;
+    final style = IconStyle.values.asNameMap()[s.iconStyle] ?? IconStyle.classic;
+    final accent = Accent.values.asNameMap()[s.accent] ?? Accent.orange;
     final first = _iconKey == null;
     _iconKey = key;
     if (style == IconStyle.classic) {
-      if (!first) unawaited(Tray.setIcon(const []));
+      if (!first) unawaited(Tray.setIcon(const [], taskbarIcon: AppPaths.exe));
       return;
     }
-    unawaited(renderIcon(style, accent).then((images) {
+    unawaited(renderIcon(style, accent).then<void>((images) async {
       // Пока рисовали, могли выбрать другой.
-      if (_iconKey == key) return Tray.setIcon(images);
+      if (!mounted || _iconKey != key || images.isEmpty) return;
+      await Tray.setIcon(
+        [for (final image in images) (size: image.size, rgba: image.rgba)],
+        taskbarIcon: saveTaskbarIcon(AppPaths.dataDir, style, accent, images),
+      );
     }));
   }
 

@@ -1,12 +1,13 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-import 'theme.dart';
 import '../l10n/l10n.dart';
+import 'theme.dart';
 
-/// Вид значка SkipIt (Настройки → Внешний вид → «Значок»): окно, трей и значок в меню. Кнопку на панели задач Windows 11 рисует по exe — её не поменять.
+/// Вид значка SkipIt (Настройки → Внешний вид → «Значок»).
 /// Классический — картинка из ресурсов exe; остальные программа рисует сама той же формы.
 enum IconStyle {
   classic('Классический'),
@@ -96,16 +97,58 @@ class SkipItIconPainter extends CustomPainter {
 /// 256 — для крупного значка в уведомлении над треем (≈105 точек при 125 %): уменьшать чётче, чем растягивать.
 const iconSizes = [16, 20, 24, 32, 40, 48, 64, 96, 256];
 
-/// Картинки значка [style] всех размеров [iconSizes] — пиксели RGBA без предумножения альфы.
-Future<List<({int size, Uint8List rgba})>> renderIcon(IconStyle style, Accent accent) async {
-  final images = <({int size, Uint8List rgba})>[];
+/// Пиксели для окна и трея, PNG — для ICO, на который указывает закреплённый ярлык.
+typedef IconImage = ({int size, Uint8List rgba, Uint8List? png});
+
+Future<List<IconImage>> renderIcon(IconStyle style, Accent accent) async {
+  final images = <IconImage>[];
   for (final size in iconSizes) {
     final recorder = ui.PictureRecorder();
     SkipItIconPainter(style, accent).paint(Canvas(recorder), Size.square(size.toDouble()));
     final image = await recorder.endRecording().toImage(size, size);
     final data = await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
+    final png = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
-    if (data != null) images.add((size: size, rgba: data.buffer.asUint8List()));
+    if (data != null) {
+      images.add((size: size, rgba: Uint8List.sublistView(data), png: png == null ? null : Uint8List.sublistView(png)));
+    }
   }
   return images;
+}
+
+/// У каждого варианта свой путь, чтобы Explorer не показывал прежнюю картинку из кэша.
+String? saveTaskbarIcon(Directory directory, IconStyle style, Accent accent, List<IconImage> images) {
+  final entries = [for (final image in images) if (image.png case final png?) (image.size, png)];
+  if (entries.isEmpty) return null;
+
+  final path = '${directory.path}${Platform.pathSeparator}taskbar-${style.name}-${accent.name}.ico';
+  final file = File(path);
+  final header = ByteData(6 + 16 * entries.length)
+    ..setUint16(2, 1, Endian.little) // ICO
+    ..setUint16(4, entries.length, Endian.little);
+  var offset = header.lengthInBytes;
+  for (final (index, (size, png)) in entries.indexed) {
+    final entry = 6 + 16 * index;
+    header
+      ..setUint8(entry, size % 256)
+      ..setUint8(entry + 1, size % 256)
+      ..setUint16(entry + 4, 1, Endian.little)
+      ..setUint16(entry + 6, 32, Endian.little)
+      ..setUint32(entry + 8, png.lengthInBytes, Endian.little)
+      ..setUint32(entry + 12, offset, Endian.little);
+    offset += png.lengthInBytes;
+  }
+  try {
+    if (!file.existsSync()) {
+      final bytes = BytesBuilder(copy: false)..add(Uint8List.sublistView(header));
+      for (final (_, png) in entries) {
+        bytes.add(png);
+      }
+      final pending = File('$path.tmp')..writeAsBytesSync(bytes.takeBytes(), flush: true);
+      pending.renameSync(path);
+    }
+    return path;
+  } on FileSystemException {
+    return null;
+  }
 }

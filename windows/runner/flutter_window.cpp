@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <optional>
+#include <shlobj.h>
+#include <wrl/client.h>
 
 #include "flutter/generated_plugin_registrant.h"
 #include "kill_switch.h"
@@ -239,6 +241,48 @@ void FlutterWindow::ShowNotification(const std::wstring& title, const std::wstri
 }
 
 namespace {
+
+// Закреплённая кнопка берёт значок из .lnk, даже когда окно уже получило WM_SETICON.
+void UpdatePinnedIcon(const std::wstring& icon_path) {
+  if (icon_path.empty()) return;
+
+  wchar_t exe[MAX_PATH]{};
+  const DWORD length = GetModuleFileNameW(nullptr, exe, ARRAYSIZE(exe));
+  if (length == 0 || length >= ARRAYSIZE(exe)) return;
+
+  PWSTR app_data = nullptr;
+  if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &app_data))) return;
+  const std::wstring folder = std::wstring(app_data) +
+      LR"(\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\)";
+  CoTaskMemFree(app_data);
+
+  WIN32_FIND_DATAW entry{};
+  HANDLE search = FindFirstFileW((folder + L"*.lnk").c_str(), &entry);
+  if (search == INVALID_HANDLE_VALUE) return;
+  do {
+    if (entry.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) continue;
+    Microsoft::WRL::ComPtr<IShellLinkW> link;
+    if (FAILED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&link)))) break;
+    Microsoft::WRL::ComPtr<IPersistFile> file;
+    const std::wstring path = folder + entry.cFileName;
+    if (FAILED(link.As(&file)) || FAILED(file->Load(path.c_str(), STGM_READ))) continue;
+
+    wchar_t target[MAX_PATH]{};
+    if (link->GetPath(target, ARRAYSIZE(target), nullptr, 0) != S_OK ||
+        CompareStringOrdinal(target, -1, exe, -1, TRUE) != CSTR_EQUAL) {
+      continue;
+    }
+
+    wchar_t previous[MAX_PATH]{};
+    int index = 0;
+    link->GetIconLocation(previous, ARRAYSIZE(previous), &index);
+    if (index == 0 && CompareStringOrdinal(previous, -1, icon_path.c_str(), -1, TRUE) == CSTR_EQUAL) continue;
+    if (SUCCEEDED(link->SetIconLocation(icon_path.c_str(), 0)) && SUCCEEDED(file->Save(path.c_str(), TRUE))) {
+      SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, path.c_str(), nullptr);
+    }
+  } while (FindNextFileW(search, &entry));
+  FindClose(search);
+}
 
 // Значок из картинки RGBA (без предумножения альфы) стороной size.
 HICON IconFromRgba(int size, const std::vector<uint8_t>& rgba) {
@@ -533,8 +577,14 @@ void FlutterWindow::HandleTrayCall(
     result->Success();
   } else if (method == "setIcon") {
     // Список {size, rgba}; пустой — обычный значок.
+    const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+    if (!args) {
+      result->Success();
+      return;
+    }
     std::vector<std::pair<int, std::vector<uint8_t>>> images;
-    if (const auto* list = std::get_if<flutter::EncodableList>(call.arguments())) {
+    const auto list_entry = args->find(flutter::EncodableValue("images"));
+    if (const auto* list = list_entry == args->end() ? nullptr : std::get_if<flutter::EncodableList>(&list_entry->second)) {
       for (const auto& value : *list) {
         const auto* entry = std::get_if<flutter::EncodableMap>(&value);
         if (!entry) continue;
@@ -547,6 +597,10 @@ void FlutterWindow::HandleTrayCall(
       }
     }
     SetCustomIcon(images);
+    const auto path = args->find(flutter::EncodableValue("taskbarIcon"));
+    if (path != args->end()) {
+      if (const auto* icon_path = std::get_if<std::string>(&path->second)) UpdatePinnedIcon(Utf8ToWide(*icon_path));
+    }
     result->Success();
   } else if (method == "captureScreen" || method == "clipboardImage") {
     // Картинка для поиска QR-кода: {w, h, gray}; null — снять не удалось или в буфере нет картинки.

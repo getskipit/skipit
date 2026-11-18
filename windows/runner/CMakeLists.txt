@@ -38,7 +38,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
-target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "shell32.lib" "gdiplus.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "shell32.lib" "gdiplus.lib" "uuid.lib")
 # Kill Switch (kill_switch.cpp): фильтры Windows Filtering Platform.
 target_link_libraries(${BINARY_NAME} PRIVATE "fwpuclnt.lib" "rpcrt4.lib" "ws2_32.lib")
 # Слежение за сменой сети (net_watch.cpp).

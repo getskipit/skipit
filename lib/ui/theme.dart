@@ -1,5 +1,25 @@
 import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
+import '../models/settings.dart';
+
+extension AppThemeAppearance on AppTheme {
+  String get label => tr(switch (this) {
+        AppTheme.dark => 'Тёмная',
+        AppTheme.black => 'Чёрная',
+        AppTheme.light => 'Светлая',
+        AppTheme.system => 'Как в системе',
+        AppTheme.midnight => 'Полночь',
+        AppTheme.forest => 'Лес',
+        AppTheme.plum => 'Слива',
+        AppTheme.cocoa => 'Какао',
+        AppTheme.mint => 'Мята',
+        AppTheme.lavender => 'Лаванда',
+      });
+
+  Palette resolve(Brightness systemBrightness) => this == AppTheme.system
+      ? (systemBrightness == Brightness.light ? Palette.light : Palette.dark)
+      : Palette.presets[this]!;
+}
 
 /// Цвет акцента (Настройки → Внешний вид): кнопки, переключатели, подсветка меню, знак SkipIt.
 enum Accent {
@@ -131,6 +151,41 @@ class Palette {
     markMuted: Color(0xFFB8B8C0),
     shadow: Color(0x1F000000),
   );
+
+  static final presets = Map<AppTheme, Palette>.unmodifiable({
+    AppTheme.dark: dark,
+    AppTheme.black: black,
+    AppTheme.light: light,
+    AppTheme.midnight: dark._tinted(const Color(0xFF365C9B), 0.30),
+    AppTheme.forest: dark._tinted(const Color(0xFF36765A), 0.28),
+    AppTheme.plum: dark._tinted(const Color(0xFF874A8D), 0.28),
+    AppTheme.cocoa: dark._tinted(const Color(0xFF955E3D), 0.27),
+    AppTheme.mint: light._tinted(const Color(0xFF69C7A4), 0.18),
+    AppTheme.lavender: light._tinted(const Color(0xFFA58AE8), 0.18),
+  });
+
+  Palette _tinted(Color color, double opacity) {
+    Color tint(Color base) => Color.alphaBlend(color.withValues(alpha: opacity), base);
+    return Palette(
+      brightness: brightness,
+      bg: tint(bg),
+      surface: tint(surface),
+      surface2: tint(surface2),
+      border: tint(border),
+      text: text,
+      muted: brightness == Brightness.dark ? const Color(0xFFA0A0AC) : const Color(0xFF60606C),
+      cyan: cyan,
+      green: green,
+      red: red,
+      hover: hover,
+      tileTop: tint(tileTop),
+      tileBottom: tint(tileBottom),
+      tileActiveTop: tint(tileActiveTop),
+      tileActiveBottom: tint(tileActiveBottom),
+      markMuted: markMuted,
+      shadow: shadow,
+    );
+  }
 
   /// Копия палитры с промежуточным скруглением — для плавного перехода между ступенями (не запоминается).
   Palette withCorners(double value) => Palette(

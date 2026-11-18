@@ -324,12 +324,7 @@ class _SettingsPageState extends State<SettingsPage> {
         tr('Внешний вид'),
         tr('Тема, масштаб, где стоит меню, что показывать на главной, анимации'),
         tr('{0} · {1} % · меню {2}', [
-          switch (s.theme) {
-            AppTheme.dark => tr('Тёмная'),
-            AppTheme.black => tr('Чёрная'),
-            AppTheme.light => tr('Светлая'),
-            AppTheme.system => tr('Как в Windows'),
-          },
+          s.theme.label,
           s.uiScale,
           s.navTop ? tr('сверху') : tr('слева'),
         ]),
@@ -357,10 +352,27 @@ class _SettingsPageState extends State<SettingsPage> {
             below: PictureChoice<AppTheme>(
               value: s.theme,
               items: {
-                AppTheme.dark: (tr('Тёмная'), MiniWindow(p: Palette.dark)),
-                AppTheme.black: (tr('Чёрная'), MiniWindow(p: Palette.black)),
-                AppTheme.light: (tr('Светлая'), MiniWindow(p: Palette.light)),
-                AppTheme.system: (tr('Как в системе'), const MiniSystemTheme()),
+                for (final theme in [AppTheme.dark, AppTheme.black, AppTheme.light])
+                  theme: (theme.label, MiniWindow(p: Palette.presets[theme]!)),
+                AppTheme.system: (AppTheme.system.label, const MiniSystemTheme()),
+              },
+              onChanged: (v) {
+                s.theme = v;
+                state.changed();
+              },
+            ),
+          ),
+          _Row(
+            title: tr('Цветные темы'),
+            subtitle: '',
+            trailing: const SizedBox.shrink(),
+            below: PictureChoice<AppTheme>(
+              value: s.theme,
+              items: {
+                for (final theme in [
+                  AppTheme.midnight, AppTheme.forest, AppTheme.plum, AppTheme.cocoa, AppTheme.mint, AppTheme.lavender,
+                ])
+                  theme: (theme.label, MiniWindow(p: Palette.presets[theme]!)),
               },
               onChanged: (v) {
                 s.theme = v;
@@ -381,7 +393,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           _Row(
             title: tr('Значок'),
-            subtitle: tr('Значок окна и трея. На панели задач, рабочем столе и в «Пуске» Windows показывает прежний'),
+            subtitle: tr('Значок окна, трея и панели задач Windows'),
             trailing: _IconPicker(
               value: IconStyle.values.asNameMap()[s.iconStyle] ?? IconStyle.classic,
               onChanged: (v) {
@@ -1543,13 +1555,15 @@ class _Row extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 2),
-              SelectableText(subtitle,
-                  style: TextStyle(
-                    color: subtitleColor ?? C.muted,
-                    fontSize: 12,
-                    fontWeight: subtitleColor != null ? FontWeight.w600 : null,
-                  )),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                SelectableText(subtitle,
+                    style: TextStyle(
+                      color: subtitleColor ?? C.muted,
+                      fontSize: 12,
+                      fontWeight: subtitleColor != null ? FontWeight.w600 : null,
+                    )),
+              ],
               if (below != null) ...[const SizedBox(height: 10), below!],
             ]),
           ),

@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/paths.dart';
 import 'package:skipit/l10n/l10n.dart';
@@ -12,7 +15,19 @@ import 'package:skipit/ui/theme.dart';
 /// Смена темы перекрашивает окно, не пересоздавая его: открытый раздел и состояние виджетов сохраняются.
 void main() {
   // Настоящий ввод-вывод — вне testWidgets: внутри него время поддельное, и чтение диска не завершилось бы.
-  setUpAll(AppPaths.init);
+  const shots = String.fromEnvironment('SKIPIT_SHOTS');
+
+  setUpAll(() async {
+    await AppPaths.init();
+    if (shots.isEmpty) return;
+    final fonts = Directory('${Platform.environment['WINDIR']}\\Fonts');
+    final segoe = FontLoader('Segoe UI');
+    for (final name in ['segoeui.ttf', 'segoeuib.ttf', 'seguisb.ttf']) {
+      final file = File('${fonts.path}\\$name');
+      if (file.existsSync()) segoe.addFont(Future.value(ByteData.sublistView(file.readAsBytesSync())));
+    }
+    await segoe.load();
+  });
 
   testWidgets('смена темы перекрашивает окно на месте', (tester) async {
     tester.view.physicalSize = const Size(1280, 720);
@@ -52,6 +67,54 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(background(), Palette.dark.bg);
     C.use(Palette.dark);
+  });
+
+  test('в цветных темах второстепенный текст контрастен на фоне и карточках', () {
+    for (final theme in [AppTheme.midnight, AppTheme.forest, AppTheme.plum, AppTheme.cocoa, AppTheme.mint, AppTheme.lavender]) {
+      final palette = Palette.presets[theme]!;
+      final text = palette.muted.computeLuminance() + 0.05;
+      for (final color in [palette.bg, palette.surface, palette.surface2]) {
+        final background = color.computeLuminance() + 0.05;
+        expect(text > background ? text / background : background / text, greaterThanOrEqualTo(4.5), reason: theme.name);
+      }
+    }
+  });
+
+  testWidgets('цветная тема выбирается в настройках и сохраняется', (tester) async {
+    tester.view.physicalSize = const Size(944, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(() => C.use(Palette.dark));
+    addTearDown(() => lang = Lang.ru);
+
+    final state = AppState()
+      ..settings.language = 'ru'
+      ..settings.accent = 'blue';
+    state.routingProfiles.add(RoutingProfile.global());
+    await tester.pumpWidget(RepaintBoundary(child: SkipItApp(state: state)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.tune_rounded).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Внешний вид'));
+    await tester.pumpAndSettle();
+
+    final mint = find.text('Мята').hitTestable();
+    expect(mint, findsOneWidget);
+    await tester.tap(mint);
+    await tester.pumpAndSettle();
+
+    expect(state.settings.theme, AppTheme.mint);
+    expect(AppSettings.fromJson(state.settings.toJson()).theme, AppTheme.mint);
+    expect(C.palette.bg, Palette.presets[AppTheme.mint]!.bg);
+    expect(C.palette.brightness, Brightness.light);
+    expect(C.palette.accent, Accent.blue);
+    expect(find.text('Цветные темы'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    if (shots.isNotEmpty) {
+      await expectLater(find.byType(RepaintBoundary).first,
+          matchesGoldenFile(Uri.file('$shots\\appearance-themes.png')));
+    }
   });
 
   testWidgets('смена языка: снимок прежнего окна плавно тает, с «Меньше анимаций» — сразу', (tester) async {
