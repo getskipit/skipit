@@ -44,6 +44,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Тема').hitTestable(), findsOneWidget);
     expect(find.text('Kill Switch'), findsNothing);
+    await tester.enterText(find.widgetWithText(TextField, 'Поиск по настройкам'), 'вид настроек');
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    await search('');
     await tester.tap(find.byTooltip('Все настройки'));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
@@ -62,6 +66,15 @@ void main() {
     expect(find.text('SOCKS-порт'), findsOneWidget);
     expect(find.text('HTTP-порт'), findsOneWidget);
     expect(find.text('Тема'), findsNothing);
+
+    // При закрытии поиска уходящие результаты остаются отфильтрованными на время анимации.
+    await tester.enterText(find.widgetWithText(TextField, 'Поиск по настройкам'), '');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(find.text('SOCKS-порт'), findsOneWidget);
+    expect(find.text('Тема'), findsNothing);
+    await tester.pumpAndSettle();
+    expect(find.text('SOCKS-порт'), findsNothing);
 
     // Несколько слов — должны найтись все.
     await search('пароль порт');

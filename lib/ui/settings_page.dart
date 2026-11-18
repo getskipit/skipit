@@ -104,13 +104,13 @@ class _SettingsPageState extends State<SettingsPage> {
   final _outShift = ValueNotifier<(Key?, double)>((null, 0));
 
   /// Строка «Вид настроек»: при смене вида она остаётся там же на экране, где на неё нажали.
-  final _viewRowKey = GlobalKey();
+  var _viewRowKey = GlobalKey();
 
   /// В другом виде страница уже или шире — текст и картинки переносятся иначе, и строка уехала бы
   /// вверх или вниз. Прокрутка подстраивается в том же кадре, ещё до отрисовки, так, чтобы строка
   /// осталась на прежнем месте.
   void _keepViewRow(VoidCallback change) {
-    final before = SmoothScrollController.offsetOf(_viewRowKey);
+    final before = _query.trim().isEmpty ? SmoothScrollController.offsetOf(_viewRowKey) : null;
     change();
     final scroll = PrimaryScrollController.maybeOf(context);
     if (before == null || scroll is! SmoothScrollController) return;
@@ -154,6 +154,19 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final s = state.settings;
+
+    // Ушли в другой раздел меню — поиск сбрасывается, открытая группа закрывается: вернувшись, человек
+    // видит плитки всех групп.
+    // То же, когда «Настройки» нажали в меню ещё раз, уже находясь в них.
+    final reselected = _seenReselect != null && _seenReselect != state.pageReselected;
+    _seenReselect = state.pageReselected;
+    if ((state.pageIndex != AppState.settingsPage || reselected) && (_query.isNotEmpty || _group != null)) {
+      _search.clear();
+      _query = '';
+      _group = null;
+      if (reselected) _scrollToTop();
+    }
+    final query = _query.trim().toLowerCase();
 
     Widget toggle(String title, String subtitle, bool value, void Function(bool) set) => _Row(
           title: title,
@@ -477,7 +490,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           _Row(
-            key: _viewRowKey,
+            key: query.isEmpty ? _viewRowKey : null,
             title: tr('Вид настроек'),
             subtitle: s.settingsList
                 ? tr('Списком: слева группы, справа настройки выбранной')
@@ -1036,18 +1049,6 @@ class _SettingsPageState extends State<SettingsPage> {
       ]),
     ];
 
-    // Ушли в другой раздел меню — поиск сбрасывается, открытая группа закрывается: вернувшись, человек
-    // видит плитки всех групп.
-    // То же, когда «Настройки» нажали в меню ещё раз, уже находясь в них.
-    final reselected = _seenReselect != null && _seenReselect != state.pageReselected;
-    _seenReselect = state.pageReselected;
-    if ((state.pageIndex != AppState.settingsPage || reselected) && (_query.isNotEmpty || _group != null)) {
-      _search.clear();
-      _query = '';
-      _group = null;
-      if (reselected) _scrollToTop();
-    }
-    final query = _query.trim().toLowerCase();
     // Ключ держит одно и то же поле поиска при смене заголовка (плитки ↔ группа ↔ поиск): иначе поле
     // создавалось бы заново после первой же буквы и теряло фокус.
     final search = SizedBox(
@@ -1092,17 +1093,29 @@ class _SettingsPageState extends State<SettingsPage> {
     // Вид «Списком»: слева группы, справа настройки выбранной (поиск и в нём ищет по всем группам).
     final listMode = s.settingsList && query.isEmpty;
     final listGroup = _listGroup.clamp(0, groups.length - 1);
+    // Одна и та же группа сохраняет ключ при смене вида. Если к группе вернулись до конца
+    // перехода, старая копия ещё может гаснуть, поэтому у новой свой якорь прокрутки.
+    final shownKey = ValueKey(query.isNotEmpty
+        ? 'search'
+        : listMode
+            ? 'group$listGroup'
+            : (_group == null ? 'grid' : 'group$_group'));
+    if (shownKey != _shownKey) _viewRowKey = GlobalKey();
     if (query.isNotEmpty) {
       // Поиск — по всем группам сразу; у раздела без своего названия подписью служит название группы.
-      final sections = [
-        for (final g in groups)
-          for (final sec in g.buildSections()) _Section(sec.title.isEmpty ? g.title : '${g.title} · ${sec.title}', sec.children),
-      ];
-      final found = sections.any((s) => _found(s.title, s.children, query).isNotEmpty);
+      // Уходящая страница сохраняет найденные строки, пока гаснет в AnimatedSwitcher.
+      final sections = <_Section>[];
+      for (final group in groups) {
+        for (final section in group.buildSections()) {
+          final title = section.title.isEmpty ? group.title : '${group.title} · ${section.title}';
+          final rows = _found(title, section.children, query);
+          if (rows.isNotEmpty) sections.add(_Section(title, rows));
+        }
+      }
       header = headerFor(null);
       body = [
         ...sections,
-        if (!found)
+        if (sections.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(tr('Ничего не найдено. Попробуйте другое слово — например, «порт» или «трей».'),
@@ -1120,12 +1133,10 @@ class _SettingsPageState extends State<SettingsPage> {
       header = headerFor(null);
       body = [GroupGrid(groups: groups, onOpen: openGroup)];
     }
-    return _SettingsQuery(
-      query: query,
-      // Заголовок со стрелкой назад и поиском закреплён: прокручиваются только настройки под ним.
-      child: MouseBack(
-        onBack: !listMode && query.isEmpty && _group != null ? () => openGroup(null) : null,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    // Заголовок со стрелкой назад и поиском закреплён: прокручиваются только настройки под ним.
+    return MouseBack(
+      onBack: !listMode && query.isEmpty && _group != null ? () => openGroup(null) : null,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         header,
         Expanded(
           child: GroupListLayout(
@@ -1156,12 +1167,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           )),
           child: KeyedSubtree(
-            key: _shownKey = ValueKey(query.isNotEmpty
-                ? 'search'
-                // Та же группа в обоих видах — тот же ключ: при смене вида страница не гаснет и не проявляется заново.
-                : listMode
-                    ? 'group$listGroup'
-                    : (_group == null ? 'grid' : 'group$_group')),
+            key: _shownKey = shownKey,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
           ),
         ),
@@ -1169,7 +1175,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
       ]),
-      ),
     );
   }
 }
@@ -1183,18 +1188,6 @@ class _Group extends PageGroup {
 
   /// Плашка над настройками группы (в поиске не показывается).
   final Widget? banner;
-}
-
-/// Текст поиска по настройкам (строчными буквами; пустой — поиска нет) — для разделов страницы.
-class _SettingsQuery extends InheritedWidget {
-  const _SettingsQuery({required this.query, required super.child});
-  final String query;
-
-  static String of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_SettingsQuery>()?.query ?? '';
-
-  @override
-  bool updateShouldNotify(_SettingsQuery old) => old.query != query;
 }
 
 /// Ключевые слова строк настроек (по названию строки): слова, которыми настройку ищут, хотя в её
@@ -1275,7 +1268,6 @@ bool _muxOk(String v) {
 /// Строки раздела [title], подходящие под поиск [query]: по названию строки, её подписи и ключевым
 /// словам — должны найтись все слова запроса. Если под поиск подходит название раздела — весь раздел.
 List<Widget> _found(String title, List<Widget> rows, String query) {
-  if (query.isEmpty) return rows;
   final words = query.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
   bool has(String text) => words.every(text.toLowerCase().contains);
   if (has(title)) return rows;
@@ -1298,8 +1290,7 @@ class _Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // При поиске остаются только подходящие строки; раздел без них не показывается.
-    final rows = _found(title, children, _SettingsQuery.of(context));
+    final rows = children;
     if (rows.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
