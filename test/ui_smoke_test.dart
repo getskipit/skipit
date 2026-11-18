@@ -10,6 +10,7 @@ import 'package:skipit/models/settings.dart';
 import 'package:skipit/models/subscription.dart';
 import 'package:skipit/state/app_scope.dart';
 import 'package:skipit/state/app_state.dart';
+import 'package:skipit/ui/settings_page.dart';
 import 'package:skipit/ui/shell.dart';
 import 'package:skipit/ui/theme.dart';
 import 'package:skipit/ui/widgets.dart';
@@ -26,6 +27,32 @@ void main() {
       if (f.existsSync()) loader.addFont(Future.value(ByteData.sublistView(f.readAsBytesSync())));
     }
     await loader.load();
+  });
+
+  testWidgets('раздел монтируется при первом открытии и сохраняет свой элемент', (tester) async {
+    C.use(Palette.dark);
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState()..routingProfiles.add(RoutingProfile.global());
+    await tester.pumpWidget(AppScope(
+      state: state,
+      child: MaterialApp(theme: buildTheme(), home: const Shell()),
+    ));
+    await tester.pump(const Duration(milliseconds: 400));
+    final settings = find.byType(SettingsPage, skipOffstage: false);
+    expect(settings, findsNothing);
+
+    state.openPage(AppState.settingsPage);
+    await tester.pump();
+    final mounted = tester.element(settings);
+    state.openPage(0);
+    await tester.pump();
+    expect(tester.element(settings), same(mounted));
+    state.openPage(AppState.settingsPage);
+    await tester.pump();
+    expect(tester.element(settings), same(mounted));
   });
 
   testWidgets('таймер подключения обновляет цифры без перестроения главной', (tester) async {

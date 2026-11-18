@@ -78,11 +78,8 @@ class _MarkPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
     final r = h * 0.12;
-    final Gradient gradient = white
-        ? const LinearGradient(colors: [Colors.white, Colors.white])
-        : muted
-            ? LinearGradient(colors: [C.palette.markMuted, C.palette.markMuted])
-            : C.gradient;
+    final color = muted && !white ? palette.markMuted : Colors.white;
+    final shader = white || muted ? null : C.gradient.createShader(Offset.zero & size);
 
     Path tri(double x0, double tw) => Path()
       ..moveTo(x0 + r, r)
@@ -91,11 +88,11 @@ class _MarkPainter extends CustomPainter {
       ..close();
 
     void drawTri(Path p) {
-      final shader = gradient.createShader(Offset.zero & size);
-      canvas.drawPath(p, Paint()..shader = shader);
+      canvas.drawPath(p, Paint()..color = color..shader = shader);
       canvas.drawPath(
           p,
           Paint()
+            ..color = color
             ..shader = shader
             ..style = PaintingStyle.stroke
             ..strokeWidth = r * 2

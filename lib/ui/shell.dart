@@ -386,9 +386,12 @@ class _ShellState extends State<Shell> {
 
   /// Источник обновлений спрятанных разделов: никогда не срабатывает.
   static final _asleep = ChangeNotifier();
+  final _openedPages = <int>{};
 
   @override
   Widget build(BuildContext context) {
+    final index = _index;
+    _openedPages.add(index);
     // Спрятанные разделы (Настройки → Внешний вид → «Пункты меню») меню плавно сворачивает. Спрятанный раздел
     // по-прежнему открывается ссылками из окна.
     final hiddenNames = AppScope.of(context).settings.menuHidden;
@@ -407,7 +410,7 @@ class _ShellState extends State<Shell> {
       // Ctrl+V (и Ctrl+Shift+V) на главной, в «Серверах» и «Маршрутизации» — импорт ссылки или конфига.
       // В журнале, проверках и настройках сочетание ничего не добавляет.
       body: Shortcuts(
-        shortcuts: _index > 2
+        shortcuts: index > 2
             ? const {}
             : const {
                 SingleActivator(LogicalKeyboardKey.keyV, control: true): _PasteIntent(),
@@ -424,26 +427,29 @@ class _ShellState extends State<Shell> {
               _MenuSlot(
                 shown: !AppScope.of(context).settings.navTop,
                 axis: Axis.horizontal,
-                child: _Sidebar(index: _index, items: _items, hidden: hidden, onSelect: go),
+                child: _Sidebar(index: index, items: _items, hidden: hidden, onSelect: go),
               ),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _MenuSlot(
             shown: AppScope.of(context).settings.navTop,
             axis: Axis.vertical,
-            child: _TopBar(index: _index, items: _items, hidden: hidden, onSelect: go),
+            child: _TopBar(index: index, items: _items, hidden: hidden, onSelect: go),
           ),
-          // Спрятанные разделы слушают «спящий» источник и не перестраиваются от каждого изменения состояния
-          // (раньше любое изменение перестраивало все шесть, вместе с полной копией списка серверов
-          // в «Серверах»). Открытый раздел перестраивается сразу при переходе: у него меняется источник.
+          // Раздел строится при первом открытии. Посещённые разделы сохраняют своё состояние
+          // и слушают «спящий» источник, когда пользователь переходит на другую страницу.
           Expanded(
-            child: IndexedStack(index: _index, children: [
+            child: IndexedStack(index: index, children: [
               for (var i = 0; i < pages.length; i++)
-                AppScope(
-                  state: AppScope.read(context),
-                  notifier: i == _index ? null : _asleep,
-                  child: _SmoothPage(child: pages[i]),
-                ),
+                if (_openedPages.contains(i))
+                  AppScope(
+                    key: ValueKey(i),
+                    state: AppScope.read(context),
+                    notifier: i == index ? null : _asleep,
+                    child: _SmoothPage(child: pages[i]),
+                  )
+                else
+                  const SizedBox.shrink(),
             ]),
           ),
         ]),
