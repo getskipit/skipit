@@ -157,7 +157,7 @@ class Palette {
     AppTheme.dark: dark,
     AppTheme.black: black,
     AppTheme.light: light,
-    AppTheme.skipit: dark._tinted(const Color(0xFFE86737), 0.08),
+    AppTheme.skipit: dark._tinted(const Color(0xFF41434A), 0.22),
     AppTheme.midnight: dark._tinted(const Color(0xFF365C9B), 0.30),
     AppTheme.forest: dark._tinted(const Color(0xFF36765A), 0.28),
     AppTheme.plum: dark._tinted(const Color(0xFF874A8D), 0.28),
