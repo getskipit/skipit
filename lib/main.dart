@@ -335,16 +335,13 @@ class _SkipItAppState extends State<SkipItApp> with WidgetsBindingObserver, Tick
     final first = _iconKey == null;
     _iconKey = key;
     if (style == IconStyle.classic) {
-      if (!first) unawaited(Tray.setIcon(const [], taskbarIcon: AppPaths.exe));
+      if (!first) unawaited(Tray.setIcon(const []));
       return;
     }
     unawaited(renderIcon(style, accent).then<void>((images) async {
       // Пока рисовали, могли выбрать другой.
       if (!mounted || _iconKey != key || images.isEmpty) return;
-      await Tray.setIcon(
-        [for (final image in images) (size: image.size, rgba: image.rgba)],
-        taskbarIcon: saveTaskbarIcon(AppPaths.dataDir, style, accent, images),
-      );
+      await Tray.setIcon(images);
     }));
   }
 

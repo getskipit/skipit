@@ -70,7 +70,7 @@ void main() {
   });
 
   test('в цветных темах второстепенный текст контрастен на фоне и карточках', () {
-    for (final theme in [AppTheme.midnight, AppTheme.forest, AppTheme.plum, AppTheme.cocoa, AppTheme.mint, AppTheme.lavender]) {
+    for (final theme in [AppTheme.midnight, AppTheme.forest, AppTheme.plum, AppTheme.cocoa, AppTheme.mint, AppTheme.lavender, AppTheme.skipit]) {
       final palette = Palette.presets[theme]!;
       final text = palette.muted.computeLuminance() + 0.05;
       for (final color in [palette.bg, palette.surface, palette.surface2]) {
@@ -98,7 +98,7 @@ void main() {
     await tester.tap(find.text('Внешний вид'));
     await tester.pumpAndSettle();
 
-    final mint = find.text('Мята').hitTestable();
+    final mint = find.byKey(const ValueKey(AppTheme.mint)).hitTestable();
     expect(mint, findsOneWidget);
     await tester.tap(mint);
     await tester.pumpAndSettle();
@@ -108,7 +108,15 @@ void main() {
     expect(C.palette.bg, Palette.presets[AppTheme.mint]!.bg);
     expect(C.palette.brightness, Brightness.light);
     expect(C.palette.accent, Accent.blue);
-    expect(find.text('Цветные темы'), findsOneWidget);
+    final skipit = find.byKey(const ValueKey(AppTheme.skipit)).hitTestable();
+    expect(skipit, findsOneWidget);
+    await tester.tap(skipit);
+    await tester.pumpAndSettle();
+
+    expect(state.settings.theme, AppTheme.skipit);
+    expect(AppSettings.fromJson(state.settings.toJson()).theme, AppTheme.skipit);
+    expect(C.palette.bg, Palette.presets[AppTheme.skipit]!.bg);
+    expect(C.palette.accent, Accent.blue);
     expect(tester.takeException(), isNull);
 
     if (shots.isNotEmpty) {

@@ -123,12 +123,9 @@ class Tray {
 
   static Future<void> show() => _call('show');
 
-  /// Пустой список возвращает значок окна и трея из exe. [taskbarIcon] — путь для закреплённого ярлыка.
-  static Future<void> setIcon(List<({int size, Uint8List rgba})> images, {String? taskbarIcon}) =>
-      _call('setIcon', {
-        'images': [for (final i in images) {'size': i.size, 'rgba': i.rgba}],
-        'taskbarIcon': taskbarIcon,
-      });
+  /// Свой значок окна и трея: картинки RGBA нескольких размеров; пустой список — обычный.
+  static Future<void> setIcon(List<({int size, Uint8List rgba})> images) =>
+      _call('setIcon', [for (final i in images) {'size': i.size, 'rgba': i.rgba}]);
 
   /// Уведомление Windows у значка. Оболочка показывает его, только когда окно спрятано или свёрнуто.
   /// [kind] — цвет отметки на значке уведомления: ok — связь вернулась, warn — сбой, error — ошибка, info — без отметки.

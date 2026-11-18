@@ -345,35 +345,10 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           _Row(
             title: tr('Тема'),
-            subtitle: s.theme == AppTheme.black
-                ? tr('Чёрная: фон совсем чёрный — для экранов AMOLED и OLED')
-                : tr('«Как в системе» следует за настройкой Windows'),
+            subtitle: s.theme.label,
             trailing: const SizedBox.shrink(),
-            below: PictureChoice<AppTheme>(
+            below: _ThemePicker(
               value: s.theme,
-              items: {
-                for (final theme in [AppTheme.dark, AppTheme.black, AppTheme.light])
-                  theme: (theme.label, MiniWindow(p: Palette.presets[theme]!)),
-                AppTheme.system: (AppTheme.system.label, const MiniSystemTheme()),
-              },
-              onChanged: (v) {
-                s.theme = v;
-                state.changed();
-              },
-            ),
-          ),
-          _Row(
-            title: tr('Цветные темы'),
-            subtitle: '',
-            trailing: const SizedBox.shrink(),
-            below: PictureChoice<AppTheme>(
-              value: s.theme,
-              items: {
-                for (final theme in [
-                  AppTheme.midnight, AppTheme.forest, AppTheme.plum, AppTheme.cocoa, AppTheme.mint, AppTheme.lavender,
-                ])
-                  theme: (theme.label, MiniWindow(p: Palette.presets[theme]!)),
-              },
               onChanged: (v) {
                 s.theme = v;
                 state.changed();
@@ -393,7 +368,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           _Row(
             title: tr('Значок'),
-            subtitle: tr('Значок окна, трея и панели задач Windows'),
+            subtitle: tr('Значок окна и трея'),
             trailing: _IconPicker(
               value: IconStyle.values.asNameMap()[s.iconStyle] ?? IconStyle.classic,
               onChanged: (v) {
@@ -1485,6 +1460,63 @@ class _IconPicker extends StatelessWidget {
       ]);
 }
 
+class _ThemePicker extends StatelessWidget {
+  const _ThemePicker({required this.value, required this.onChanged});
+  final AppTheme value;
+  final ValueChanged<AppTheme> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final theme in [AppTheme.system, ...Palette.presets.keys])
+            _swatch(theme),
+        ],
+      );
+
+  Widget _swatch(AppTheme theme) {
+    final palette = Palette.presets[theme];
+    final selected = value == theme;
+    final foreground = palette?.text ?? C.text;
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Tooltip(
+        message: theme.label,
+        child: InkWell(
+          key: ValueKey(theme),
+          borderRadius: BorderRadius.circular(C.r(8)),
+          onTap: selected ? null : () => onChanged(theme),
+          child: Container(
+            width: 38,
+            height: 38,
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(C.r(8)),
+              border: Border.all(color: selected ? C.highlight : C.border, width: 2),
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(C.r(4)),
+                color: palette?.surface ?? C.surface2,
+                border: Border.all(color: palette?.border ?? C.border),
+              ),
+              child: selected || theme == AppTheme.system
+                  ? Center(child: Icon(
+                      theme == AppTheme.system ? Icons.brightness_auto_rounded : Icons.check_rounded,
+                      size: 15,
+                      color: foreground,
+                    ))
+                  : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Выбор цвета акцента: кружки цветов, выбранный — с галочкой.
 class _AccentPicker extends StatelessWidget {
   const _AccentPicker({required this.value, required this.onChanged});
@@ -1555,15 +1587,13 @@ class _Row extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-              if (subtitle.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                SelectableText(subtitle,
-                    style: TextStyle(
-                      color: subtitleColor ?? C.muted,
-                      fontSize: 12,
-                      fontWeight: subtitleColor != null ? FontWeight.w600 : null,
-                    )),
-              ],
+              const SizedBox(height: 2),
+              SelectableText(subtitle,
+                  style: TextStyle(
+                    color: subtitleColor ?? C.muted,
+                    fontSize: 12,
+                    fontWeight: subtitleColor != null ? FontWeight.w600 : null,
+                  )),
               if (below != null) ...[const SizedBox(height: 10), below!],
             ]),
           ),
