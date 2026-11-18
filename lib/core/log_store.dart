@@ -241,6 +241,8 @@ class LogSession {
   int unknownProcess = 0;
 
   RandomAccessFile? _out;
+  final _pending = StringBuffer();
+  Timer? _flushTimer;
   int _written = 0;
 
   void _count(LogLine l) {
@@ -441,6 +443,7 @@ class LogBuffer extends ChangeNotifier {
     final s = _current;
     if (s == null) return;
     s.live = false;
+    _flushRows(s);
     try {
       s._out?.closeSync();
     } catch (_) {}
@@ -515,17 +518,32 @@ class LogBuffer extends ChangeNotifier {
     // Kill Switch) — пишутся всегда, иначе по файлу нельзя было бы понять, чем всё закончилось.
     final core = line.source == 'xray' || line.source == 'sing-box' || line.source == 'test';
     if (s._written >= fileLimit && core) return;
+    final row = '${line.time.toIso8601String()}\t${line.source}\t${line.text}\n';
+    s._pending.write(row);
+    s._written += row.length;
+    // На диске строки идут пачками, а в окне появляются сразу.
+    if (s._pending.length >= 32 * 1024) {
+      _flushRows(s);
+    } else {
+      s._flushTimer ??= Timer(const Duration(milliseconds: 100), () => _flushRows(s));
+    }
+  }
+
+  void _flushRows(LogSession s) {
+    s._flushTimer?.cancel();
+    s._flushTimer = null;
+    if (s._pending.isEmpty) return;
     try {
-      final row = '${line.time.toIso8601String()}\t${line.source}\t${line.text}\n';
-      s._out!.writeStringSync(row);
-      s._written += row.length;
+      s._out?.writeStringSync(s._pending.toString());
     } catch (_) {}
+    s._pending.clear();
   }
 
   /// Файл отрезка заполнен — запись продолжается в следующей части.
   void _nextPart(LogSession s) {
     final dir = _dir;
     if (dir == null) return;
+    _flushRows(s);
     final file = File('${dir.path}\\${s.id}-${s.parts.length + 2}.log');
     try {
       final out = file.openSync(mode: FileMode.write);

@@ -259,7 +259,7 @@ class _SettingsPageState extends State<SettingsPage> {
         tr('Подключение'),
         tr('Kill Switch, блокировка рекламы, автовыбор сервера, режим TUN'),
         'Kill Switch ${s.killSwitch ? tr('включён') : tr('выключен')} · TUN: ${s.tunCore == TunCore.xray ? 'Xray' : 'sing-box'}',
-        [
+        () => [
         _Section('', [
           toggle(tr('Подключаться при запуске'), tr('Автоматически включать VPN при автозапуске'), s.connectOnStart,
               (v) => s.connectOnStart = v),
@@ -328,7 +328,7 @@ class _SettingsPageState extends State<SettingsPage> {
           s.uiScale,
           s.navTop ? tr('сверху') : tr('слева'),
         ]),
-        [
+        () => [
         _Section(tr('Язык и цвета'), [
           _Row(
             title: tr('Язык'),
@@ -526,7 +526,7 @@ class _SettingsPageState extends State<SettingsPage> {
         tr('Подписки и серверы'),
         tr('Когда обновлять подписки, как проверять задержку серверов'),
         tr('Проверка: {0}', [s.pingType == PingType.realDelay ? tr('реальная') : 'TCP']),
-        [
+        () => [
         _Section(tr('Подписки'), [
           toggle(tr('Обновлять при запуске'), tr('Загружать свежий список серверов при старте'), s.updateSubsOnStart,
               (v) => s.updateSubsOnStart = v),
@@ -627,7 +627,7 @@ class _SettingsPageState extends State<SettingsPage> {
         tr('Программа'),
         tr('Автозапуск, трей, уведомления, перенос настроек, «Починить сеть» и сброс'),
         tr('Автозапуск {0}', [state.autostart ? tr('включён') : tr('выключен')]),
-        [
+        () => [
         _Section('', [
           toggle(tr('Запускать вместе с Windows'), tr('Запускать приложение при входе в Windows'), state.autostart,
               (v) => state.setAutostart(v)),
@@ -787,7 +787,7 @@ class _SettingsPageState extends State<SettingsPage> {
         [s.fragment ? tr('фрагментация') : '', s.noise ? tr('шумы') : '', s.mux ? 'Mux' : ''].any((e) => e.isNotEmpty)
             ? tr('Включено: {0}', [[s.fragment ? tr('фрагментация') : '', s.noise ? tr('шумы') : '', s.mux ? 'Mux' : ''].where((e) => e.isNotEmpty).join(', ')])
             : tr('Обычно менять не нужно'),
-        [
+        () => [
         _Section(tr('Подписки'), [
           _Row(
             title: 'User-Agent',
@@ -969,7 +969,7 @@ class _SettingsPageState extends State<SettingsPage> {
         tr('Версия, обновления и их канал, версии ядер'),
         state.appUpdate != null ? tr('Доступна версия {0}', [state.appUpdate!.version]) : tr('Версия {0}', [appVersion]),
         alert: SettingsPage._coresMissing(state) ? C.red : (state.appUpdate != null ? C.highlight : null),
-        [
+        () => [
         _Section('', [
           _Row(
             title: tr('Версия SkipIt'),
@@ -1096,7 +1096,7 @@ class _SettingsPageState extends State<SettingsPage> {
       // Поиск — по всем группам сразу; у раздела без своего названия подписью служит название группы.
       final sections = [
         for (final g in groups)
-          for (final sec in g.sections) _Section(sec.title.isEmpty ? g.title : '${g.title} · ${sec.title}', sec.children),
+          for (final sec in g.buildSections()) _Section(sec.title.isEmpty ? g.title : '${g.title} · ${sec.title}', sec.children),
       ];
       final found = sections.any((s) => _found(s.title, s.children, query).isNotEmpty);
       header = headerFor(null);
@@ -1111,11 +1111,11 @@ class _SettingsPageState extends State<SettingsPage> {
       ];
     } else if (listMode) {
       header = headerFor(null);
-      body = [if (groups[listGroup].banner != null) groups[listGroup].banner!, ...groups[listGroup].sections];
+      body = [if (groups[listGroup].banner != null) groups[listGroup].banner!, ...groups[listGroup].buildSections()];
     } else if (_group != null) {
       final g = groups[_group!];
       header = headerFor(g);
-      body = [if (g.banner != null) g.banner!, ...g.sections];
+      body = [if (g.banner != null) g.banner!, ...g.buildSections()];
     } else {
       header = headerFor(null);
       body = [GroupGrid(groups: groups, onOpen: openGroup)];
@@ -1176,8 +1176,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
 /// Группа настроек: плитка на первой странице «Настроек» и своя страница с разделами.
 class _Group extends PageGroup {
-  const _Group(super.icon, super.title, super.description, super.summary, this.sections, {super.alert, this.banner});
-  final List<_Section> sections;
+  const _Group(super.icon, super.title, super.description, super.summary, this.buildSections, {super.alert, this.banner});
+
+  // На плитках достаточно заголовков и описаний. Строки строятся для открытой группы или поиска.
+  final List<_Section> Function() buildSections;
 
   /// Плашка над настройками группы (в поиске не показывается).
   final Widget? banner;

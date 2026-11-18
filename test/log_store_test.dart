@@ -376,6 +376,26 @@ void main() {
     log.close();
   });
 
+  test('строки видны в журнале сразу, буфер дописывается при завершении отрезка', () async {
+    final log = LogBuffer();
+    await log.open(dir);
+    log.startSession('Сервер');
+    final file = log.sessions.single.file!;
+
+    log.add('app', 'Первая строка');
+    log.add('app', 'Вторая строка');
+    expect(log.lines.map((line) => line.text), ['Первая строка', 'Вторая строка']);
+    expect(file.readAsStringSync(), isNot(contains('Первая строка')));
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(file.readAsStringSync(), contains('Вторая строка'));
+
+    log.add('app', 'Отключено');
+    log.endSession();
+    final contents = file.readAsStringSync();
+    expect(contents, endsWith('Отключено\n'));
+    expect(contents.indexOf('Первая строка'), lessThan(contents.indexOf('Вторая строка')));
+  });
+
   test('после перезапуска прошлые отрезки читаются с диска', () async {
     final first = LogBuffer();
     await first.open(dir);

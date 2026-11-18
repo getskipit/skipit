@@ -12,6 +12,7 @@ import 'package:skipit/state/app_scope.dart';
 import 'package:skipit/state/app_state.dart';
 import 'package:skipit/ui/shell.dart';
 import 'package:skipit/ui/theme.dart';
+import 'package:skipit/ui/widgets.dart';
 
 /// Отрисовывает всё окно на каждой странице и в обоих состояниях меню —
 /// ловит ошибки вёрстки, которые в релизной сборке видны лишь как пустые области.
@@ -25,6 +26,32 @@ void main() {
       if (f.existsSync()) loader.addFont(Future.value(ByteData.sublistView(f.readAsBytesSync())));
     }
     await loader.load();
+  });
+
+  testWidgets('таймер подключения обновляет цифры без перестроения главной', (tester) async {
+    C.use(Palette.dark);
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState()
+      ..status = ConnStatus.connected
+      ..connectedAt = DateTime.now().subtract(const Duration(hours: 2));
+    state.routingProfiles.add(RoutingProfile.global());
+    await tester.pumpWidget(AppScope(
+      state: state,
+      child: MaterialApp(theme: buildTheme(), home: const Shell()),
+    ));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final clock = find.textContaining(RegExp(r'^2:\d{2}:\d{2}$'));
+    final text = tester.widget<Text>(clock);
+    final connect = tester.widget<ConnectButton>(find.byType(ConnectButton));
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.widget<Text>(clock), isNot(same(text)));
+    expect(tester.widget<ConnectButton>(find.byType(ConnectButton)), same(connect));
+
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   for (final palette in [Palette.dark, Palette.light])

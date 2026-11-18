@@ -17,29 +17,8 @@ import 'widgets.dart';
 import '../l10n/l10n.dart';
 
 /// Главная: слева кнопка подключения и режимы, справа список серверов.
-class HomePage extends StatefulWidget {
+class HomePage extends StatelessWidget {
   const HomePage({super.key});
-
-  @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  late final Timer _clock;
-
-  @override
-  void initState() {
-    super.initState();
-    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && AppScope.read(context).isConnected) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _clock.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +74,12 @@ class _HomePageState extends State<HomePage> {
 
     // Части, которые можно спрятать в Настройках → Внешний вид → «На главной».
     final show = state.settings.homeShows;
+    final clockStyle = TextStyle(
+      color: connected ? (C.isDark ? C.highlightLight : C.highlight) : C.muted,
+      fontSize: connected ? 18 : 13,
+      fontWeight: connected ? FontWeight.w600 : FontWeight.w400,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
     final stage = Column(mainAxisSize: MainAxisSize.min, children: [
       ConnectButton(
         connected: connected,
@@ -111,19 +96,15 @@ class _HomePageState extends State<HomePage> {
           )),
       Reveal(open: show('timer'), child: Column(mainAxisSize: MainAxisSize.min, children: [
       const SizedBox(height: 6),
-      Text(
-        connected && state.connectedAt != null
-            ? formatDuration(DateTime.now().difference(state.connectedAt!))
-            : state.closingOtherVpn
-                ? tr('Закрываю другой VPN…')
-                : (state.status == ConnStatus.connecting ? tr('Нажмите, чтобы отменить') : tr('Нажмите, чтобы подключиться')),
-        style: TextStyle(
-          color: connected ? (C.isDark ? C.highlightLight : C.highlight) : C.muted,
-          fontSize: connected ? 18 : 13,
-          fontWeight: connected ? FontWeight.w600 : FontWeight.w400,
-          fontFeatures: const [FontFeature.tabularFigures()],
+      if (connected && state.connectedAt != null)
+        _ConnectionClock(since: state.connectedAt!, style: clockStyle)
+      else
+        Text(
+          state.closingOtherVpn
+              ? tr('Закрываю другой VPN…')
+              : (state.status == ConnStatus.connecting ? tr('Нажмите, чтобы отменить') : tr('Нажмите, чтобы подключиться')),
+          style: clockStyle,
         ),
-      ),
       // Откуда сайты видят компьютер и стоит ли Kill Switch. Высота постоянная: строка появляется
       // через пару секунд после подключения, и всё, что ниже, не должно прыгать.
       const SizedBox(height: 4),
@@ -266,6 +247,39 @@ class _HomePageState extends State<HomePage> {
             ),
     );
   }
+}
+
+/// Тик меняет только текст таймера. Главная и список серверов от него не перестраиваются.
+class _ConnectionClock extends StatefulWidget {
+  const _ConnectionClock({required this.since, required this.style});
+  final DateTime since;
+  final TextStyle style;
+
+  @override
+  State<_ConnectionClock> createState() => _ConnectionClockState();
+}
+
+class _ConnectionClockState extends State<_ConnectionClock> {
+  late final Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final state = AppScope.read(context);
+      if (state.pageIndex == 0 && state.windowVisible && state.isConnected) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(formatDuration(DateTime.now().difference(widget.since)), style: widget.style);
 }
 
 /// Выбор ядра, которое поднимает TUN-адаптер: небольшая кнопка с выпадающим меню.
