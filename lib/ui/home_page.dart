@@ -96,7 +96,7 @@ class HomePage extends StatelessWidget {
       Reveal(open: show('timer'), child: Column(mainAxisSize: MainAxisSize.min, children: [
       const SizedBox(height: 6),
       if (connected && state.connectedAt != null)
-        _ConnectionClock(since: state.connectedAt!, style: clockStyle)
+        _ConnectionClock(since: state.connectedAt!, style: clockStyle.copyWith(fontWeight: FontWeight.w700))
       else
         Text(
           state.closingOtherVpn

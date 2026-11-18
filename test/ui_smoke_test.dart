@@ -110,6 +110,7 @@ void main() {
     expect(tester.widget<Text>(find.text('ЗАЩИЩЕНО')).style?.fontWeight, FontWeight.w700);
     final clock = find.textContaining(RegExp(r'^2:\d{2}:\d{2}$'));
     final text = tester.widget<Text>(clock);
+    expect(text.style?.fontWeight, FontWeight.w700);
     final connect = tester.widget<ConnectButton>(find.byType(ConnectButton));
     await tester.pump(const Duration(seconds: 1));
     expect(tester.widget<Text>(clock), isNot(same(text)));
