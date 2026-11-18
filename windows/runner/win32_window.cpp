@@ -239,14 +239,13 @@ Win32Window* Win32Window::GetThisFromHandle(HWND const window) noexcept {
 }
 
 void Win32Window::SetChildContent(HWND content) {
+  // Главное окно ещё скрыто. WM_ACTIVATE передаст фокус при показе окна.
   child_content_ = content;
   SetParent(content, window_handle_);
   RECT frame = GetClientArea();
 
   MoveWindow(content, frame.left, frame.top, frame.right - frame.left,
              frame.bottom - frame.top, true);
-
-  SetFocus(child_content_);
 }
 
 RECT Win32Window::GetClientArea() {
