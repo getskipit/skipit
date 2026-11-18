@@ -18,6 +18,7 @@ import '../version.dart';
 import 'app_icon.dart';
 import 'appearance_previews.dart';
 import 'groups.dart';
+import 'icon_style_preview.dart';
 import 'mouse_back.dart';
 import 'smooth_scroll.dart';
 import 'theme.dart';
@@ -96,6 +97,7 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Счётчик повторных нажатий на раздел в меню ([AppState.pageReselected]), который страница уже видела.
   int? _seenReselect;
   final _searchKey = GlobalKey();
+  ImageConfiguration? _previewConfiguration;
 
   /// Страница, показанная сейчас (ключ в AnimatedSwitcher ниже).
   Key? _shownKey;
@@ -154,6 +156,13 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final s = state.settings;
+    if (state.pageIndex == AppState.settingsPage) {
+      final configuration = createLocalImageConfiguration(context);
+      if (_previewConfiguration != configuration) {
+        _previewConfiguration = configuration;
+        unawaited(precacheImage(iconPreviewAtlas, context));
+      }
+    }
 
     // Ушли в другой раздел меню — поиск сбрасывается, открытая группа закрывается: вернувшись, человек
     // видит плитки всех групп.
@@ -1445,7 +1454,7 @@ class _IconPicker extends StatelessWidget {
                   ),
                   child: style == IconStyle.classic
                       ? Image.asset('assets/icon.png', width: 30, height: 30, filterQuality: FilterQuality.medium)
-                      : CustomPaint(size: const Size.square(30), painter: SkipItIconPainter(style, C.palette.accent)),
+                      : IconStylePreview(style: style, accent: C.palette.accent),
                 ),
               ),
             ),
