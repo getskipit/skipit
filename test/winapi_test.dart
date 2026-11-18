@@ -18,7 +18,7 @@ void main() {
     await AppPaths.init();
     final sw = Stopwatch()..start();
     final adapter = WinSys.defaultRouteAdapter();
-    final conflicts = WinSys.vpnConflicts();
+    final conflicts = await WinSys.vpnConflicts();
     sw.stop();
     // ignore: avoid_print
     print('адаптер: ${adapter?.alias} (${adapter?.description}), мешающих VPN: ${conflicts.map((c) => c.name).toList()}, '

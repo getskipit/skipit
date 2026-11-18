@@ -31,8 +31,7 @@ class HomePage extends StatelessWidget {
       ConnStatus.connected => tr('Защищено').toUpperCase(),
       ConnStatus.connecting => tr('Подключаемся…'),
       ConnStatus.disconnecting => tr('Отключаемся…'),
-      // Перед подключением закрывается другой VPN — это уже часть подключения, а не простой.
-      ConnStatus.disconnected when state.closingOtherVpn => tr('Подключаемся…'),
+      ConnStatus.disconnected when state.checkingConnection || state.closingOtherVpn => tr('Подключаемся…'),
       ConnStatus.disconnected => tr('Не подключено'),
     };
 
@@ -84,14 +83,14 @@ class HomePage extends StatelessWidget {
       ConnectButton(
         connected: connected,
         // Стрелки «летят» только при подключении; отключение мгновенное, для него анимация не нужна.
-        busy: state.status == ConnStatus.connecting || state.closingOtherVpn,
+        busy: state.status == ConnStatus.connecting || state.checkingConnection || state.closingOtherVpn,
         onTap: () => connectOrToggle(context),
       ),
       const SizedBox(height: 24),
       Text(statusText,
           style: TextStyle(
             fontSize: 20,
-            fontWeight: FontWeight.w600,
+            fontWeight: connected && !state.linkDown ? FontWeight.w700 : FontWeight.w600,
             color: connected ? C.text : C.muted,
           )),
       Reveal(open: show('timer'), child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -102,7 +101,9 @@ class HomePage extends StatelessWidget {
         Text(
           state.closingOtherVpn
               ? tr('Закрываю другой VPN…')
-              : (state.status == ConnStatus.connecting ? tr('Нажмите, чтобы отменить') : tr('Нажмите, чтобы подключиться')),
+              : state.checkingConnection
+                  ? tr('Проверяем подключение…')
+                  : (state.status == ConnStatus.connecting ? tr('Нажмите, чтобы отменить') : tr('Нажмите, чтобы подключиться')),
           style: clockStyle,
         ),
       // Откуда сайты видят компьютер и стоит ли Kill Switch. Высота постоянная: строка появляется

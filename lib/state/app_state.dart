@@ -2364,8 +2364,24 @@ class AppState extends ChangeNotifier {
 
   /// Другие подключённые VPN, которые помешают (проверяется перед подключением).
   /// В режиме «Только порты» система не меняется — там мешать нечему.
-  List<VpnConflict> findVpnConflicts() =>
-      settings.mode == ConnectionMode.proxyOnly ? const [] : WinSys.vpnConflicts();
+  Future<List<VpnConflict>> findVpnConflicts() async =>
+      settings.mode == ConnectionMode.proxyOnly ? const [] : await WinSys.vpnConflicts();
+
+  bool _checkingConnection = false;
+  bool get checkingConnection => _checkingConnection;
+
+  /// Пока проверка или её диалог открыты, повторное нажатие не начинает ещё одну проверку.
+  bool beginConnectionCheck() {
+    if (_stopping || _checkingConnection || closingOtherVpn || isBusy || isConnected || repairing) return false;
+    _checkingConnection = true;
+    notifyListeners();
+    return true;
+  }
+
+  void endConnectionCheck() {
+    _checkingConnection = false;
+    if (!_stopping) notifyListeners();
+  }
 
   /// Закрывает мешающие VPN по выбору пользователя.
   /// Идёт закрытие другого VPN перед подключением (несколько секунд): окно показывает это как ход
@@ -2418,7 +2434,7 @@ class AppState extends ChangeNotifier {
   Future<void>? _connectTask;
 
   Future<void> connect({bool ignoreOtherVpn = false}) {
-    if (_stopping || _connectTask != null) return Future<void>.value();
+    if (_stopping || _checkingConnection || _connectTask != null) return Future<void>.value();
     late final Future<void> task;
     task = _connect(ignoreOtherVpn: ignoreOtherVpn).whenComplete(() {
       if (identical(_connectTask, task)) _connectTask = null;
@@ -2446,7 +2462,8 @@ class AppState extends ChangeNotifier {
     try {
       // zapret правит пакеты, в том числе на пути к VPN-серверу, — с ним VPN может не заработать.
       // Подключаемся всё равно (пользователя спросили при нажатии кнопки), но оставляем след в журнале.
-      final zapret = WinSys.zapretRunning();
+      final zapret = await WinSys.zapretRunning();
+      _checkCancel();
       if (zapret != null) {
         log.add('app', tr('Предупреждение: запущен {0} — он меняет соединения и может мешать VPN. Если VPN-сервер '
             'не отвечает или сайты не открываются, добавьте адрес VPN-сервера в исключения {1} или закройте его',
@@ -2463,7 +2480,8 @@ class AppState extends ChangeNotifier {
 
       // Два VPN с TUN одновременно дерутся за маршруты — сеть ломается до перезагрузки.
       if (usesTun && !ignoreOtherVpn) {
-        final other = WinSys.otherVpnAdapters();
+        final other = await WinSys.otherVpnAdapters();
+        _checkCancel();
         if (other.isNotEmpty) {
           throw CoreException(tr('Включён другой VPN ({0}). Отключите его и подключитесь снова — '
               'два VPN одновременно мешают друг другу и ломают сеть.', [other.join(', ')]));
@@ -2550,7 +2568,9 @@ class AppState extends ChangeNotifier {
         }
       }
       if (xrayTun) {
-        if (!File(AppPaths.wintunDll).existsSync()) {
+        final hasWintun = await File(AppPaths.wintunDll).exists();
+        _checkCancel();
+        if (!hasWintun) {
           throw CoreException(tr('Не найден файл wintun.dll рядом с ядром Xray — без него Xray не может создать адаптер. '
               'Переустановите SkipIt или выберите режим TUN «sing-box».'));
         }

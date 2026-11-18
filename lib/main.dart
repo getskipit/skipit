@@ -116,10 +116,20 @@ Future<void> main(List<String> rawArgs) async {
   Tray.init(
     onToggle: () async {
       // Найден другой подключённый VPN — показываем окно: там спросят, что с ним делать.
-      if (!state.isConnected && !state.isBusy && state.findVpnConflicts().isNotEmpty) {
-        await Tray.show();
-        state.requestConnect();
-        return;
+      if (state.checkingConnection || state.closingOtherVpn) return;
+      if (!state.isConnected && !state.isBusy) {
+        if (!state.beginConnectionCheck()) return;
+        var askInWindow = false;
+        try {
+          askInWindow = (await state.findVpnConflicts()).isNotEmpty;
+          if (askInWindow) await Tray.show();
+        } finally {
+          state.endConnectionCheck();
+        }
+        if (askInWindow) {
+          state.requestConnect();
+          return;
+        }
       }
       try {
         await state.toggle();

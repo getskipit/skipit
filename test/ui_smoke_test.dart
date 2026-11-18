@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skipit/core/link_parser.dart';
 import 'package:skipit/core/paths.dart';
+import 'package:skipit/core/windows.dart';
 import 'package:skipit/models/routing.dart';
 import 'package:skipit/models/settings.dart';
 import 'package:skipit/models/subscription.dart';
@@ -55,6 +57,40 @@ void main() {
     expect(tester.element(settings), same(mounted));
   });
 
+  testWidgets('первое нажатие показывает ход проверки и не запускает её повторно', (tester) async {
+    C.use(Palette.dark);
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = _PendingConnection()
+      ..settings.zapretWarn = false
+      ..routingProfiles.add(RoutingProfile.global());
+    await tester.pumpWidget(AppScope(
+      state: state,
+      child: MaterialApp(theme: buildTheme(), home: const Shell()),
+    ));
+
+    final button = find.byType(ConnectButton);
+    await tester.tap(button);
+    await tester.pump();
+    expect(find.text('Проверяем подключение…'), findsOneWidget);
+    expect(tester.widget<ConnectButton>(button).busy, isTrue);
+    expect(state.toggleCalls, 0);
+
+    await tester.tap(button);
+    await tester.pump();
+    expect(state.checkCalls, 1);
+
+    state.conflicts.complete([]);
+    await tester.pump();
+    expect(state.checkingConnection, isFalse);
+    expect(find.text('Проверяем подключение…'), findsNothing);
+    expect(state.toggleCalls, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    state.dispose();
+  });
+
   testWidgets('таймер подключения обновляет цифры без перестроения главной', (tester) async {
     C.use(Palette.dark);
     tester.view.physicalSize = const Size(1280, 720);
@@ -71,6 +107,7 @@ void main() {
     ));
     await tester.pump(const Duration(milliseconds: 400));
 
+    expect(tester.widget<Text>(find.text('ЗАЩИЩЕНО')).style?.fontWeight, FontWeight.w700);
     final clock = find.textContaining(RegExp(r'^2:\d{2}:\d{2}$'));
     final text = tester.widget<Text>(clock);
     final connect = tester.widget<ConnectButton>(find.byType(ConnectButton));
@@ -174,5 +211,22 @@ void main() {
         }
       });
     }
+  }
+}
+
+class _PendingConnection extends AppState {
+  final conflicts = Completer<List<VpnConflict>>();
+  var checkCalls = 0;
+  var toggleCalls = 0;
+
+  @override
+  Future<List<VpnConflict>> findVpnConflicts() {
+    checkCalls++;
+    return conflicts.future;
+  }
+
+  @override
+  Future<void> toggle({bool ignoreOtherVpn = false}) async {
+    toggleCalls++;
   }
 }

@@ -164,26 +164,31 @@ Future<bool> _askAboutZapret(BuildContext context, AppState state, String zapret
 /// администратора для TUN, если их нет.
 Future<void> connectOrToggle(BuildContext context) async {
   final state = AppScope.read(context);
-  // Другой VPN ещё закрывается — подключение начнётся само, второе нажатие ничего не меняет.
-  if (state.closingOtherVpn) return;
+  if (state.checkingConnection || state.closingOtherVpn) return;
   var ignoreOtherVpn = false;
   if (!state.isConnected && !state.isBusy) {
-    final zapret = state.settings.zapretWarn ? WinSys.zapretRunning() : null;
-    if (zapret != null) {
-      if (!await _askAboutZapret(context, state, zapret)) return;
+    if (!state.beginConnectionCheck()) return;
+    try {
+      final zapret = state.settings.zapretWarn ? await WinSys.zapretRunning() : null;
       if (!context.mounted) return;
-    }
-    final conflicts = state.findVpnConflicts();
-    if (conflicts.isNotEmpty) {
-      switch (await _askAboutConflicts(context, conflicts)) {
-        case _ConflictChoice.cancel:
-          return;
-        case _ConflictChoice.close:
-          await state.closeVpnConflicts(conflicts);
-        case _ConflictChoice.proceed:
-          ignoreOtherVpn = true;
+      if (zapret != null) {
+        if (!await _askAboutZapret(context, state, zapret) || !context.mounted) return;
       }
+      final conflicts = await state.findVpnConflicts();
       if (!context.mounted) return;
+      if (conflicts.isNotEmpty) {
+        switch (await _askAboutConflicts(context, conflicts)) {
+          case _ConflictChoice.cancel:
+            return;
+          case _ConflictChoice.close:
+            await state.closeVpnConflicts(conflicts);
+          case _ConflictChoice.proceed:
+            ignoreOtherVpn = true;
+        }
+        if (!context.mounted) return;
+      }
+    } finally {
+      state.endConnectionCheck();
     }
   }
   try {

@@ -656,6 +656,7 @@ const en = <String, String>{
   'Список программ изменён': 'The program list has changed',
   'Правила по приложениям (Маршрутизация → Приложения) начнут действовать после переподключения': 'Per-app rules (Routing → Apps) will take effect after reconnecting',
   'Закрываю другой VPN…': 'Closing the other VPN…',
+  'Проверяем подключение…': 'Checking the connection…',
   'Нажмите, чтобы отменить': 'Click to cancel',
   'Нажмите, чтобы подключиться': 'Click to connect',
   'Весь трафик компьютера через VPN': 'All of the computer\'s traffic via VPN',

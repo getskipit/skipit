@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'pac.dart';
@@ -395,7 +396,9 @@ class WinSys {
 
   /// Запущенный zapret (обход блокировок, который вмешивается в пакеты): его название или null.
   /// Перед подключением о нём предупреждают: zapret правит и соединение с VPN-сервером.
-  static String? zapretRunning() {
+  static Future<String?> zapretRunning() => Isolate.run(_zapretRunning);
+
+  static String? _zapretRunning() {
     try {
       return zapretIn(processNames());
     } catch (_) {
@@ -528,9 +531,14 @@ class WinSys {
   /// Другой VPN, который сейчас забирает весь трафик: маршрут в интернет идёт через виртуальный
   /// туннельный адаптер (Wintun, WireGuard, TAP, PPP). Свой адаптер не считается. При любой ошибке —
   /// пустой список: проверка не должна мешать подключению.
-  static List<String> otherVpnAdapters() {
+  static Future<List<String>> otherVpnAdapters() {
+    final ownNames = tunNames;
+    return Isolate.run(() => _otherVpnAdapters(ownNames));
+  }
+
+  static List<String> _otherVpnAdapters(List<String> ownNames) {
     final a = defaultRouteAdapter();
-    if (a == null || a.hardware || tunNames.contains(a.alias)) return const [];
+    if (a == null || a.hardware || ownNames.contains(a.alias)) return const [];
     // Типы адаптеров: 23 — PPP, 53 — виртуальный (Wintun/WireGuard), 131 — туннель.
     final tunnel = const {23, 53, 131}.contains(a.type) ||
         RegExp(r'\b(tap|tun|vpn|wintun|wireguard|openvpn)\b', caseSensitive: false).hasMatch(a.description);
@@ -555,9 +563,20 @@ class WinSys {
   /// Другие VPN, которые сейчас подключены и будут мешать. Определяются по работающим ядрам
   /// (xray, sing-box и т. п. не из нашей папки) и по туннельному адаптеру, через который идёт трафик.
   /// Клиент, который просто открыт, но не подключён, помехой не считается.
-  static List<VpnConflict> vpnConflicts() {
+  static Future<List<VpnConflict>> vpnConflicts() {
     final ownDir = '${File(AppPaths.exe).parent.path.toLowerCase()}\\';
     final ownCore = '${AppPaths.coreDir.path.toLowerCase()}\\';
+    final ownNames = tunNames;
+    final language = lang;
+    // Путь ядер, имена адаптеров и язык настроены в основном изоляте.
+    return Isolate.run(() {
+      lang = language;
+      return _vpnConflicts(ownDir, ownCore, ownNames);
+    });
+  }
+
+  static List<VpnConflict> _vpnConflicts(String ownDir, String ownCore, List<String> ownNames) {
+    final knownClients = _knownClients;
     String base(String path) =>
         path.split('\\').last.toLowerCase().replaceAll(RegExp(r'\.exe$'), '');
     final others = [
@@ -569,14 +588,14 @@ class WinSys {
       // Хозяин ядра — известный клиент, из папки которого (или выше) оно запущено.
       final corePath = core.path.toLowerCase();
       final owners = others.where((p) {
-        if (!_knownClients.containsKey(base(p.path))) return false;
+        if (!knownClients.containsKey(base(p.path))) return false;
         final dir = p.path.toLowerCase();
         return corePath.startsWith(dir.substring(0, dir.lastIndexOf('\\') + 1));
       }).toList();
       final name = owners.isNotEmpty
-          ? _knownClients[base(owners.first.path)]!
+          ? knownClients[base(owners.first.path)]!
           : base(core.path).startsWith('skipit-')
-              ? _knownClients['skipit']!
+              ? knownClients['skipit']!
               : tr('другой VPN ({0})', [core.path.split('\\').last]);
       final c = byName.putIfAbsent(name, () => VpnConflict(name));
       c.pids.add(core.pid);
@@ -587,12 +606,12 @@ class WinSys {
         c.paths[pid] = others.firstWhere((p) => p.pid == pid).path;
       }
       // Вторую копию SkipIt сначала просим выйти по-хорошему (она вернёт системный прокси).
-      if (name == _knownClients['skipit']) c.isSkipIt = true;
+      if (name == knownClients['skipit']) c.isSkipIt = true;
     }
     if (byName.isEmpty) {
       // Ядер не нашли, но трафик идёт через чужой туннель (WireGuard, OpenVPN, корпоративный VPN) —
       // закрыть его сами не можем, только предупредить.
-      for (final adapter in otherVpnAdapters()) {
+      for (final adapter in _otherVpnAdapters(ownNames)) {
         byName[adapter] = VpnConflict(adapter);
       }
     }
@@ -618,7 +637,7 @@ class WinSys {
       }
       // Закрываем только те процессы, что видели при проверке: за это время номер процесса мог
       // достаться другой программе, поэтому сверяем и путь.
-      final alive = {for (final p in _processes()) p.pid: p.path};
+      final alive = {for (final p in await Isolate.run(_processes)) p.pid: p.path};
       for (final pid in c.pids) {
         if (alive[pid] != null && alive[pid] == c.paths[pid]) await killPid(pid);
       }
