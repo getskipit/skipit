@@ -39,7 +39,7 @@ enum TunCore {
 
 enum PingType { tcp, realDelay }
 
-enum AppTheme { dark, light, system, black, midnight, forest, plum, cocoa, mint, lavender, skipit }
+enum AppTheme { dark, light, system, black, midnight, forest, plum, cocoa, mint, lavender }
 
 /// Канал обновлений SkipIt: только релизы или ещё и пре-релизы (бета).
 enum UpdateChannel { stable, beta }

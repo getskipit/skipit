@@ -14,7 +14,6 @@ extension AppThemeAppearance on AppTheme {
         AppTheme.cocoa => 'Какао',
         AppTheme.mint => 'Мята',
         AppTheme.lavender => 'Лаванда',
-        AppTheme.skipit => 'SkipIt',
       });
 
   Palette resolve(Brightness systemBrightness) => this == AppTheme.system
@@ -157,7 +156,6 @@ class Palette {
     AppTheme.dark: dark,
     AppTheme.black: black,
     AppTheme.light: light,
-    AppTheme.skipit: dark._tinted(const Color(0xFF41434A), 0.22),
     AppTheme.midnight: dark._tinted(const Color(0xFF365C9B), 0.30),
     AppTheme.forest: dark._tinted(const Color(0xFF36765A), 0.28),
     AppTheme.plum: dark._tinted(const Color(0xFF874A8D), 0.28),
